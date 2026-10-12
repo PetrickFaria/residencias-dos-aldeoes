@@ -293,7 +293,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         var camera=Vector3f.ZP.rotationDegrees(180.0F);poses.mulPose(camera);dispatcher.overrideCameraOrientation(camera);dispatcher.setRenderShadow(false);
         poses.mulPose(Vector3f.YP.rotationDegrees(skinPreviewYaw));poses.translate(0.0D,-1.05D,0.0D);
         skinPreviewVillager.setYRot(0);skinPreviewVillager.yBodyRot=0;skinPreviewVillager.yBodyRotO=0;skinPreviewVillager.yHeadRot=0;skinPreviewVillager.yHeadRotO=0;
-        var buffers=minecraft.renderBuffers().bufferSource();dispatcher.render(skinPreviewVillager,0,0,0,0,1.0F,poses,buffers,15728880);buffers.endBatch();dispatcher.setRenderShadow(true);poses.popPose();
+        var buffers=minecraft.renderBuffers().bufferSource();dispatcher.render(skinPreviewVillager,0,0,0,0,1.0F,poses,buffers,15728880);buffers.endBatch();dispatcher.overrideCameraOrientation(null);dispatcher.setRenderShadow(true);Lighting.setupFor3DItems();poses.popPose();
     }
     private boolean hasSkinScrollbar(){return skinChoices.size()>5;}
     private int skinScrollbarX(){return skinDialogLeft+149;}
