@@ -53,3 +53,19 @@
 - `SkinApplicationMode`, `ResidenceData`, `ModNetwork`, `AnchorMenu`, `VillagerSkinTextures` e `AnchorScreen` guardam, sincronizam e mostram o modo por aldeão. Saves antigos sem modo são lidos como Completo; a remoção da skin e a desvinculação limpam o PNG e o modo junto.
 - A reflexão permanece localizada à lista de camadas do renderer porque o evento Forge `AddLayers` só acrescenta camadas; é usada para inserir a skin antes da camada vanilla e envolvê-la sem substituir o renderer ou o modelo. Se um renderer de terceiro impedir esse acesso/refletir sua lista, o log avisa que o modo Completo pode não conseguir ocultar a roupa.
 - A persistência, sincronização, seleção por UUID e UV continuam dependendo do PNG 64×64 do modelo de aldeão. O cliente de jogo não foi executado nesta sessão; os testes visuais A–H permanecem pendentes até validar dentro do Minecraft, inclusive com Fresh Animations/EMF/ETF.
++
+
+## Versão 1.0.21 — Resolução nativa, UV e diagnóstico das skins
+
+- `VillagerSkinTextures` não reduz mais arquivos 128×128, 256×256 ou 512×512 para 64×64. O PNG é entregue ao DynamicTexture nas dimensões originais; alpha é preservado e a filtragem segue nearest-neighbor sem mipmaps.
+- Texturas de roupa e acessórios em pacotes ZIP também preservam resolução. Os offsets UV em escala base 64 são multiplicados pela escala da imagem e o `LayerDefinition` é assado com atlas proporcional. Isso evita amostrar apenas parte da imagem maior.
+- `VillagerSkinLayer` ainda usa o renderer e o modelo do aldeão em um passe de textura adicional. Não existe uma segunda instância de modelo. A camada vanilla combinada de tipo/bioma e profissão é ignorada apenas em Skin Completa. A substituição da lista de render layers agora é preparada antes de mutá-la; o log comunica quando a camada vanilla não pôde ser encontrada ou envolvida.
+- `docs/villager_uv_diagnostic_64.png` e `docs/villager_uv_diagnostic_256.png` são texturas de teste por região. `examples/skeleton-villager-custom-validation.png` guarda uma cópia do PNG enviado para análise. O relatório UV explica offsets e alpha.
+
+### Verificações da 1.0.21
+
+- Inspeção estática confirmou que o PNG de exemplo tem 64×64 RGBA, 1.176 pixels opacos, 2.920 transparentes, zero pixels alfa intermediário e zero pixels pretos opacos. O RGB de pixels totalmente transparentes não deve produzir preto visível; no passe cutout esses pixels deixam aparecer a textura base desenhada antes.
+- O gerador UV executou e criou atlas 64×64 e 256×256 por nearest-neighbor. A imagem de referência foi conferida por dimensão, modo e alpha.
+- `VillagerProfessionLayer` mantém estado/caches por tipo de aldeão e por profissão, então a mesma camada pode atuar em aldeões desempregados. A implementação mantém Skin Parcial delegando a camada vanilla e Skin Completa ignorando-a somente para o residente personalizado.
+- Minecraft não foi iniciado. Os testes visuais A–J de renderização, persistência após reinício, troca de recursos, Fresh Animations, EMF e ETF não foram executados. Não há testes JUnit no projeto (`test` é `NO-SOURCE`).
+

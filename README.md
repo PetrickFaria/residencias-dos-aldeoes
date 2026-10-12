@@ -1,10 +1,10 @@
-# Mod de Residências dos Aldeões 1.0.20
+# Mod de Residências dos Aldeões 1.0.21
 
 Minecraft Java 1.19.2 · Forge 43.5.0 · Java 17.
 
 ## Skins PNG para o aldeão vanilla
 
-As skins são texturas no UV do `VillagerModel` de Minecraft 1.19.2. PNGs quadrados de 64, 128, 256 ou 512 pixels são aceitos; como o modelo original usa UV 64×64, o cliente reamostra as maiores para 64×64 com nearest-neighbor. Elas não usam o UV nem o modelo de jogador. O modelo vanilla continua controlando nariz, cabeça, braços cruzados, pernas e animações; a textura escolhida é renderizada no próprio modelo do aldeão.
+As skins usam o UV do `VillagerModel` do Minecraft 1.19.2. PNGs quadrados de 64, 128, 256 ou 512 pixels são aceitos e mantidos na resolução original. O modelo vanilla armazena UVs normalizados a partir do atlas 64×64, então a mesma disposição proporcional funciona nas quatro resoluções; o cliente não reduz a imagem. A filtragem nearest-neighbor sem mipmaps preserva os pixels. Não são skins de jogador: o modelo, nariz, braços cruzados, pernas e animações continuam sendo os do aldeão.
 
 Há duas maneiras de disponibilizar PNGs:
 
@@ -13,13 +13,13 @@ Há duas maneiras de disponibilizar PNGs:
 
 Use somente o nome do arquivo como identificador, sem `.png`, com letras, números, ponto, hífen ou sublinhado (até 64 caracteres). Ao abrir **Personalização → Alterar Skin**, a galeria lê a pasta de configuração e os pacotes de recursos ativos. Se o mesmo identificador existir nos dois locais, o PNG da pasta `config` prevalece. PNGs simples devem ter até 1,5 MB. Para roupa externa e acessórios, use um pacote ZIP compatível conforme a documentação abaixo. Reabra a tela depois de instalar ou alterar um arquivo.
 
-O arquivo [modelo_uv_aldeao_vanilla_1.19.2.png](docs/modelo_uv_aldeao_vanilla_1.19.2.png) é um guia de cores UV em tamanho real (64×64). Substitua as cores de guia ao pintar; não o selecione como skin final. A imagem é acompanhada pelo mapa dos retângulos de UV abaixo. Os intervalos usam coordenadas começando em zero e o limite final não está incluído.
+Os arquivos [diagnóstico UV 64×64](docs/villager_uv_diagnostic_64.png) e [diagnóstico UV 256×256](docs/villager_uv_diagnostic_256.png) usam cores distintas para cabeça, nariz, tronco, braços, pernas e partes externas. São texturas de teste: aplique-as a um aldeão para ver onde as ilhas aparecem no modelo. A [legenda detalhada](docs/diagnostico-uv-aldeao-1.19.2.md) identifica faces e offsets. Remova as cores antes de criar uma skin final.
 
 | Peça do modelo vanilla | UV inicial e tamanho da caixa | Faces no atlas (x, y, largura, altura) |
 |---|---|---|
 | Cabeça base | `(0,0)`, 8×10×8 | Esquerda `(0,8,8,10)`, frente `(8,8,8,10)`, direita `(16,8,8,10)`, costas `(24,8,8,10)`, topo `(8,0,8,8)`, base `(16,0,8,8)` |
 | Nariz | `(24,0)`, 2×4×2 | Frente `(26,2,2,4)`; faces laterais, costas, topo e base ocupam o restante da ilha `(24,0)`–`(32,6)` |
-| Aba/chapéu da cabeça | `(32,0)`, 8×12×8 | Frente `(40,8,8,12)`, costas `(56,8,8,12)`, laterais `(32,8,8,12)` e `(48,8,8,12)`, topo `(40,0,8,8)`, base `(48,0,8,8)` |
+| Aba/chapéu da cabeça | `(32,0)`, 8×10×8 | Frente `(40,8,8,10)`, costas `(56,8,8,10)`, laterais `(32,8,8,10)` e `(48,8,8,10)`, topo `(40,0,8,8)`, base `(48,0,8,8)` |
 | Tronco base | `(16,20)`, 8×12×6 | Frente `(22,26,8,12)`, costas `(36,26,8,12)`, laterais `(16,26,6,12)` e `(30,26,6,12)`, topo `(22,20,8,6)`, base `(30,20,8,6)` |
 | Braços externos (UV compartilhado e espelhado) | `(44,22)`, 4×8×4 | Frente `(48,26,4,8)`; faces laterais, costas, topo e base dentro de `(44,22)`–`(60,34)` |
 | Braços cruzados | `(40,38)`, 8×4×4 | Frente `(44,42,8,4)`; demais faces dentro de `(40,38)`–`(64,46)` |
@@ -45,7 +45,7 @@ O manipulador de desconexão agora é registrado no barramento Forge. Os eventos
 
 ## Compilação
 
-Com Java 17, execute `./gradlew clean build`. O JAR fica em `build/libs/residencias-dos-aldeoes-1.0.20.jar`.
+Com Java 17, execute `./gradlew clean build`. O JAR fica em `build/libs/residencias-dos-aldeoes-1.0.21.jar`.
 
 
 ## Personalização em camadas (1.0.19)
@@ -55,6 +55,10 @@ Skins PNG antigas seguem suportadas. Para camadas externas e acessórios, consul
 Pacotes são ZIPs com manifesto JSON e PNGs; o sistema valida caminhos, tamanhos, dimensões, número de componentes e cubos antes de persistir. Os dados são salvos e sincronizados por UUID. Camadas extras usam cubos ligados às partes vanilla `HEAD`, `BODY`, `ARMS`, `RIGHT_LEG` e `LEFT_LEG`.
 
 A prévia de personalização permite arrastar o aldeão para girá-lo horizontalmente e usar **Centralizar** para voltar à frente.
+
+## Correção de skins (1.0.21)
+
+A imagem personalizada é registrada em sua resolução nativa, sem reduzir 128/256/512 para 64 pixels. Pacotes de roupas/acessórios também escalam os UVs declarados em base 64 ao assar a geometria adicional, para que uma textura maior continue cobrindo o mesmo atlas completo. A camada de skin usa o renderer e o modelo vanilla atuais. Ela é um passe de textura sobre o modelo renderizado pelo jogo, não uma substituição do renderer; áreas totalmente transparentes são descartadas pelo modo cutout e revelam a textura base que foi desenhada antes.
 
 
 ## Ajustes visuais (1.0.20)

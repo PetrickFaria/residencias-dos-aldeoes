@@ -9,7 +9,7 @@ Um pacote é um ZIP importado da pasta `config/residenciasaldeoes/skins`. PNGs s
 - `outer.png` — atlas independente para jaqueta/mangas/roupa externa.
 - `headphones.png` e `hood.png` — texturas dos acessórios.
 
-Cada PNG quadrado deve ter 64, 128, 256 ou 512 pixels. Por compatibilidade com o UV fixo do modelo vanilla 1.19.2 e o renderizador de cubos da camada adicional, o cliente reduz imagens maiores para 64×64 por vizinho mais próximo, preservando alpha e sem filtro bilinear. Desenhe o UV em coordenadas de 64×64.
+Cada PNG quadrado deve ter 64, 128, 256 ou 512 pixels. A resolução original e o canal alfa são preservados. Coordenadas de UV no manifesto continuam sendo escritas em unidades do atlas 64×64; ao carregar uma textura maior, o modelo de cubos multiplica os offsets e a dimensão do atlas pela mesma escala, sem redimensionar o arquivo. O nearest-neighbor sem mipmaps mantém o pixel art.
 
 ## Manifesto
 

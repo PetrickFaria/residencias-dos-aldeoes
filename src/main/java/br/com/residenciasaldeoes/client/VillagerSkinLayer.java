@@ -36,17 +36,24 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
                     field.setAccessible(true);
                     Object value = field.get(renderer);
                     if (value instanceof List list && list.contains(layer)) {
-                        list.remove(layer);
-                        boolean foundOutfitLayer = false;
-                        for (int i = 0; i < list.size(); i++) {
-                            Object current = list.get(i);
+                        // Build the replacement first. The previous implementation removed
+                        // the skin layer before attempting a reflective list.set; if that
+                        // mutation failed, the custom layer silently disappeared.
+                        List<Object> replacement = new java.util.ArrayList<>(list);
+                        replacement.remove(layer);
+                        int wrapped = 0;
+                        for (int i = 0; i < replacement.size(); i++) {
+                            Object current = replacement.get(i);
                             if (current instanceof VillagerProfessionLayer<?, ?>) {
-                                list.set(i, new ModeAwareProfessionLayer(renderer, (RenderLayer<Villager, VillagerModel<Villager>>) current));
-                                foundOutfitLayer = true;
+                                replacement.set(i, new ModeAwareProfessionLayer(renderer, (RenderLayer<Villager, VillagerModel<Villager>>) current));
+                                wrapped++;
                             }
                         }
-                        list.add(0, layer);
-                        if (!foundOutfitLayer) LOGGER.warn("VillagerProfessionLayer was not found; complete skins cannot suppress vanilla biome/profession clothing on this renderer.");
+                        replacement.add(0, layer);
+                        list.clear();
+                        list.addAll(replacement);
+                        if (wrapped == 0) LOGGER.warn("VillagerProfessionLayer was not found; complete skins cannot suppress vanilla biome/profession clothing on this renderer.");
+                        else LOGGER.info("Skin de aldeão instalada antes das camadas vanilla; {} camada(s) de vestimenta passam a respeitar Skin Completa/Parcial.", wrapped);
                         return;
                     }
                 } catch (ReflectiveOperationException | RuntimeException ignored) {
@@ -54,7 +61,7 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
                 }
             }
         }
-        LOGGER.warn("Could not place villager skin before vanilla render layers; partial skins may render above vanilla outfits.");
+        LOGGER.warn("Could not place villager skin before vanilla render layers; complete skins cannot reliably suppress the vanilla biome/profession outfit.");
     }
 
     @Override public void render(PoseStack poseStack, MultiBufferSource buffers, int packedLight, Villager villager,
