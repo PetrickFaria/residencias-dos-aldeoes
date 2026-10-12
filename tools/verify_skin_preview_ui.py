@@ -7,8 +7,9 @@ assert "resetSkinPreviewView(){skinPreviewYaw=SKIN_PREVIEW_DEFAULT_YAW;skinPrevi
 assert "skinDialogLeft+16,skinDialogTop+132,86,20" in screen
 assert "skinDialogLeft+118,skinDialogTop+132,86,20" in screen
 assert "if(!skinOpen)font.draw(p,title,titleLabelX,titleLabelY" in screen
-assert "poses.translate(0.0D,modelHeight*0.43D,0.0D);" in screen
-assert screen.index("poses.translate(0.0D,modelHeight*0.43D,0.0D);") < screen.index("poses.mulPose(Vector3f.YP.rotationDegrees(skinPreviewYaw));")
+assert "poses.translate(0.0D,-modelHeight*0.43D,0.0D);" in screen
+assert screen.index("poses.mulPose(Vector3f.YP.rotationDegrees(skinPreviewYaw));") < screen.index("poses.mulPose(Vector3f.XP.rotationDegrees(skinPreviewPitch));")
+assert screen.index("poses.mulPose(Vector3f.XP.rotationDegrees(skinPreviewPitch));") < screen.index("poses.translate(0.0D,-modelHeight*0.43D,0.0D);")
 assert "poses.translate(0.0D,-modelHeight/2.0D,0.0D);" not in screen
 assert "sinP*halfHeight+cosP*halfDepth" in screen
 assert "skinPreviewPitch=Math.max(-90.0F,Math.min(90.0F" in screen

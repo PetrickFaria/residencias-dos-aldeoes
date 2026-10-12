@@ -325,11 +325,11 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     private void renderRotatingPreview(PoseStack poses,int x,int y,int scale,float modelHeight){
         Lighting.setupForEntityInInventory();var dispatcher=minecraft.getEntityRenderDispatcher();poses.pushPose();poses.translate(x,y,1050.0D);poses.scale(1.0F,1.0F,-1.0F);poses.translate(0.0D,0.0D,1000.0D);poses.scale(scale,scale,scale);
         var camera=Vector3f.ZP.rotationDegrees(180.0F);poses.mulPose(camera);dispatcher.overrideCameraOrientation(camera);dispatcher.setRenderShadow(false);
-        // Villager render coordinates put the visual center about 0.43 entity-heights above its origin.
-        // Move that center to the viewport center first, then rotate the mesh around it.
-        poses.translate(0.0D,modelHeight*0.43D,0.0D);
+        // The mesh center is about 0.43 entity-heights above the renderer origin.
+        // Translate that center to the pivot, then apply both rotations around it.
         poses.mulPose(Vector3f.YP.rotationDegrees(skinPreviewYaw));
         poses.mulPose(Vector3f.XP.rotationDegrees(skinPreviewPitch));
+        poses.translate(0.0D,-modelHeight*0.43D,0.0D);
         // Vanilla inventory previews use a 180-degree entity yaw to face the viewer.
         // The additional yaw and pitch above are screen-only transforms on this preview entity.
         skinPreviewVillager.setYRot(180);skinPreviewVillager.yBodyRot=180;skinPreviewVillager.yBodyRotO=180;skinPreviewVillager.yHeadRot=180;skinPreviewVillager.yHeadRotO=180;
