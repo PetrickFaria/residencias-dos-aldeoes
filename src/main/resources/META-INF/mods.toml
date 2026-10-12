@@ -1,0 +1,21 @@
+modLoader="javafml"
+loaderVersion="[43,)"
+license="MIT"
+[[mods]]
+modId="residenciasaldeoes"
+version="1.0.17"
+displayName="Residências dos Aldeões"
+authors="Petrick Faria"
+description='''Permite criar residências e registrar aldeões para retorno e contenção noturna.'''
+[[dependencies.residenciasaldeoes]]
+modId="forge"
+mandatory=true
+versionRange="[43.5.0,)"
+ordering="NONE"
+side="BOTH"
+[[dependencies.residenciasaldeoes]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.19.2,1.20)"
+ordering="NONE"
+side="BOTH"

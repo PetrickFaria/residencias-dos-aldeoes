@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "PCP",
+    "PBP",
+    "PPP"
+  ],
+  "key": {
+    "P": {
+      "tag": "minecraft:planks"
+    },
+    "C": {
+      "item": "minecraft:crafting_table"
+    },
+    "B": {
+      "tag": "residenciasaldeoes:beds"
+    }
+  },
+  "result": {
+    "item": "residenciasaldeoes:ancora_residencial",
+    "count": 1
+  }
+}

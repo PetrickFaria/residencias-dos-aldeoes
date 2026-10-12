@@ -1,0 +1,1 @@
+{"variants":{"facing=north":{"model":"residenciasaldeoes:block/ancora_residencial"},"facing=south":{"model":"residenciasaldeoes:block/ancora_residencial","y":180},"facing=west":{"model":"residenciasaldeoes:block/ancora_residencial","y":270},"facing=east":{"model":"residenciasaldeoes:block/ancora_residencial","y":90}}}

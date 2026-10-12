@@ -1,0 +1,14 @@
+{
+  "loader": "forge:obj",
+  "model": "residenciasaldeoes:models/block/emerald_top.obj",
+  "flip_v": false,
+  "automatic_culling": false,
+  "shade_quads": true,
+  "emissive_ambient": false,
+  "textures": {
+    "particle": "residenciasaldeoes:block/emerald_crystal_mid",
+    "crystal_light": "residenciasaldeoes:block/emerald_crystal_light",
+    "crystal_mid": "residenciasaldeoes:block/emerald_crystal_mid",
+    "crystal_dark": "residenciasaldeoes:block/emerald_crystal_dark"
+  }
+}
