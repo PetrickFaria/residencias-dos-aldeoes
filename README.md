@@ -1,4 +1,4 @@
-# Mod de Residências dos Aldeões 1.0.21
+# Mod de Residências dos Aldeões 1.0.22
 
 Minecraft Java 1.19.2 · Forge 43.5.0 · Java 17.
 
@@ -45,7 +45,7 @@ O manipulador de desconexão agora é registrado no barramento Forge. Os eventos
 
 ## Compilação
 
-Com Java 17, execute `./gradlew clean build`. O JAR fica em `build/libs/residencias-dos-aldeoes-1.0.21.jar`.
+Com Java 17, execute `./gradlew clean build`. O JAR fica em `build/libs/residencias-dos-aldeoes-1.0.22.jar`.
 
 
 ## Personalização em camadas (1.0.19)
@@ -56,7 +56,7 @@ Pacotes são ZIPs com manifesto JSON e PNGs; o sistema valida caminhos, tamanhos
 
 A prévia de personalização permite arrastar o aldeão para girá-lo horizontalmente e usar **Centralizar** para voltar à frente.
 
-## Correção de skins (1.0.21)
+## Correção de skins (1.0.22)
 
 A imagem personalizada é registrada em sua resolução nativa, sem reduzir 128/256/512 para 64 pixels. Pacotes de roupas/acessórios também escalam os UVs declarados em base 64 ao assar a geometria adicional, para que uma textura maior continue cobrindo o mesmo atlas completo. A camada de skin usa o renderer e o modelo vanilla atuais. Ela é um passe de textura sobre o modelo renderizado pelo jogo, não uma substituição do renderer; áreas totalmente transparentes são descartadas pelo modo cutout e revelam a textura base que foi desenhada antes.
 

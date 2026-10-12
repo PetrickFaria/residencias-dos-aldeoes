@@ -3,7 +3,7 @@ loaderVersion="[43,)"
 license="MIT"
 [[mods]]
 modId="residenciasaldeoes"
-version="1.0.21"
+version="1.0.22"
 displayName="Residências dos Aldeões"
 authors="Petrick Faria"
 description='''Permite criar residências e registrar aldeões para retorno e contenção noturna.'''

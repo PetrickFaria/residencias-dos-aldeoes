@@ -55,14 +55,14 @@
 - A persistência, sincronização, seleção por UUID e UV continuam dependendo do PNG 64×64 do modelo de aldeão. O cliente de jogo não foi executado nesta sessão; os testes visuais A–H permanecem pendentes até validar dentro do Minecraft, inclusive com Fresh Animations/EMF/ETF.
 +
 
-## Versão 1.0.21 — Resolução nativa, UV e diagnóstico das skins
+## Versão 1.0.22 — Resolução nativa, UV e diagnóstico das skins
 
 - `VillagerSkinTextures` não reduz mais arquivos 128×128, 256×256 ou 512×512 para 64×64. O PNG é entregue ao DynamicTexture nas dimensões originais; alpha é preservado e a filtragem segue nearest-neighbor sem mipmaps.
 - Texturas de roupa e acessórios em pacotes ZIP também preservam resolução. Os offsets UV em escala base 64 são multiplicados pela escala da imagem e o `LayerDefinition` é assado com atlas proporcional. Isso evita amostrar apenas parte da imagem maior.
 - `VillagerSkinLayer` ainda usa o renderer e o modelo do aldeão em um passe de textura adicional. Não existe uma segunda instância de modelo. A camada vanilla combinada de tipo/bioma e profissão é ignorada apenas em Skin Completa. A substituição da lista de render layers agora é preparada antes de mutá-la; o log comunica quando a camada vanilla não pôde ser encontrada ou envolvida.
 - `docs/villager_uv_diagnostic_64.png` e `docs/villager_uv_diagnostic_256.png` são texturas de teste por região. `examples/skeleton-villager-custom-validation.png` guarda uma cópia do PNG enviado para análise. O relatório UV explica offsets e alpha.
 
-### Verificações da 1.0.21
+### Verificações da 1.0.22
 
 - Inspeção estática confirmou que o PNG de exemplo tem 64×64 RGBA, 1.176 pixels opacos, 2.920 transparentes, zero pixels alfa intermediário e zero pixels pretos opacos. O RGB de pixels totalmente transparentes não deve produzir preto visível; no passe cutout esses pixels deixam aparecer a textura base desenhada antes.
 - A contagem UV da amostra confirmou falhas de cobertura que explicam a roupa base visível: 264/432 pixels da ilha de tronco são transparentes e 600/600 da caixa externa do casaco são transparentes. A sobreposição de cabeça e aba do chapéu também estão completamente transparentes (448/448 e 576/576). A planilha completa está em `docs/diagnostico-uv-aldeao-1.19.2.md`.
@@ -70,3 +70,9 @@
 - `VillagerProfessionLayer` mantém estado/caches por tipo de aldeão e por profissão, então a mesma camada pode atuar em aldeões desempregados. A implementação mantém Skin Parcial delegando a camada vanilla e Skin Completa ignorando-a somente para o residente personalizado.
 - Minecraft não foi iniciado. Os testes visuais A–J de renderização, persistência após reinício, troca de recursos, Fresh Animations, EMF e ETF não foram executados. Não há testes JUnit no projeto (`test` é `NO-SOURCE`).
 
+
+## Versão 1.0.22 — Centralização da prévia de skin
+
+- `AnchorScreen.renderSkinPreview` calcula escala e centro com base no retângulo real do painel, na largura/altura do viewport e nos limites da entidade. A altura do aldeão passa a ser centrada no painel, mantendo a área recortada e os controles abaixo fixos.
+- O modelo, a textura, a rotação e os botões não foram alterados. O modelo do Bloco Residencial também não foi alterado: as duas imagens que deveriam servir de referência não estavam disponíveis no workspace, então a remodelagem não pode ser feita com fidelidade nem comparada.
+- Validação visual em diferentes escalas e dentro do Minecraft ainda pendente; o ajuste foi conferido estaticamente. A geometria do bloco não foi modificada.

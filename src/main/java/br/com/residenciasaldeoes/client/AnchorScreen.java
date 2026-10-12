@@ -297,13 +297,14 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         double guiScale=minecraft.getWindow().getGuiScale();
         int sx=(int)Math.floor(x1*guiScale),ex=(int)Math.ceil(x2*guiScale);
         int sy=(int)Math.floor(y1*guiScale),ey=(int)Math.ceil(y2*guiScale);
-        int scale=Math.min(36,Math.max(1,(SKIN_PREVIEW_BOTTOM-SKIN_PREVIEW_TOP-12)/2));
-        int centerX=(x1+x2)/2;
-        // In this inventory-style pose the entity's visual center sits just above
-        // the origin. Compensate proportionally so all GUI scales use the same center.
-        int originY=(y1+y2)/2+Math.round(scale/24.0F);
+        int viewportWidth=x2-x1,viewportHeight=y2-y1;
+        float modelHeight=Math.max(1.0F,skinPreviewVillager.getBbHeight());
+        float modelWidth=Math.max(0.8F,skinPreviewVillager.getBbWidth()*1.35F);
+        int scale=Math.max(1,(int)Math.floor(Math.min(36.0F,Math.min((viewportWidth-8.0F)/modelWidth,(viewportHeight-12.0F)/modelHeight))));
+        int centerX=x1+viewportWidth/2;
+        int centerY=y1+viewportHeight/2;
         RenderSystem.enableScissor(sx,minecraft.getWindow().getHeight()-ey,ex-sx,ey-sy);
-        try{renderRotatingPreview(poses,centerX,originY,scale);}finally{RenderSystem.disableScissor();}
+        try{renderRotatingPreview(poses,centerX,centerY,scale,modelHeight);}finally{RenderSystem.disableScissor();}
     }
     private void renderSkinFolderHint(PoseStack p){
         int x=skinDialogLeft+SKIN_HINT_LEFT,y=skinDialogTop+SKIN_HINT_TOP;
@@ -316,10 +317,14 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         for(int i=0;i<Math.min(2,lines.size());i++)font.draw(p,lines.get(i),x,skinDialogTop+SKIN_HINT_TOP+i*8,0xFFD3C8AF);
         RenderSystem.disableScissor();
     }
-    private void renderRotatingPreview(PoseStack poses,int x,int y,int scale){
+    private void renderRotatingPreview(PoseStack poses,int x,int y,int scale,float modelHeight){
         Lighting.setupForEntityInInventory();var dispatcher=minecraft.getEntityRenderDispatcher();poses.pushPose();poses.translate(x,y,1050.0D);poses.scale(1.0F,1.0F,-1.0F);poses.translate(0.0D,0.0D,1000.0D);poses.scale(scale,scale,scale);
         var camera=Vector3f.ZP.rotationDegrees(180.0F);poses.mulPose(camera);dispatcher.overrideCameraOrientation(camera);dispatcher.setRenderShadow(false);
-        poses.mulPose(Vector3f.YP.rotationDegrees(skinPreviewYaw));poses.translate(0.0D,-1.05D,0.0D);
+        poses.mulPose(Vector3f.YP.rotationDegrees(skinPreviewYaw));
+        // The dialog viewport is expressed in GUI coordinates. Center the entity
+        // from its actual bounding height, so screen size and GUI scale do not
+        // push its feet into the mode/action controls below the viewport.
+        poses.translate(0.0D,-modelHeight/2.0D,0.0D);
         skinPreviewVillager.setYRot(0);skinPreviewVillager.yBodyRot=0;skinPreviewVillager.yBodyRotO=0;skinPreviewVillager.yHeadRot=0;skinPreviewVillager.yHeadRotO=0;
         var buffers=minecraft.renderBuffers().bufferSource();dispatcher.render(skinPreviewVillager,0,0,0,0,1.0F,poses,buffers,15728880);buffers.endBatch();dispatcher.overrideCameraOrientation(null);dispatcher.setRenderShadow(true);Lighting.setupFor3DItems();poses.popPose();
     }
