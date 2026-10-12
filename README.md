@@ -1,4 +1,4 @@
-# Mod de Residências dos Aldeões 1.0.18
+# Mod de Residências dos Aldeões 1.0.19
 
 Minecraft Java 1.19.2 · Forge 43.5.0 · Java 17.
 
@@ -31,7 +31,7 @@ As peças de chapéu e casaco são partes/camadas do modelo de aldeão. O desenh
 
 Cada textura e modo é associado ao UUID escolhido e salvo nos dados do mundo. **Skin Completa** é o padrão e omite, somente para esse aldeão, a camada vanilla combinada de roupa do bioma/profissão e acessórios/nível. **Skin Parcial** aplica o PNG à base e preserva essa camada vanilla. O modo pode ser alternado sem importar o arquivo novamente. A opção **Skin Original** remove a substituição; desvincular o morador também remove a skin gerenciada. O canal alfa original é mantido; pixels transparentes seguem o comportamento cutout do Minecraft e deixam a textura base abaixo aparecer. O modelo e as animações vanilla continuam sendo usados.
 
-## Correção 1.0.18 das skins
+## Correção 1.0.19 das skins
 
 - A captura anexada mostrava a face customizada e o corpo vanilla. O código da 1.0.17 desenhava o PNG numa RenderLayer antes da VillagerProfessionLayer. Esta camada vanilla também desenha vestimenta por tipo de bioma, inclusive em aldeões desempregados; portanto, as camadas de profissão não eram a única causa.
 - A camada do mod permanece no renderer/modelo vanilla existente, mas agora a camada combinada vanilla é delegada por um wrapper que só a omite para residentes que tenham uma skin e estejam em modo Completo. Parcial continua delegando a renderização vanilla normalmente.
@@ -45,4 +45,11 @@ O manipulador de desconexão agora é registrado no barramento Forge. Os eventos
 
 ## Compilação
 
-Com Java 17, execute `./gradlew clean build`. O JAR fica em `build/libs/residencias-dos-aldeoes-1.0.18.jar`.
+Com Java 17, execute `./gradlew clean build`. O JAR fica em `build/libs/residencias-dos-aldeoes-1.0.19.jar`.
+
+
+## Personalização em camadas (1.0.19)
+
+Skins PNG antigas seguem suportadas. Para camadas externas e acessórios, consulte [o formato de pacote](docs/personalizacao-pacote-v1.md) e use o ZIP de exemplo em `examples/pacote-jaqueta-fones.zip`. Copie pacotes ou PNGs compatíveis para `config/residenciasaldeoes/skins` e selecione no menu **Personalização → Alterar Skin**.
+
+Pacotes são ZIPs com manifesto JSON e PNGs; o sistema valida caminhos, tamanhos, dimensões, número de componentes e cubos antes de persistir. Os dados são salvos e sincronizados por UUID. Camadas extras usam cubos ligados às partes vanilla `HEAD`, `BODY`, `ARMS`, `RIGHT_LEG` e `LEFT_LEG`.

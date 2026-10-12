@@ -4,6 +4,7 @@ import br.com.residenciasaldeoes.ResidenciasDosAldeoes;
 import br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity;
 import br.com.residenciasaldeoes.data.ResidenceData;
 import br.com.residenciasaldeoes.data.SkinApplicationMode;
+import br.com.residenciasaldeoes.data.WardrobePackage;
 import br.com.residenciasaldeoes.menu.AnchorMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -24,8 +25,8 @@ import javax.imageio.ImageIO;
 import java.util.function.Supplier;
 
 public final class ModNetwork {
- private static final String VERSION="6";
- public static final int MAX_SKIN_BYTES=262144;
+ private static final String VERSION="7";
+ public static final int MAX_SKIN_BYTES=WardrobePackage.MAX_ARCHIVE_BYTES;
  public static final SimpleChannel CHANNEL=NetworkRegistry.newSimpleChannel(new ResourceLocation(ResidenciasDosAldeoes.MODID,"main"),()->VERSION,VERSION::equals,VERSION::equals);
  private static int id; private ModNetwork(){}
  public static void register(){
@@ -42,6 +43,7 @@ public final class ModNetwork {
  public static void setPreview(BlockPos p,boolean enabled){CHANNEL.sendToServer(new Action(p,7,enabled?1:0,null,""));}
  public static void requestResidents(BlockPos p){CHANNEL.sendToServer(new Action(p,8,0,null,""));}
  public static void assignSkin(BlockPos pos,UUID resident,String key,byte[] png,SkinApplicationMode mode){CHANNEL.sendToServer(new AssignSkin(pos,resident,key,png,mode));}
+ public static void requestSkin(BlockPos pos,UUID resident){CHANNEL.sendToServer(new Action(pos,9,0,resident,""));}
  public static void broadcastSkin(UUID id,ResidenceData.ResidentSkin skin){if(skin==null){clearSkin(id);return;}CHANNEL.send(PacketDistributor.ALL.noArg(),new SkinSync(id,skin.key(),skin.png(),skin.mode()));}
  public static void clearSkin(UUID id){CHANNEL.send(PacketDistributor.ALL.noArg(),new SkinSync(id,"",new byte[0],SkinApplicationMode.COMPLETE));}
  public static void sendSkin(ServerPlayer player,UUID id,ResidenceData.ResidentSkin skin){if(skin!=null)CHANNEL.send(PacketDistributor.PLAYER.with(()->player),new SkinSync(id,skin.key(),skin.png(),skin.mode()));}
@@ -64,6 +66,7 @@ public final class ModNetwork {
     case 6->{d.unlinkResidents(sl,sl.dimension(),pos);p.displayClientMessage(Component.translatable("message.residenciasaldeoes.unlinked_all"),true);}
     case 7->{String key=previewKey(sl.dimension().location(),pos);p.getPersistentData().putBoolean(key,value!=0);br.com.residenciasaldeoes.VillagerResidenceEvents.syncPreviews(p);}
     case 8->m.sendResidentSnapshot(p);
+    case 9->{if(resident!=null){ResidenceData.Home h=d.owner(resident);if(h!=null&&h.dimension.equals(sl.dimension())&&h.pos.equals(pos))sendSkin(p,resident,d.residentSkin(resident));}}
    }
   });c.get().setPacketHandled(true);}
  }
@@ -81,20 +84,21 @@ public final class ModNetwork {
    if(key.isEmpty()&&png.length==0){data.setResidentSkin(resident,"",new byte[0],mode);clearSkin(resident);m.sendResidentSnapshot(p);return;}
    if(!key.matches("[A-Za-z0-9._-]{1,64}"))return;
    if(png.length==0){if(!data.setResidentSkinMode(resident,key,mode))return;}
-   else {if(!validPng64(png))return;data.setResidentSkin(resident,key,png,mode);}
+   else {if(!validSkinPayload(png))return;data.setResidentSkin(resident,key,png,mode);}
    broadcastSkin(resident,data.residentSkin(resident));m.sendResidentSnapshot(p);
   });c.get().setPacketHandled(true);}
  }
- private static boolean validPng64(byte[] png){
+ private static boolean validSkinPayload(byte[] png){
+  if(png!=null&&png.length>3&&png[0]=='P'&&png[1]=='K'){try{WardrobePackage.parse(png);return true;}catch(Exception invalid){return false;}}
   if(png==null||png.length<24||png.length>MAX_SKIN_BYTES)return false;
   byte[] signature={(byte)137,80,78,71,13,10,26,10};for(int i=0;i<8;i++)if(png[i]!=signature[i])return false;
-  if(!(png[12]=='I'&&png[13]=='H'&&png[14]=='D'&&png[15]=='R'&&readInt(png,16)==64&&readInt(png,20)==64))return false;
-  try{var image=ImageIO.read(new ByteArrayInputStream(png));return image!=null&&image.getWidth()==64&&image.getHeight()==64;}catch(Exception invalid){return false;}
+  int w=readInt(png,16),h=readInt(png,20);if(!(png[12]=='I'&&png[13]=='H'&&png[14]=='D'&&png[15]=='R'&&w==h&&Set.of(64,128,256,512).contains(w)))return false;
+  try{var image=ImageIO.read(new ByteArrayInputStream(png));return image!=null&&image.getWidth()==w&&image.getHeight()==h;}catch(Exception invalid){return false;}
  }
  private static int readInt(byte[] b,int i){return (b[i]&255)<<24|(b[i+1]&255)<<16|(b[i+2]&255)<<8|(b[i+3]&255);}
  public record SkinSync(UUID resident,String key,byte[] png,SkinApplicationMode mode){
   void encode(FriendlyByteBuf b){b.writeUUID(resident);b.writeUtf(key,64);b.writeByteArray(png);b.writeBoolean(mode==SkinApplicationMode.COMPLETE);}
   static SkinSync decode(FriendlyByteBuf b){return new SkinSync(b.readUUID(),b.readUtf(64),b.readByteArray(MAX_SKIN_BYTES),b.readBoolean()?SkinApplicationMode.COMPLETE:SkinApplicationMode.PARTIAL);}
-  void handle(Supplier<NetworkEvent.Context> c){c.get().enqueueWork(()->DistExecutor.unsafeRunWhenOn(Dist.CLIENT,()->()->br.com.residenciasaldeoes.client.VillagerSkinTextures.receive(resident,key,png,mode)));c.get().setPacketHandled(true);}
+  void handle(Supplier<NetworkEvent.Context> c){c.get().enqueueWork(()->DistExecutor.unsafeRunWhenOn(Dist.CLIENT,()->()->{br.com.residenciasaldeoes.client.VillagerSkinTextures.receive(resident,key,png,mode);br.com.residenciasaldeoes.client.AnchorScreen.skinReceived(resident);}));c.get().setPacketHandled(true);}
  }
 }

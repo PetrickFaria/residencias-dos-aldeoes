@@ -64,6 +64,20 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
         if (skin == null) return;
         getParentModel().renderToBuffer(poseStack, buffers.getBuffer(RenderType.entityCutoutNoCull(skin)), packedLight,
                 OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+        VillagerModel<Villager> model=getParentModel();
+        renderPieces(poseStack,buffers,packedLight,villager,model,VillagerSkinTextures.outerParts(villager.getUUID()));
+        renderPieces(poseStack,buffers,packedLight,villager,model,VillagerSkinTextures.accessories(villager.getUUID()));
+    }
+
+    /** Extra clothing and accessories are cuboids attached in the local coordinates of vanilla model parts. */
+    private static void renderPieces(PoseStack poses,MultiBufferSource buffers,int light,Villager villager,
+                                     VillagerModel<Villager> model,List<VillagerSkinTextures.PreparedPart> parts){
+        for(var piece:parts){ResourceLocation texture=VillagerSkinTextures.extraTexture(villager.getUUID(),piece.texture());if(texture==null)continue;
+            net.minecraft.client.model.geom.ModelPart anchor=switch(piece.anchor()){
+                case "HEAD"->model.head;case "BODY"->model.body;case "ARMS"->model.arms;case "RIGHT_LEG"->model.rightLeg;case "LEFT_LEG"->model.leftLeg;default->null;};
+            if(anchor==null)continue;poses.pushPose();anchor.translateAndRotate(poses);
+            piece.model().render(poses,buffers.getBuffer(RenderType.entityCutoutNoCull(texture)),light,OverlayTexture.NO_OVERLAY,1,1,1,1);poses.popPose();
+        }
     }
 
     /** The vanilla profession layer also supplies biome clothing for unemployed villagers. */
