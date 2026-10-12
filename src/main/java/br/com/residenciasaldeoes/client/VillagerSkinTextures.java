@@ -8,6 +8,7 @@ import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.model.geom.builders.*;
 import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.model.geom.PartPose;
 import br.com.residenciasaldeoes.data.WardrobePackage;
 import java.util.ArrayList;
 import java.util.List;

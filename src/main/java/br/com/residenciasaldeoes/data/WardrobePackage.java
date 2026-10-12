@@ -5,6 +5,7 @@ import com.google.gson.*;
 import java.io.*;
 import java.util.*;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
 import java.util.zip.ZipInputStream;
 
 /** Validated, declarative villager wardrobe package. No code or arbitrary paths are loaded from a pack. */

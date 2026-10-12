@@ -73,8 +73,10 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
     private static void renderPieces(PoseStack poses,MultiBufferSource buffers,int light,Villager villager,
                                      VillagerModel<Villager> model,List<VillagerSkinTextures.PreparedPart> parts){
         for(var piece:parts){ResourceLocation texture=VillagerSkinTextures.extraTexture(villager.getUUID(),piece.texture());if(texture==null)continue;
+            net.minecraft.client.model.geom.ModelPart root=model.root();
             net.minecraft.client.model.geom.ModelPart anchor=switch(piece.anchor()){
-                case "HEAD"->model.head;case "BODY"->model.body;case "ARMS"->model.arms;case "RIGHT_LEG"->model.rightLeg;case "LEFT_LEG"->model.leftLeg;default->null;};
+                case "HEAD"->model.getHead();case "BODY"->root.getChild("body");case "ARMS"->root.getChild("arms");
+                case "RIGHT_LEG"->root.getChild("right_leg");case "LEFT_LEG"->root.getChild("left_leg");default->null;};
             if(anchor==null)continue;poses.pushPose();anchor.translateAndRotate(poses);
             piece.model().render(poses,buffers.getBuffer(RenderType.entityCutoutNoCull(texture)),light,OverlayTexture.NO_OVERLAY,1,1,1,1);poses.popPose();
         }
