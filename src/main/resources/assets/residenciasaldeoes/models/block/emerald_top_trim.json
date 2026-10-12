@@ -1,0 +1,13 @@
+{
+  "loader": "forge:obj",
+  "model": "residenciasaldeoes:models/block/emerald_top_trim.obj",
+  "flip_v": false,
+  "automatic_culling": false,
+  "shade_quads": true,
+  "emissive_ambient": false,
+  "textures": {
+    "particle": "residenciasaldeoes:block/wood_trim",
+    "gold_light": "residenciasaldeoes:block/wood_trim",
+    "gold_shade": "residenciasaldeoes:block/corner_trim"
+  }
+}

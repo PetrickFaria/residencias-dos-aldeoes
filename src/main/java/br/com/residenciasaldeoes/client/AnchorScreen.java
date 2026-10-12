@@ -228,21 +228,30 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         fill(p,leftPos+6,topPos+30,leftPos+imageWidth-6,topPos+31,0xFF876A45);fill(p,leftPos+7,topPos+74,leftPos+imageWidth-7,topPos+ROW_TOP+LIST_HEIGHT+2,0xFF393125);
         fill(p,leftPos+8,topPos+75,leftPos+imageWidth-8,topPos+76,0xFF6B5438);
     }
+    private void setSkinDialogWidgetsVisible(boolean visible){
+        Button[] buttons={registerButton,renameButton,unlinkResidentButton,unlinkAllButton,previewButton,skinConfirm,skinCancel,skinPreviewCenter};
+        for(Button button:buttons)if(button!=null)button.visible=visible;
+        for(Button button:skinButtons)button.visible=visible;
+    }
     @Override public void render(PoseStack p,int x,int y,float q){
-        renderBackground(p);super.render(p,x,y,q);
-        font.draw(p,Component.translatable("gui.residenciasaldeoes.current",menu.getSize(minecraft.player),menu.getSize(minecraft.player),menu.getSize(minecraft.player)),leftPos+8,topPos+19,0xFFF2E5C9);
-        font.draw(p,Component.translatable("gui.residenciasaldeoes.occupancy",menu.getCount(minecraft.player),capacity(menu.getSize(minecraft.player))),leftPos+8,topPos+54,0xFFE4D7BD);
-        font.draw(p,Component.translatable("gui.residenciasaldeoes.residents"),leftPos+8,topPos+64,0xFFFFEBCB);
-        enableResidentClip();
-        if(residents.isEmpty())font.draw(p,Component.translatable("gui.residenciasaldeoes.no_residents"),leftPos+12,topPos+82,0xFFD3C8AF);
-        for(int i=scroll;i<Math.min(residents.size(),scroll+VISIBLE_ROWS);i++){
-            int yy=topPos+ROW_TOP+(i-scroll)*ROW_HEIGHT;var e=residents.get(i);
-            if(e.id().equals(selected)){fill(p,leftPos+7,yy-2,listClipRight(),yy+10,0xFF9A8058);fill(p,leftPos+8,yy-1,listClipRight()-1,yy+9,0xFF4A3B2C);}
-            font.draw(p,font.plainSubstrByWidth(e.name(),69),leftPos+10,yy,e.id().equals(selected)?0xFFFFE7BF:0xFFF2EEE4);
-            int sx=leftPos+82;sx=drawStatus(p,"Cama",e.bed(),sx,yy);sx=drawSeparator(p,sx,yy);sx=drawStatus(p,"Trabalho",e.work(),sx,yy);sx=drawSeparator(p,sx,yy);drawStatus(p,"Baú",e.chest(),sx,yy);
+        renderBackground(p);
+        if(skinOpen)setSkinDialogWidgetsVisible(false);
+        try{super.render(p,x,y,q);}finally{if(skinOpen)setSkinDialogWidgetsVisible(true);}
+        if(!skinOpen){
+            font.draw(p,Component.translatable("gui.residenciasaldeoes.current",menu.getSize(minecraft.player),menu.getSize(minecraft.player),menu.getSize(minecraft.player)),leftPos+8,topPos+19,0xFFF2E5C9);
+            font.draw(p,Component.translatable("gui.residenciasaldeoes.occupancy",menu.getCount(minecraft.player),capacity(menu.getSize(minecraft.player))),leftPos+8,topPos+54,0xFFE4D7BD);
+            font.draw(p,Component.translatable("gui.residenciasaldeoes.residents"),leftPos+8,topPos+64,0xFFFFEBCB);
+            enableResidentClip();
+            if(residents.isEmpty())font.draw(p,Component.translatable("gui.residenciasaldeoes.no_residents"),leftPos+12,topPos+82,0xFFD3C8AF);
+            for(int i=scroll;i<Math.min(residents.size(),scroll+VISIBLE_ROWS);i++){
+                int yy=topPos+ROW_TOP+(i-scroll)*ROW_HEIGHT+(i==scroll?2:0);var e=residents.get(i);
+                if(e.id().equals(selected)){fill(p,leftPos+7,yy-2,listClipRight(),yy+10,0xFF9A8058);fill(p,leftPos+8,yy-1,listClipRight()-1,yy+9,0xFF4A3B2C);}
+                font.draw(p,font.plainSubstrByWidth(e.name(),69),leftPos+10,yy,e.id().equals(selected)?0xFFFFE7BF:0xFFF2EEE4);
+                int sx=leftPos+82;sx=drawStatus(p,"Cama",e.bed(),sx,yy);sx=drawSeparator(p,sx,yy);sx=drawStatus(p,"Trabalho",e.work(),sx,yy);sx=drawSeparator(p,sx,yy);drawStatus(p,"Baú",e.chest(),sx,yy);
+            }
+            RenderSystem.disableScissor();
+            if(hasScrollbar())renderScrollbar(p);
         }
-        RenderSystem.disableScissor();
-        if(hasScrollbar())renderScrollbar(p);
         if(renameOpen)renderRenameDialog(p,x,y,q);
         if(personalizationOpen)renderCustomizationDialog(p,x,y,q);
         if(skinOpen)renderSkinDialog(p,x,y,q);
@@ -371,7 +380,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         setFocused(null);
         return true;
     }
-    @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy){if(draggingSkinPreview&&button==0){skinPreviewYaw=(skinPreviewYaw+(float)(x-skinPreviewDragX)*3.0F)%360.0F;skinPreviewPitch=Math.max(-90.0F,Math.min(90.0F,skinPreviewPitch+(float)(y-skinPreviewDragY)*2.0F));skinPreviewDragX=x;skinPreviewDragY=y;return true;}if(draggingScrollbar&&button==0){int travel=LIST_HEIGHT-scrollbarThumbHeight(),max=residents.size()-VISIBLE_ROWS;if(travel>0&&max>0)scroll=Math.max(0,Math.min(max,scrollbarDragStart+(int)Math.round((y-scrollbarDragStartY)*max/travel)));return true;}return super.mouseDragged(x,y,button,dx,dy);}
+    @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy){if(draggingSkinPreview&&button==0){skinPreviewYaw=(skinPreviewYaw+(float)(x-skinPreviewDragX)*3.0F)%360.0F;skinPreviewPitch=Math.max(-90.0F,Math.min(90.0F,skinPreviewPitch-(float)(y-skinPreviewDragY)*2.0F));skinPreviewDragX=x;skinPreviewDragY=y;return true;}if(draggingScrollbar&&button==0){int travel=LIST_HEIGHT-scrollbarThumbHeight(),max=residents.size()-VISIBLE_ROWS;if(travel>0&&max>0)scroll=Math.max(0,Math.min(max,scrollbarDragStart+(int)Math.round((y-scrollbarDragStartY)*max/travel)));return true;}return super.mouseDragged(x,y,button,dx,dy);}
     @Override public boolean mouseReleased(double x,double y,int button){if(button==0&&draggingSkinPreview){draggingSkinPreview=false;return true;}if(button==0&&draggingScrollbar){draggingScrollbar=false;return true;}return super.mouseReleased(x,y,button);}
     @Override public boolean mouseScrolled(double x,double y,double delta){if(skinOpen&&x>=skinDialogLeft+7&&x<skinDialogLeft+213&&y>=skinDialogTop+22&&y<skinDialogTop+111&&skinChoices.size()>5){skinScroll=Math.max(0,Math.min(skinChoices.size()-5,skinScroll-(int)Math.signum(delta)));rebuildSkinButtons();return true;}if(!renameOpen&&!personalizationOpen&&x>=leftPos+6&&x<leftPos+imageWidth-6&&y>=topPos+ROW_TOP&&y<topPos+ROW_TOP+LIST_HEIGHT&&residents.size()>VISIBLE_ROWS){scroll=Math.max(0,Math.min(residents.size()-VISIBLE_ROWS,scroll-(int)Math.signum(delta)));return true;}return super.mouseScrolled(x,y,delta);}
     @Override public boolean keyPressed(int keyCode,int scanCode,int modifiers){
