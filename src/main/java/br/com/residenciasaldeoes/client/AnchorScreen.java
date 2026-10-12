@@ -300,7 +300,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         try{renderRotatingPreview(poses,centerX,centerY,scale,modelHeight);}finally{RenderSystem.disableScissor();}
     }
     private int fitPreviewScale(int baseScale,int viewportWidth,int viewportHeight,float modelWidth,float modelHeight,float yaw,float pitch){
-        double y=Math.toRadians(yaw),p=Math.toRadians(p);
+        double y=Math.toRadians(yaw),p=Math.toRadians(pitch);
         double cosY=Math.abs(Math.cos(y)),sinY=Math.abs(Math.sin(y));
         double cosP=Math.abs(Math.cos(p)),sinP=Math.abs(Math.sin(p));
         double halfWidth=modelWidth/2.0,halfDepth=modelWidth/2.0,halfHeight=modelHeight/2.0;
