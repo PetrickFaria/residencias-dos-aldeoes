@@ -31,7 +31,7 @@ jobs:
           from email.parser import BytesParser
           from zipfile import ZipFile
 
-          jar_path = "build/libs/residencias-dos-aldeoes-1.0.28.jar"
+          jar_path = "build/libs/residencias-dos-aldeoes-1.0.29.jar"
           with ZipFile(jar_path) as jar:
               entries = set(jar.namelist())
               manifest = BytesParser(policy=policy.default).parsebytes(
@@ -52,21 +52,21 @@ jobs:
                       f"MixinConfigs manifest entry is {manifest.get('MixinConfigs')!r}"
                   )
               mods = jar.read("META-INF/mods.toml").decode("utf-8")
-              if 'version="1.0.28"' not in mods:
-                  raise SystemExit("JAR does not identify itself as mod version 1.0.28")
-          print("JAR packaging check passed: version 1.0.28, full-skin Mixin, and Fresh Animations face adapter registered")
+              if 'version="1.0.29"' not in mods:
+                  raise SystemExit("JAR does not identify itself as mod version 1.0.29")
+          print("JAR packaging check passed: version 1.0.29, full-skin Mixin, and Fresh Animations face adapter registered")
           PY
       - name: Package complete source archive
-        run: git archive --format=zip --output=build/residencias-dos-aldeoes-1.0.28-source.zip HEAD
+        run: git archive --format=zip --output=build/residencias-dos-aldeoes-1.0.29-source.zip HEAD
       - name: Upload mod JAR
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.28
-          path: build/libs/residencias-dos-aldeoes-1.0.28.jar
+          name: residencias-dos-aldeoes-1.0.29
+          path: build/libs/residencias-dos-aldeoes-1.0.29.jar
           if-no-files-found: error
       - name: Upload complete source ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.28-source
-          path: build/residencias-dos-aldeoes-1.0.28-source.zip
+          name: residencias-dos-aldeoes-1.0.29-source
+          path: build/residencias-dos-aldeoes-1.0.29-source.zip
           if-no-files-found: error

@@ -34,8 +34,8 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     // Skin dialog preview viewport, local to the dialog rather than to the screen.
     private static final int SKIN_PREVIEW_LEFT=154,SKIN_PREVIEW_RIGHT=213,SKIN_PREVIEW_TOP=22,SKIN_PREVIEW_BOTTOM=111;
     private static final int SKIN_HINT_LEFT=8,SKIN_HINT_RIGHT=149,SKIN_HINT_TOP=112,SKIN_HINT_BOTTOM=129;
-    // The preview camera is flipped 180 degrees on Z, so negative model yaw turns the face toward screen-right.
-    private static final float SKIN_PREVIEW_DEFAULT_YAW=-25.0F;
+    // The preview camera is flipped 180 degrees on Z; positive model yaw reverses the previous three-quarter direction.
+    private static final float SKIN_PREVIEW_DEFAULT_YAW=25.0F;
     private static final int REGISTER_BUTTON_Y=151,UNLINK_BUTTON_Y=175,PREVIEW_BUTTON_Y=199;
     private static final Map<String,Snapshot> CACHE=new HashMap<>();
     private List<ModNetwork.ResidentEntry> residents=List.of();
@@ -143,7 +143,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         if(!current.isEmpty())ModNetwork.requestSkin(menu.getPos(),selected);
         for(SkinFiles.SkinFile file:SkinFiles.list())skinChoices.add(new SkinChoice(file.id(),file.label(),file));
         if(!current.isEmpty()&&skinChoices.stream().noneMatch(o->o.id().equals(current)))skinChoices.add(new SkinChoice(current,Component.translatable("gui.residenciasaldeoes.current_skin",current).getString(),null));
-        skinDialogLeft=leftPos+(imageWidth-220)/2;skinDialogTop=topPos+(imageHeight-180)/2;
+        skinDialogLeft=leftPos+(imageWidth-220)/2;skinDialogTop=topPos+(imageHeight-160)/2;
         skinPreviewVillager=minecraft.level==null?null:EntityType.VILLAGER.create(minecraft.level);
         updateSkinPreview();
         setMainButtonsActive(false);
@@ -272,7 +272,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     }
     private void renderSkinDialog(PoseStack p,int x,int y,float q){
         fill(p,leftPos+3,topPos+3,leftPos+imageWidth-3,topPos+imageHeight-3,0x99000000);
-        fill(p,skinDialogLeft,skinDialogTop,skinDialogLeft+220,skinDialogTop+180,0xFF30251C);fill(p,skinDialogLeft+2,skinDialogTop+2,skinDialogLeft+218,skinDialogTop+178,0xFF644A30);
+        fill(p,skinDialogLeft,skinDialogTop,skinDialogLeft+220,skinDialogTop+160,0xFF30251C);fill(p,skinDialogLeft+2,skinDialogTop+2,skinDialogLeft+218,skinDialogTop+158,0xFF644A30);
         Component heading=Component.translatable("gui.residenciasaldeoes.skin_title");font.draw(p,heading,skinDialogLeft+(220-font.width(heading))/2,skinDialogTop+9,0xFFFFEBCB);
         fill(p,skinDialogLeft+7,skinDialogTop+22,skinDialogLeft+213,skinDialogTop+111,0xFF393125);
         for(Button b:skinButtons)b.render(p,x,y,q);
@@ -293,23 +293,11 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         float modelHeight=Math.max(1.0F,skinPreviewVillager.getBbHeight());
         float modelWidth=Math.max(0.8F,skinPreviewVillager.getBbWidth()*1.35F);
         int baseScale=Math.max(1,(int)Math.floor(Math.min(36.0F,Math.min((viewportWidth-8.0F)/modelWidth,(viewportHeight-12.0F)/modelHeight))));
-        int scale=fitPreviewScale(baseScale,viewportWidth,viewportHeight,modelWidth,modelHeight,skinPreviewYaw,skinPreviewPitch);
+        int scale=baseScale; // Fixed for the full drag; the scissor clips extreme views without resizing the model.
         int centerX=x1+viewportWidth/2;
         int centerY=y1+viewportHeight/2;
         RenderSystem.enableScissor(sx,minecraft.getWindow().getHeight()-ey,ex-sx,ey-sy);
         try{renderRotatingPreview(poses,centerX,centerY,scale,modelHeight);}finally{RenderSystem.disableScissor();}
-    }
-    private int fitPreviewScale(int baseScale,int viewportWidth,int viewportHeight,float modelWidth,float modelHeight,float yaw,float pitch){
-        double y=Math.toRadians(yaw),p=Math.toRadians(pitch);
-        double cosY=Math.abs(Math.cos(y)),sinY=Math.abs(Math.sin(y));
-        double cosP=Math.abs(Math.cos(p)),sinP=Math.abs(Math.sin(p));
-        double halfWidth=modelWidth/2.0,halfDepth=modelWidth/2.0,halfHeight=modelHeight/2.0;
-        // Project a 3D bounding box through the same Y-then-X rotation order used below.
-        double projectedHalfWidth=cosY*halfWidth+sinY*(sinP*halfHeight+cosP*halfDepth);
-        double projectedHalfHeight=cosP*halfHeight+sinP*halfDepth;
-        int fitWidth=(int)Math.floor((viewportWidth-8.0)/(2.0*projectedHalfWidth));
-        int fitHeight=(int)Math.floor((viewportHeight-12.0)/(2.0*projectedHalfHeight));
-        return Math.max(1,Math.min(baseScale,Math.min(fitWidth,fitHeight)));
     }
     private void renderSkinFolderHint(PoseStack p){
         int x=skinDialogLeft+SKIN_HINT_LEFT,y=skinDialogTop+SKIN_HINT_TOP;
@@ -347,7 +335,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         if(personalizationOpen){if(x<dialogLeft||x>=dialogLeft+180||y<dialogTop||y>=dialogTop+112)return true;return super.mouseClicked(x,y,button);}
         if(skinOpen){
             setFocused(null);
-            if(x<skinDialogLeft||x>=skinDialogLeft+220||y<skinDialogTop||y>=skinDialogTop+180)return true;
+            if(x<skinDialogLeft||x>=skinDialogLeft+220||y<skinDialogTop||y>=skinDialogTop+160)return true;
             if(button==0&&x>=skinDialogLeft+SKIN_PREVIEW_LEFT&&x<skinDialogLeft+SKIN_PREVIEW_RIGHT&&y>=skinDialogTop+SKIN_PREVIEW_TOP&&y<skinDialogTop+SKIN_PREVIEW_BOTTOM){draggingSkinPreview=true;skinPreviewDragX=x;skinPreviewDragY=y;return true;}
             if(button==0&&hasSkinScrollbar()&&x>=skinScrollbarX()-2&&x<skinScrollbarX()+7&&y>=skinDialogTop+25&&y<skinDialogTop+110){setSkinScrollFromPointer(y);return true;}
             return dispatchSkinDialogClick(x,y,button);
