@@ -1,11 +1,11 @@
 newmtl gold_light
-Ka 0.25 0.25 0.25
+Ka 0.55 0.55 0.55
 Kd 1.0 1.0 1.0
 map_Kd #gold_light
 
 
 newmtl gold_shade
-Ka 0.12 0.12 0.12
+Ka 0.36 0.36 0.36
 Kd 1.0 1.0 1.0
 map_Kd #gold_shade
 

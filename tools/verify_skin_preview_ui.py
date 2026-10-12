@@ -47,7 +47,7 @@ assert left+dialog_w/2==image_w/2
 assert top+dialog_h/2==image_h/2
 
 
-# Version 1.0.34: preserve all 1.0.33 features while checking the requested narrow fixes.
+# Version 1.0.36: retain the approved preview behavior while checking the resident-return changes.
 assert "skinPreviewPitch=Math.max(-90.0F,Math.min(90.0F,skinPreviewPitch-(float)(y-skinPreviewDragY)*2.0F))" in screen
 assert "int yy=topPos+ROW_TOP+(i-scroll)*ROW_HEIGHT+(i==scroll?2:0);var e=residents.get(i);" in screen
 assert "if(skinOpen)setSkinDialogWidgetsVisible(false);" in screen
@@ -61,8 +61,8 @@ side_trim=json.loads((assets/"emerald_side_trim.json").read_text())
 composite=json.loads((assets/"ancora_residencial.json").read_text())
 assert top_crystal["emissive_ambient"] is True
 assert side_crystal["emissive_ambient"] is True
-assert top_trim["emissive_ambient"] is False
-assert side_trim["emissive_ambient"] is False
+assert top_trim["emissive_ambient"] is True
+assert side_trim["emissive_ambient"] is True
 assert "top_trim" in composite["children"]
 obj=(assets/"emerald_top_trim.obj").read_text()
 assert "mtllib emerald_top_trim.mtl" in obj
@@ -70,4 +70,4 @@ assert obj.count("\nf ")==12
 assert "usemtl gold_light" in obj and "usemtl gold_shade" in obj
 assert top_trim["automatic_culling"] is False
 
-print("Preview, gem material isolation, top diamond bezel, first-row offset, and pitch checks passed.")
+print("Preview, localized trim lighting, top diamond bezel, first-row offset, and pitch checks passed.")

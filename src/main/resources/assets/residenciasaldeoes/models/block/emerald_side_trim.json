@@ -3,8 +3,8 @@
   "model": "residenciasaldeoes:models/block/emerald_sides.obj",
   "flip_v": false,
   "automatic_culling": false,
-  "shade_quads": true,
-  "emissive_ambient": false,
+  "shade_quads": false,
+  "emissive_ambient": true,
   "textures": {
     "particle": "residenciasaldeoes:block/wood_trim",
     "gold_light": "residenciasaldeoes:block/wood_trim",

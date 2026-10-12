@@ -1,6 +1,7 @@
 package br.com.residenciasaldeoes.block;
 
 import br.com.residenciasaldeoes.ResidenciasDosAldeoes;
+import br.com.residenciasaldeoes.VillagerResidenceEvents;
 import br.com.residenciasaldeoes.data.ResidenceData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -16,7 +17,7 @@ public class ResidentialAnchorBlockEntity extends BlockEntity {
     public int getSize(){return size;}
     public int getCapacity(){for(int i=0;i<ResidenceData.DIMENSIONS.length;i++)if(ResidenceData.DIMENSIONS[i]==size)return ResidenceData.CAPACITIES[i];return 1;}
     public int getResidentCount(){return level instanceof ServerLevel sl?ResidenceData.get(sl).count(sl.dimension(),worldPosition):getPersistentData().getInt("resident_count");}
-    public boolean setSize(int value){if(!(level instanceof ServerLevel sl))return false;ResidenceData data=ResidenceData.get(sl);ResidenceData.Home home=data.home(sl,worldPosition);if(!data.setSize(home,value))return false;size=value;setChanged();sl.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);return true;}
+    public boolean setSize(int value){if(!(level instanceof ServerLevel sl))return false;ResidenceData data=ResidenceData.get(sl);ResidenceData.Home home=data.home(sl,worldPosition);int oldSize=home.size;if(!data.setSize(home,value))return false;size=value;setChanged();sl.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);if(oldSize!=value)VillagerResidenceEvents.onResidenceSizeChanged(sl,home,data);return true;}
     @Override protected void saveAdditional(CompoundTag tag){super.saveAdditional(tag);tag.putInt("size",size);}
     @Override public void load(CompoundTag tag){super.load(tag);size=tag.contains("size")?tag.getInt("size"):3;}
     @Override public CompoundTag getUpdateTag(){CompoundTag t=super.getUpdateTag();t.putInt("size",size);return t;}

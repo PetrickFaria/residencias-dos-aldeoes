@@ -22,6 +22,8 @@ jobs:
           cache: gradle
       - name: Verify skin preview and modal input invariants
         run: python tools/verify_skin_preview_ui.py
+      - name: Verify anchor visuals and resident return invariants
+        run: python tools/verify_anchor_residence.py
       - name: Build with the project Gradle wrapper
         run: ./gradlew --no-daemon clean build
       - name: Verify full-skin Mixin packaging
@@ -31,7 +33,7 @@ jobs:
           from email.parser import BytesParser
           from zipfile import ZipFile
 
-          jar_path = "build/libs/residencias-dos-aldeoes-1.0.35.jar"
+          jar_path = "build/libs/residencias-dos-aldeoes-1.0.36.jar"
           with ZipFile(jar_path) as jar:
               entries = set(jar.namelist())
               manifest = BytesParser(policy=policy.default).parsebytes(
@@ -52,21 +54,21 @@ jobs:
                       f"MixinConfigs manifest entry is {manifest.get('MixinConfigs')!r}"
                   )
               mods = jar.read("META-INF/mods.toml").decode("utf-8")
-              if 'version="1.0.35"' not in mods:
-                  raise SystemExit("JAR does not identify itself as mod version 1.0.35")
-          print("JAR packaging check passed: version 1.0.35, full-skin Mixin, and Fresh Animations face adapter registered")
+              if 'version="1.0.36"' not in mods:
+                  raise SystemExit("JAR does not identify itself as mod version 1.0.36")
+          print("JAR packaging check passed: version 1.0.36, full-skin Mixin, and Fresh Animations face adapter registered")
           PY
       - name: Package complete source archive
-        run: git archive --format=zip --output=build/residencias-dos-aldeoes-1.0.35-source.zip HEAD
+        run: git archive --format=zip --output=build/residencias-dos-aldeoes-1.0.36-source.zip HEAD
       - name: Upload mod JAR
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.35
-          path: build/libs/residencias-dos-aldeoes-1.0.35.jar
+          name: residencias-dos-aldeoes-1.0.36
+          path: build/libs/residencias-dos-aldeoes-1.0.36.jar
           if-no-files-found: error
       - name: Upload complete source ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.35-source
-          path: build/residencias-dos-aldeoes-1.0.35-source.zip
+          name: residencias-dos-aldeoes-1.0.36-source
+          path: build/residencias-dos-aldeoes-1.0.36-source.zip
           if-no-files-found: error
