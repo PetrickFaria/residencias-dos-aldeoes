@@ -52,12 +52,17 @@ public final class VillagerSkinTextures {
         DynamicTexture dynamic = null;
         try {
             image = readSupportedPng(png);
-            // VillagerModel uses normalized UVs based on a 64x64 atlas. Binding larger
-            // images directly preserves authored detail without remapping or downsampling.
-            // NativeImage is handed to DynamicTexture unchanged, including its alpha.
+            boolean completeSkin = mode == null || mode == SkinApplicationMode.COMPLETE;
+            NativeImage renderImage = FreshAnimationsFaceTextureAdapter.adaptIfAvailable(image, completeSkin);
+            if (renderImage != image) {
+                image.close();
+                image = renderImage;
+            }
+            // VillagerModel uses normalized UVs based on a 64x64 atlas. The adapter,
+            // when applicable, only fills Fresh Animations' otherwise-empty facial UVs.
             ResourceLocation location = textureLocation(resident);
             dynamic = new DynamicTexture(image);
-            image = null; // DynamicTexture owns the decoded RGBA image from here.
+            image = null; // DynamicTexture owns the rendered RGBA image from here.
             dynamic.setFilter(false, false); // nearest-neighbor and no mipmaps
             minecraft.getTextureManager().register(location, dynamic);
             dynamic = null; // TextureManager owns and replaces a texture at the same ID.
@@ -95,7 +100,7 @@ public final class VillagerSkinTextures {
             releaseExtras(id);
             Map<String, ResourceLocation> textures = new HashMap<>();
             Map<String, Integer> scales = new HashMap<>();
-            RegisteredTexture base = registerPng(id, "base", pack.texture(pack.baseTexture()));
+            RegisteredTexture base = registerPng(id, "base", pack.texture(pack.baseTexture()), mode == null || mode == SkinApplicationMode.COMPLETE);
             for (String path : allTexturePaths(pack)) {
                 RegisteredTexture registered = registerPng(id, path, pack.texture(path));
                 textures.put(path, registered.location());
@@ -123,13 +128,30 @@ public final class VillagerSkinTextures {
     }
 
     private static RegisteredTexture registerPng(UUID id, String path, byte[] data) throws Exception {
+        return registerPng(id, path, data, false);
+    }
+
+    private static RegisteredTexture registerPng(UUID id, String path, byte[] data, boolean completeSkin) throws Exception {
         NativeImage image = readSupportedPng(data);
         int scale = image.getWidth() / 64;
-        DynamicTexture dynamic = new DynamicTexture(image);
-        dynamic.setFilter(false, false);
-        ResourceLocation location = textureLocation(id, path);
-        Minecraft.getInstance().getTextureManager().register(location, dynamic);
-        return new RegisteredTexture(location, scale);
+        DynamicTexture dynamic = null;
+        try {
+            NativeImage renderImage = FreshAnimationsFaceTextureAdapter.adaptIfAvailable(image, completeSkin);
+            if (renderImage != image) {
+                image.close();
+                image = renderImage;
+            }
+            dynamic = new DynamicTexture(image);
+            image = null; // DynamicTexture owns the image.
+            dynamic.setFilter(false, false);
+            ResourceLocation location = textureLocation(id, path);
+            Minecraft.getInstance().getTextureManager().register(location, dynamic);
+            dynamic = null; // TextureManager owns the texture.
+            return new RegisteredTexture(location, scale);
+        } finally {
+            if (image != null) image.close();
+            if (dynamic != null) dynamic.close();
+        }
     }
 
     private static List<PreparedPart> prepare(List<WardrobePackage.Part> parts, Map<String, Integer> scales) {
