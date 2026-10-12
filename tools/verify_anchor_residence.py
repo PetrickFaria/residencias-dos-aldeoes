@@ -50,8 +50,9 @@ for name in ("wood_trim.png", "corner_trim.png"):
 
 events = (ROOT / "src/main/java/br/com/residenciasaldeoes/VillagerResidenceEvents.java").read_text(encoding="utf-8")
 anchor = (ROOT / "src/main/java/br/com/residenciasaldeoes/block/ResidentialAnchorBlockEntity.java").read_text(encoding="utf-8")
-assert "RETURN_TIMEOUT_TICKS=160L" in events and "RETURN_RETRY_TICKS=20L" in events
-assert "elapsed>=RETURN_TIMEOUT_TICKS" in events
+assert "RETURN_TIMEOUT_TICKS=300L" in events and "RETURN_RETRY_TICKS=20L" in events
+assert "elapsed>=returnTimeout" in events
+assert "THREAT_RETURN_TIMEOUT_TICKS=150L" in events
 assert "level.noCollision(villager" in events and "floor.isFaceSturdy" in events
 assert "at.getFluidState().isEmpty()" in events and "above.getFluidState().isEmpty()" in events
 assert "onResidenceSizeChanged(sl,home,data)" in anchor

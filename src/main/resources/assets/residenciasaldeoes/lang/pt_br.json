@@ -36,7 +36,8 @@
   "gui.residenciasaldeoes.unlink_resident": "Desvincular Residente",
   "gui.residenciasaldeoes.unlink_all": "Desvincular Todos",
   "message.residenciasaldeoes.unlinked_all": "Todos os vínculos desta residência foram removidos.",
-  "gui.residenciasaldeoes.anchor_title": "Âncora Residencial",
+  "gui.residenciasaldeoes.anchor_title": "Bloco Residencial",
+  "item.residenciasaldeoes.emerald_fragment": "Fragmento de Esmeralda",
   "gui.residenciasaldeoes.skin_mode_complete": "Skin Completa",
   "gui.residenciasaldeoes.skin_mode_partial": "Skin Parcial"
 }

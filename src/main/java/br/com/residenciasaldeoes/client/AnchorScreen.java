@@ -36,7 +36,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     private static final int SKIN_HINT_LEFT=8,SKIN_HINT_RIGHT=149,SKIN_HINT_TOP=112,SKIN_HINT_BOTTOM=129;
     // The preview camera is flipped 180 degrees on Z; positive model yaw reverses the previous three-quarter direction.
     private static final float SKIN_PREVIEW_DEFAULT_YAW=25.0F;
-    private static final int REGISTER_BUTTON_Y=151,UNLINK_BUTTON_Y=175,PREVIEW_BUTTON_Y=199;
+    private static final int REGISTER_BUTTON_Y=141,UNLINK_BUTTON_Y=165,PREVIEW_BUTTON_Y=189;
     private static final Map<String,Snapshot> CACHE=new HashMap<>();
     private List<ModNetwork.ResidentEntry> residents=List.of();
     private int scroll;
@@ -63,7 +63,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     private record Snapshot(List<ModNetwork.ResidentEntry> entries,boolean preview) {}
     private record SkinChoice(String id,String label,SkinFiles.SkinFile file) {}
 
-    public AnchorScreen(AnchorMenu m,Inventory i,Component t){super(m,i,t);imageWidth=246;imageHeight=226;}
+    public AnchorScreen(AnchorMenu m,Inventory i,Component t){super(m,i,t);imageWidth=274;imageHeight=236;}
     private static String cacheKey(ResourceLocation dimension,BlockPos pos){return dimension+"|"+pos.asLong();}
 
     public static void receiveResidents(ResourceLocation dimension,BlockPos pos,List<ModNetwork.ResidentEntry> entries,boolean preview){
@@ -92,12 +92,12 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     @Override protected void init(){
         super.init();titleLabelX=(imageWidth-font.width(title))/2;titleLabelY=7;inventoryLabelY=1000;
         if(minecraft.level!=null){Snapshot s=CACHE.get(cacheKey(minecraft.level.dimension().location(),menu.getPos()));if(s!=null)applySnapshot(s.entries(),s.preview());}
-        for(int i=0;i<5;i++){final int size=ResidenceData.DIMENSIONS[i];addStyledButton(leftPos+8+i*46,topPos+33,43,17,Component.literal(size+"x"+size),b->ModNetwork.action(menu.getPos(),0,size),0xFF0D4B25,0xFF70C982);}
-        registerButton=addStyledButton(leftPos+8,topPos+REGISTER_BUTTON_Y,112,20,Component.translatable("gui.residenciasaldeoes.register"),b->ModNetwork.action(menu.getPos(),1,0),0xFF0D4B25,0xFF70C982);
-        renameButton=addStyledButton(leftPos+126,topPos+REGISTER_BUTTON_Y,112,20,Component.translatable("gui.residenciasaldeoes.customization"),b->openCustomization(),0xFF0D4B25,0xFF70C982);renameButton.active=selected!=null;
-        unlinkResidentButton=addStyledButton(leftPos+8,topPos+UNLINK_BUTTON_Y,112,20,Component.literal("Desvincular Residente"),b->{if(selected!=null)ModNetwork.unlinkResident(menu.getPos(),selected);},0xFF0D4B25,0xFF70C982);unlinkResidentButton.active=selected!=null;
-        unlinkAllButton=addStyledButton(leftPos+126,topPos+UNLINK_BUTTON_Y,112,20,unlinkAllLabel(),b->{if(confirmAll){ModNetwork.unlinkAll(menu.getPos());confirmAll=false;}else confirmAll=true;b.setMessage(unlinkAllLabel());},0xFF0D4B25,0xFF70C982);
-        previewButton=addStyledButton(leftPos+8,topPos+PREVIEW_BUTTON_Y,230,20,previewLabel(),b->{previewOn=!previewOn;b.setMessage(previewLabel());ModNetwork.setPreview(menu.getPos(),previewOn);},0xFF0D4B25,0xFF70C982);
+        for(int i=0;i<5;i++){final int size=ResidenceData.DIMENSIONS[i];addStyledButton(leftPos+(imageWidth-227)/2+i*46,topPos+33,43,17,Component.literal(size+"x"+size),b->ModNetwork.action(menu.getPos(),0,size),0xFF0D4B25,0xFF70C982);}
+        registerButton=addStyledButton(leftPos+8,topPos+REGISTER_BUTTON_Y,126,20,Component.translatable("gui.residenciasaldeoes.register"),b->ModNetwork.action(menu.getPos(),1,0),0xFF0D4B25,0xFF70C982);
+        renameButton=addStyledButton(leftPos+140,topPos+REGISTER_BUTTON_Y,126,20,Component.translatable("gui.residenciasaldeoes.customization"),b->openCustomization(),0xFF0D4B25,0xFF70C982);renameButton.active=selected!=null;
+        unlinkResidentButton=addStyledButton(leftPos+8,topPos+UNLINK_BUTTON_Y,126,20,Component.literal("Desvincular Residente"),b->{if(selected!=null)ModNetwork.unlinkResident(menu.getPos(),selected);},0xFF0D4B25,0xFF70C982);unlinkResidentButton.active=selected!=null;
+        unlinkAllButton=addStyledButton(leftPos+140,topPos+UNLINK_BUTTON_Y,126,20,unlinkAllLabel(),b->{if(confirmAll){ModNetwork.unlinkAll(menu.getPos());confirmAll=false;}else confirmAll=true;b.setMessage(unlinkAllLabel());},0xFF0D4B25,0xFF70C982);
+        previewButton=addStyledButton(leftPos+8,topPos+PREVIEW_BUTTON_Y,258,20,previewLabel(),b->{previewOn=!previewOn;b.setMessage(previewLabel());ModNetwork.setPreview(menu.getPos(),previewOn);},0xFF0D4B25,0xFF70C982);
         // Pull an authoritative snapshot when a screen opens; the client cache is
         // only a fast initial display and may belong to an earlier menu session.
         ModNetwork.requestResidents(menu.getPos());
@@ -207,7 +207,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         String newName=renameField.getValue().trim();
         if(newName.isEmpty())return;
         ModNetwork.renameResident(menu.getPos(),selected,newName);
-        List<ModNetwork.ResidentEntry> next=residents.stream().map(e->e.id().equals(selected)?new ModNetwork.ResidentEntry(e.id(),newName,e.bed(),e.work(),e.chest(),e.skinKey(),e.skinMode()):e).toList();
+        List<ModNetwork.ResidentEntry> next=residents.stream().map(e->e.id().equals(selected)?new ModNetwork.ResidentEntry(e.id(),newName,e.bed(),e.work(),e.chest(),e.food(),e.skinKey(),e.skinMode()):e).toList();
         if(minecraft.level!=null)receiveResidents(minecraft.level.dimension().location(),menu.getPos(),next,previewOn);
         closeRename(true);
     }
@@ -246,8 +246,8 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
             for(int i=scroll;i<Math.min(residents.size(),scroll+VISIBLE_ROWS);i++){
                 int yy=topPos+ROW_TOP+(i-scroll)*ROW_HEIGHT+(i==scroll?2:0);var e=residents.get(i);
                 if(e.id().equals(selected)){fill(p,leftPos+7,yy-2,listClipRight(),yy+10,0xFF9A8058);fill(p,leftPos+8,yy-1,listClipRight()-1,yy+9,0xFF4A3B2C);}
-                font.draw(p,font.plainSubstrByWidth(e.name(),69),leftPos+10,yy,e.id().equals(selected)?0xFFFFE7BF:0xFFF2EEE4);
-                int sx=leftPos+82;sx=drawStatus(p,"Cama",e.bed(),sx,yy);sx=drawSeparator(p,sx,yy);sx=drawStatus(p,"Trabalho",e.work(),sx,yy);sx=drawSeparator(p,sx,yy);drawStatus(p,"Baú",e.chest(),sx,yy);
+                font.draw(p,font.plainSubstrByWidth(e.name(),54),leftPos+10,yy,e.id().equals(selected)?0xFFFFE7BF:0xFFF2EEE4);
+                int sx=leftPos+68;sx=drawStatus(p,"Cama",e.bed(),sx,yy);sx=drawSeparator(p,sx,yy);sx=drawStatus(p,"Trabalho",e.work(),sx,yy);sx=drawSeparator(p,sx,yy);sx=drawStatus(p,"Baú",e.chest(),sx,yy);sx=drawSeparator(p,sx,yy);drawStatus(p,"Comida",e.food(),sx,yy);
             }
             RenderSystem.disableScissor();
             if(hasScrollbar())renderScrollbar(p);

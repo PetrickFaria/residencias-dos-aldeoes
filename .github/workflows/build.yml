@@ -24,16 +24,18 @@ jobs:
         run: python tools/verify_skin_preview_ui.py
       - name: Verify anchor visuals and resident return invariants
         run: python tools/verify_anchor_residence.py
+      - name: Verify food indicators, output slots, and emerald fragment
+        run: python tools/verify_residence_food_slots_item.py
       - name: Build with the project Gradle wrapper
         run: ./gradlew --no-daemon clean build
-      - name: Verify full-skin Mixin packaging
+      - name: Verify mod resources and Mixin packaging
         run: |
           python - <<'PY'
           from email import policy
           from email.parser import BytesParser
           from zipfile import ZipFile
 
-          jar_path = "build/libs/residencias-dos-aldeoes-1.0.36.jar"
+          jar_path = "build/libs/residencias-dos-aldeoes-1.0.37.jar"
           with ZipFile(jar_path) as jar:
               entries = set(jar.namelist())
               manifest = BytesParser(policy=policy.default).parsebytes(
@@ -42,33 +44,40 @@ jobs:
               required = {
                   "br/com/residenciasaldeoes/mixin/VillagerRendererMixin.class",
                   "br/com/residenciasaldeoes/client/FreshAnimationsFaceTextureAdapter.class",
+                  "br/com/residenciasaldeoes/menu/AnchorMenu.class",
+                  "br/com/residenciasaldeoes/block/ResidentialAnchorBlockEntity.class",
                   "residencias.mixins.json",
                   "residencias.refmap.json",
                   "META-INF/mods.toml",
+                  "assets/residenciasaldeoes/models/item/emerald_fragment.json",
+                  "assets/residenciasaldeoes/textures/item/emerald_fragment.png",
+                  "data/residenciasaldeoes/recipes/emerald_from_fragment.json",
               }
               missing = required - entries
               if missing:
                   raise SystemExit(f"Missing required JAR entries: {sorted(missing)}")
+              if jar.read("assets/residenciasaldeoes/textures/item/emerald_fragment.png")[:8] != bytes.fromhex("89504e470d0a1a0a"):
+                  raise SystemExit("Emerald fragment texture is not a PNG")
               if manifest.get("MixinConfigs") != "residencias.mixins.json":
                   raise SystemExit(
                       f"MixinConfigs manifest entry is {manifest.get('MixinConfigs')!r}"
                   )
               mods = jar.read("META-INF/mods.toml").decode("utf-8")
-              if 'version="1.0.36"' not in mods:
-                  raise SystemExit("JAR does not identify itself as mod version 1.0.36")
-          print("JAR packaging check passed: version 1.0.36, full-skin Mixin, and Fresh Animations face adapter registered")
+              if 'version="1.0.37"' not in mods:
+                  raise SystemExit("JAR does not identify itself as mod version 1.0.37")
+          print("JAR packaging check passed: version 1.0.37, Mixin, face adapter, food slots, and emerald fragment resources")
           PY
       - name: Package complete source archive
-        run: git archive --format=zip --output=build/residencias-dos-aldeoes-1.0.36-source.zip HEAD
+        run: git archive --format=zip --output=build/residencias-dos-aldeoes-1.0.37-source.zip HEAD
       - name: Upload mod JAR
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.36
-          path: build/libs/residencias-dos-aldeoes-1.0.36.jar
+          name: residencias-dos-aldeoes-1.0.37
+          path: build/libs/residencias-dos-aldeoes-1.0.37.jar
           if-no-files-found: error
       - name: Upload complete source ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.36-source
-          path: build/residencias-dos-aldeoes-1.0.36-source.zip
+          name: residencias-dos-aldeoes-1.0.37-source
+          path: build/residencias-dos-aldeoes-1.0.37-source.zip
           if-no-files-found: error

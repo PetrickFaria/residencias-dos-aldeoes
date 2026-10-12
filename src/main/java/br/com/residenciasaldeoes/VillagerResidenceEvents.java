@@ -6,6 +6,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.entity.monster.AbstractSkeleton;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.level.Level;
@@ -36,7 +38,8 @@ public class VillagerResidenceEvents {
     private static final String RETURN_TARGET_X="residenciasaldeoes_home_return_target_x";
     private static final String RETURN_TARGET_Y="residenciasaldeoes_home_return_target_y";
     private static final String RETURN_TARGET_Z="residenciasaldeoes_home_return_target_z";
-    private static final long RETURN_TIMEOUT_TICKS=160L;
+    private static final long RETURN_TIMEOUT_TICKS=300L;
+    private static final long THREAT_RETURN_TIMEOUT_TICKS=150L;
     private static final long RETURN_RETRY_TICKS=20L;
     @SubscribeEvent public void onVillagerJoin(EntityJoinLevelEvent event){if(event.getEntity() instanceof Villager v&&event.getLevel() instanceof ServerLevel sl){ResidenceData data=ResidenceData.get(sl);data.applyPendingNameRestoration(v);if(data.owner(v.getUUID())!=null)data.applyResidentName(v);}}
     @SubscribeEvent public void onStartTracking(PlayerEvent.StartTracking event){if(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player&&event.getTarget() instanceof Villager villager&&player.level instanceof ServerLevel level&&level.dimension().equals(villager.level.dimension())){ResidenceData.ResidentSkin skin=ResidenceData.get(level).residentSkin(villager.getUUID());if(skin!=null)br.com.residenciasaldeoes.network.ModNetwork.sendSkin(player,villager.getUUID(),skin);}}
@@ -158,7 +161,8 @@ public class VillagerResidenceEvents {
             if(target!=null)writeReturnTarget(tag,target);
         }
 
-        if(elapsed>=RETURN_TIMEOUT_TICKS&&target!=null&&isSafeDestination(level,villager,target,home)){
+        long returnTimeout=hasNearbyPerceivedThreat(villager)?THREAT_RETURN_TIMEOUT_TICKS:RETURN_TIMEOUT_TICKS;
+        if(elapsed>=returnTimeout&&target!=null&&isSafeDestination(level,villager,target,home)){
             villager.getNavigation().stop();villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
             villager.teleportTo(target.getX()+0.5D,target.getY(),target.getZ()+0.5D);
             clearHomeReturn(tag);return;
@@ -175,6 +179,13 @@ public class VillagerResidenceEvents {
             else villager.getNavigation().moveTo(target.getX()+0.5D,target.getY(),target.getZ()+0.5D,0.85D);
             villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET,new WalkTarget(target,0.85F,0));
         }
+    }
+
+    /** Uses the villager's existing nearest-hostile perception, then filters to close, visible undead threats. */
+    private static boolean hasNearbyPerceivedThreat(Villager villager){
+        return villager.getBrain().getMemory(MemoryModuleType.NEAREST_HOSTILE).filter(entity->
+                entity.isAlive()&&(entity instanceof Zombie||entity instanceof AbstractSkeleton)
+                        &&villager.distanceToSqr(entity)<=64.0D&&villager.hasLineOfSight(entity)).isPresent();
     }
 
     private static BlockPos readReturnTarget(net.minecraft.nbt.CompoundTag tag){
