@@ -55,10 +55,12 @@ public class VillagerResidenceEvents {
         br.com.residenciasaldeoes.network.ModNetwork.sendPreviews(player,entries);
     }
     @SubscribeEvent public void onVillagerTick(LivingEvent.LivingTickEvent event){
-        if(!(event.getEntity() instanceof Villager villager)||!(villager.level instanceof ServerLevel level)||villager.tickCount%10!=0)return;
+        if(!(event.getEntity() instanceof Villager villager)||!(villager.level instanceof ServerLevel level))return;
+        boolean weather=level.isRaining();
+        if(villager.tickCount%10!=0&&!weather)return;
         ResidenceData data=ResidenceData.get(level);ResidenceData.Home home=data.owner(villager.getUUID());if(home==null)return;
         if(!home.dimension.equals(level.dimension()))return;
-        long time=level.getDayTime()%24000L;boolean night=time>=13000L&&time<23000L;boolean weather=level.isRaining();if(!night)data.releaseBed(villager.getUUID());
+        long time=level.getDayTime()%24000L;boolean night=time>=13000L&&time<23000L;if(!night&&villager.tickCount%10==0)data.releaseBed(villager.getUUID());
         if(!weather && time>=12000L && time<13000L){
             if(level.hasChunkAt(home.pos) && !villager.isSleeping() && villager.tickCount%40==0){
                 BlockPos approach=findSafeSpot(level,villager,home.pos,home.size);
@@ -96,9 +98,10 @@ public class VillagerResidenceEvents {
     }
     private boolean keepResidentInsideDuringRain(ServerLevel level,ResidenceData data,Villager villager,ResidenceData.Home home,boolean inside,boolean wander){
         if(!inside){
-            data.releaseBed(villager.getUUID());
+            if(villager.tickCount%10==0)data.releaseBed(villager.getUUID());
             villager.stopSleeping();
             if(hasActiveInternalPath(villager,home))return false;
+            if(villager.tickCount%10!=0)return false;
             BlockPos target=findSafeSpot(level,villager,home.pos,home.size);
             if(target!=null){
                 villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
@@ -121,7 +124,7 @@ public class VillagerResidenceEvents {
             villager.getNavigation().stop();
             walkTarget=Optional.empty();
         }
-        if(!wander||walkTarget.isPresent()||!villager.getNavigation().isDone())return true;
+        if(!wander||walkTarget.isPresent()||!villager.getNavigation().isDone()||villager.tickCount%10!=0)return true;
         if(villager.getRandom().nextInt(5)==0)return true;
         BlockPos destination=findRandomReachableInteriorSpot(level,villager,home);
         if(destination!=null)brain.setMemory(MemoryModuleType.WALK_TARGET,new WalkTarget(destination,.48F,1));
