@@ -1,24 +1,11 @@
-newmtl crystal_light
-Ka 0.18 0.18 0.18
-Kd 1.0 1.0 1.0
-map_Kd #crystal_light
-
-newmtl crystal_mid
-Ka 0.12 0.12 0.12
-Kd 1.0 1.0 1.0
-map_Kd #crystal_mid
-
-newmtl crystal_dark
-Ka 0.08 0.08 0.08
-Kd 1.0 1.0 1.0
-map_Kd #crystal_dark
-
 newmtl gold_light
 Ka 0.25 0.25 0.25
 Kd 1.0 1.0 1.0
 map_Kd #gold_light
 
+
 newmtl gold_shade
 Ka 0.12 0.12 0.12
 Kd 1.0 1.0 1.0
 map_Kd #gold_shade
+

@@ -3,12 +3,13 @@
   "model": "residenciasaldeoes:models/block/emerald_top.obj",
   "flip_v": false,
   "automatic_culling": false,
-  "shade_quads": true,
+  "shade_quads": false,
   "emissive_ambient": false,
   "textures": {
     "particle": "residenciasaldeoes:block/emerald_crystal_mid",
     "crystal_light": "residenciasaldeoes:block/emerald_crystal_light",
     "crystal_mid": "residenciasaldeoes:block/emerald_crystal_mid",
     "crystal_dark": "residenciasaldeoes:block/emerald_crystal_dark"
-  }
+  },
+  "ambientocclusion": false
 }

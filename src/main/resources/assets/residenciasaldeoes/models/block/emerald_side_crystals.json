@@ -1,9 +1,9 @@
 {
   "loader": "forge:obj",
-  "model": "residenciasaldeoes:models/block/emerald_sides.obj",
+  "model": "residenciasaldeoes:models/block/emerald_side_crystals.obj",
   "flip_v": false,
   "automatic_culling": false,
-  "shade_quads": true,
+  "shade_quads": false,
   "emissive_ambient": false,
   "textures": {
     "particle": "residenciasaldeoes:block/emerald_crystal_mid",
@@ -12,5 +12,6 @@
     "crystal_dark": "residenciasaldeoes:block/emerald_crystal_dark",
     "gold_light": "residenciasaldeoes:block/wood_trim",
     "gold_shade": "residenciasaldeoes:block/corner_trim"
-  }
+  },
+  "ambientocclusion": false
 }
