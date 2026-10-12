@@ -30,4 +30,4 @@ if not all(pixel[3] > 0 for pixel in face_pixels):
     raise SystemExit("Face-front island contains alpha holes; order alone cannot replace every face pixel")
 if not any(pixel[3] == 0 for pixel in [image.getpixel((x, y)) for y in range(26, 38) for x in range(22, 30)]):
     raise SystemExit("Expected transparent torso pixels were not found")
-print("Static UV check passed: opaque face can cover earlier pixels; transparent torso still reveals prior rendering.")
+print("Static UV check passed: face pixels are opaque; torso holes remain transparent for the base-texture render.")
