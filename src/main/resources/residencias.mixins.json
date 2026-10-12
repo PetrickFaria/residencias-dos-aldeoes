@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "br.com.residenciasaldeoes.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "residencias.refmap.json",
+  "client": [
+    "VillagerRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

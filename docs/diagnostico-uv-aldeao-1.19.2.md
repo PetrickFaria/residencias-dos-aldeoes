@@ -57,14 +57,16 @@ A contagem abaixo usa as ilhas de superfície da caixa do modelo (pixels únicos
 | Pernas | 224 | 224 | 0 |
 | Aba do chapéu | 576 | 0 | 576 |
 
-Skin Completa oculta a camada vanilla combinada de tipo/bioma e profissão, mas o render do aldeão ainda desenha primeiro a textura base do modelo. O passe da skin usa cutout: alpha zero deixa a textura base anterior visível. Assim, os 600 pixels transparentes do casaco e os 264 pixels transparentes do tronco são preenchidos visualmente pelo aldeão vanilla; o sistema não transformou esses pixels em preto. Para ver um traje totalmente customizado, preencha as ilhas que devem substituir a aparência original. A textura de diagnóstico identifica cada caixa; a transparência original continua disponível para áreas que devem deixar a base passar.
+Até a versão 1.0.22, Skin Completa ocultava a camada vanilla combinada de tipo/bioma e profissão, mas o render do aldeão ainda desenhava primeiro a textura base do modelo. O passe cutout adicional descartava alpha zero e a textura vanilla anterior permanecia visível nesses pixels.
 
 ## Investigação da captura da versão 1.0.22
 
-O passe customizado era inserido antes das camadas vanilla registradas. Isso permitia que uma camada posterior voltasse a pintar sobre os pixels opacos do PNG. A conferência direta da face frontal, UV `(8,8)` com tamanho `8×10`, encontrou 80/80 pixels opacos; portanto, os pixels cinza/pretos do rosto, incluindo os olhos da textura enviada, não deveriam ser trocados pelo conteúdo anterior se o mesmo UV receber o PNG depois dessas camadas. Esse é um indício verificável de que a ordem de renderização contribuía para as diferenças observadas; não identifica quais camadas específicas produziram cada pixel da captura.
+O passe customizado era inserido antes das camadas vanilla registradas. Isso permitia que uma camada posterior voltasse a pintar sobre os pixels opacos do PNG. A conferência direta da face frontal, UV `(8,8)` com tamanho `8×10`, encontrou 80/80 pixels opacos; portanto, os pixels cinza/pretos do rosto, incluindo os olhos da textura enviada, podem ser desenhados diretamente do PNG se ele for a textura base do modelo. Esse é um indício verificável de que a ordem de renderização e a arquitetura de overlay contribuíam para as diferenças observadas; não identifica quais camadas específicas produziram cada pixel da captura.
 
-A frente do tronco, UV `(22,26)` com tamanho `8×12`, possui 42/96 pixels opacos, e a frente do casaco `(6,44)` com tamanho `8×18` possui 0/144. O alpha transparente mantém visível o que já foi renderizado atrás. Assim, faixas no torso podem persistir mesmo com o passe movido para o fim. A inspeção estática confirma o conteúdo do arquivo e a cobertura UV; ela não substitui um teste no cliente nem confirma a aparência final dentro do Minecraft.
+A frente do tronco, UV `(22,26)` com tamanho `8×12`, possui 42/96 pixels opacos, e a frente do casaco `(6,44)` com tamanho `8×18` possui 0/144. A partir da 1.0.23, o Mixin faz o PNG ser a textura do passe base para Skin Completa; por isso os pixels transparentes deixam de expor a textura vanilla previamente desenhada e mostram a cena atrás. A inspeção estática confirma conteúdo e cobertura UV, não substitui um teste no cliente nem confirma a aparência final dentro do Minecraft.
 
 O teste reproduzível `python3 tools/verify_skin_reference.py examples/skeleton-villager-custom-validation.png` valida as regiões faciais e do torso usadas neste diagnóstico.
 
 
+
+O Mixin intercepta somente `VillagerRenderer.getTextureLocation` no cliente e apenas quando o UUID tem uma skin em modo Completo. Skin Parcial segue o caminho anterior. A camada do mod continua necessária para acessórios e peças de vestuário adicionadas por pacotes.

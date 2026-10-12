@@ -1,4 +1,4 @@
-plugins { id 'eclipse'; id 'maven-publish'; id 'net.minecraftforge.gradle' version '5.1.77' }
+plugins { id 'eclipse'; id 'maven-publish'; id 'net.minecraftforge.gradle' version '5.1.77'; id 'org.spongepowered.mixin' version '0.7-SNAPSHOT' }
 version = '1.0.23'
 group = 'br.com.residenciasaldeoes'
 archivesBaseName = 'residencias-dos-aldeoes'
@@ -13,6 +13,14 @@ minecraft {
 }
 repositories { mavenCentral() }
 dependencies { minecraft 'net.minecraftforge:forge:1.19.2-43.5.0' }
+dependencies {
+ compileOnly 'org.spongepowered:mixin:0.8.5'
+ annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+mixin {
+ add sourceSets.main, 'residencias.refmap.json'
+ config 'residencias.mixins.json'
+}
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 jar { manifest { attributes(['Specification-Title':'residenciasaldeoes','Specification-Vendor':'OpenAI','Specification-Version':'1','Implementation-Title':project.name,'Implementation-Version':project.jar.archiveVersion]) } }
 jar.finalizedBy('reobfJar')

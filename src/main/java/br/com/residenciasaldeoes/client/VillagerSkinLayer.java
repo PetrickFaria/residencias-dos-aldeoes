@@ -22,7 +22,6 @@ import java.util.List;
 public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel<Villager>> {
     private static final Logger LOGGER = LogUtils.getLogger();
     private final boolean completeOverlay;
-    private boolean completeFallback;
 
     public VillagerSkinLayer(RenderLayerParent<Villager, VillagerModel<Villager>> parent, boolean completeOverlay) {
         super(parent);
@@ -36,8 +35,7 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
         VillagerSkinLayer completeOverlay = new VillagerSkinLayer(renderer, true);
         if (!renderer.addLayer(partialLayer)) return;
         if (!renderer.addLayer(completeOverlay)) {
-            LOGGER.warn("Could not add the final villager-skin pass; complete skins may remain under later renderer layers.");
-            partialLayer.completeFallback = true;
+            LOGGER.warn("Could not add the final villager accessory pass; complete skins still use the base-texture replacement, but package accessories may not render.");
             return;
         }
         for (Class<?> type = renderer.getClass(); type != null; type = type.getSuperclass()) {
@@ -61,15 +59,15 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
                                 wrapped++;
                             }
                         }
-                        // Partial mode must be painted before the vanilla outfit. Complete
-                        // mode gets a second pass last, so opaque custom pixels also cover
-                        // any texture layer that would otherwise repaint the face/body.
+                        // Partial mode is painted before vanilla clothing. Complete mode
+                        // uses the renderer's base texture directly; this final pass is
+                        // reserved for wardrobe geometry that should sit above that texture.
                         replacement.add(0, partialLayer);
                         replacement.add(completeOverlay);
                         list.clear();
                         list.addAll(replacement);
                         if (wrapped == 0) LOGGER.warn("VillagerProfessionLayer was not found; complete skins cannot suppress vanilla biome/profession clothing on this renderer.");
-                        else LOGGER.info("Skin do aldeão instalada em duas passagens; {} camada(s) vanilla respeitam Skin Completa/Parcial.", wrapped);
+                        else LOGGER.info("Skin do aldeão instalada; textura base e acessórios usam passes separados; {} camada(s) vanilla respeitam Skin Completa/Parcial.", wrapped);
                         return;
                     }
                 } catch (ReflectiveOperationException | RuntimeException ignored) {
@@ -77,7 +75,7 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
                 }
             }
         }
-        LOGGER.warn("Could not place villager skin before vanilla render layers; complete skins cannot reliably suppress the vanilla biome/profession outfit.");
+        LOGGER.warn("Could not place villager skin layers; complete skins still replace the base texture, but package accessories or partial ordering may be affected.");
     }
 
     @Override public void render(PoseStack poseStack, MultiBufferSource buffers, int packedLight, Villager villager,
@@ -89,13 +87,12 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
         boolean complete=VillagerSkinTextures.isComplete(villager.getUUID());
         if (completeOverlay) {
             if (!complete) return;
-            // This pass is deliberately last: a skin with opaque pixels must win over
-            // any renderer layer registered after the vanilla profession/biome layer.
-            renderSkin(poseStack,buffers,packedLight,skin);
+            // Skin Completa already replaced the renderer's base texture through a
+            // narrow VillagerRenderer texture hook. Keep only extra geometry here.
             renderCustomParts(poseStack,buffers,packedLight,villager,model);
             return;
         }
-        if (complete && !completeFallback) return;
+        if (complete) return;
         renderSkin(poseStack,buffers,packedLight,skin);
         renderCustomParts(poseStack,buffers,packedLight,villager,model);
     }

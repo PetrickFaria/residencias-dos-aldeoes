@@ -62,9 +62,9 @@ A imagem personalizada é registrada em sua resolução nativa, sem reduzir 128/
 
 ## Ordem de renderização das skins (1.0.23)
 
-Skin Completa agora recebe um passe final depois das camadas atualmente registradas no renderer do aldeão. Isso permite que pixels opacos da textura personalizada, como olhos e nariz, cubram camadas que antes eram desenhadas depois do passe do mod. A camada final usa o mesmo `VillagerModel` já animado; o renderer e a geometria do aldeão não são substituídos. As peças externas e acessórios do pacote são desenhados após a textura base final.
+Skin Completa agora substitui a textura base retornada pelo `VillagerRenderer` por um hook Mixin localizado. O PNG participa do passe normal do renderer sobre o mesmo modelo já animado, em vez de ser uma segunda cópia do corpo. Isso permite que o alpha transparente mostre o fundo da cena, sem revelar a textura vanilla que antes era desenhada sob o overlay. A camada vanilla combinada de bioma/profissão continua suprimida apenas para esse aldeão. Roupas externas e acessórios do pacote são desenhados depois da textura base.
 
-O alpha continua sendo preservado. Pixels transparentes não apagam a textura base já desenhada: deixam o que está atrás visível. Na textura de referência, a face frontal (UV x=8–15, y=8–17) tem 80/80 pixels opacos; a frente do tronco (x=22–29, y=26–37) tem 42/96 opacos e a ilha frontal do casaco (x=6–13, y=44–61) tem 0/144. Portanto, a nova ordem trata a sobreposição nos pixels opacos, mas não transforma as áreas transparentes em pixels cinza. O cliente do Minecraft não foi iniciado nesta sessão, então a reprodução da captura alvo e a compatibilidade com EMF/ETF/Fresh Animations ainda não estão validadas visualmente.
+O alpha continua sendo preservado. Na textura de referência, a face frontal (UV x=8–15, y=8–17) tem 80/80 pixels opacos; a frente do tronco (x=22–29, y=26–37) tem 42/96 opacos e a ilha frontal do casaco (x=6–13, y=44–61) tem 0/144. O hook de textura base impede que esses pixels transparentes revelem a textura vanilla de baixo. O cliente do Minecraft não foi iniciado nesta sessão, então a reprodução da captura alvo e a compatibilidade com EMF/ETF/Fresh Animations ainda não estão validadas visualmente.
 
 
 ## Ajustes visuais (1.0.20)
