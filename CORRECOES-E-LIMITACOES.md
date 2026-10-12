@@ -65,6 +65,7 @@
 ### Verificações da 1.0.21
 
 - Inspeção estática confirmou que o PNG de exemplo tem 64×64 RGBA, 1.176 pixels opacos, 2.920 transparentes, zero pixels alfa intermediário e zero pixels pretos opacos. O RGB de pixels totalmente transparentes não deve produzir preto visível; no passe cutout esses pixels deixam aparecer a textura base desenhada antes.
+- A contagem UV da amostra confirmou falhas de cobertura que explicam a roupa base visível: 264/432 pixels da ilha de tronco são transparentes e 600/600 da caixa externa do casaco são transparentes. A sobreposição de cabeça e aba do chapéu também estão completamente transparentes (448/448 e 576/576). A planilha completa está em `docs/diagnostico-uv-aldeao-1.19.2.md`.
 - O gerador UV executou e criou atlas 64×64 e 256×256 por nearest-neighbor. A imagem de referência foi conferida por dimensão, modo e alpha.
 - `VillagerProfessionLayer` mantém estado/caches por tipo de aldeão e por profissão, então a mesma camada pode atuar em aldeões desempregados. A implementação mantém Skin Parcial delegando a camada vanilla e Skin Completa ignorando-a somente para o residente personalizado.
 - Minecraft não foi iniciado. Os testes visuais A–J de renderização, persistência após reinício, troca de recursos, Fresh Animations, EMF e ETF não foram executados. Não há testes JUnit no projeto (`test` é `NO-SOURCE`).
