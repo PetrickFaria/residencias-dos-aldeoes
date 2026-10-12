@@ -22,9 +22,48 @@ jobs:
           cache: gradle
       - name: Build with the project Gradle wrapper
         run: ./gradlew --no-daemon clean build
+      - name: Verify full-skin Mixin packaging
+        run: |
+          python - <<'PY'
+          from email import policy
+          from email.parser import BytesParser
+          from zipfile import ZipFile
+
+          jar_path = "build/libs/residencias-dos-aldeoes-1.0.23.jar"
+          with ZipFile(jar_path) as jar:
+              entries = set(jar.namelist())
+              manifest = BytesParser(policy=policy.default).parsebytes(
+                  jar.read("META-INF/MANIFEST.MF")
+              )
+              required = {
+                  "br/com/residenciasaldeoes/mixin/VillagerRendererMixin.class",
+                  "residencias.mixins.json",
+                  "residencias.refmap.json",
+                  "META-INF/mods.toml",
+              }
+              missing = required - entries
+              if missing:
+                  raise SystemExit(f"Missing required JAR entries: {sorted(missing)}")
+              if manifest.get("MixinConfigs") != "residencias.mixins.json":
+                  raise SystemExit(
+                      f"MixinConfigs manifest entry is {manifest.get('MixinConfigs')!r}"
+                  )
+              mods = jar.read("META-INF/mods.toml").decode("utf-8")
+              if 'version="1.0.23"' not in mods:
+                  raise SystemExit("JAR does not identify itself as mod version 1.0.23")
+          print("JAR packaging check passed: version 1.0.23 and full-skin Mixin registered.")
+          PY
+      - name: Package complete source archive
+        run: git archive --format=zip --output=build/residencias-dos-aldeoes-1.0.23-source.zip HEAD
       - name: Upload mod JAR
         uses: actions/upload-artifact@v4
         with:
           name: residencias-dos-aldeoes-1.0.23
           path: build/libs/residencias-dos-aldeoes-1.0.23.jar
+          if-no-files-found: error
+      - name: Upload complete source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: residencias-dos-aldeoes-1.0.23-source
+          path: build/residencias-dos-aldeoes-1.0.23-source.zip
           if-no-files-found: error
