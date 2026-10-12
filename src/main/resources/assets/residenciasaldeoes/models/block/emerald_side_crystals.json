@@ -9,6 +9,8 @@
     "particle": "residenciasaldeoes:block/emerald_crystal_mid",
     "crystal_light": "residenciasaldeoes:block/emerald_crystal_light",
     "crystal_mid": "residenciasaldeoes:block/emerald_crystal_mid",
-    "crystal_dark": "residenciasaldeoes:block/emerald_crystal_dark"
+    "crystal_dark": "residenciasaldeoes:block/emerald_crystal_dark",
+    "gold_light": "residenciasaldeoes:block/wood_trim",
+    "gold_shade": "residenciasaldeoes:block/corner_trim"
   }
 }
