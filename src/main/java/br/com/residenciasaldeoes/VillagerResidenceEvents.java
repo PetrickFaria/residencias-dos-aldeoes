@@ -6,9 +6,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.memory.WalkTarget;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
@@ -68,7 +71,18 @@ public class VillagerResidenceEvents {
         if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity)){data.unlinkAll(level,home.dimension,home.pos);return;}
         int r=home.size/2;double x=villager.getX(),y=villager.getY(),z=villager.getZ();
         boolean inside=x>=home.pos.getX()-r && x<home.pos.getX()+r+1 && z>=home.pos.getZ()-r && z<home.pos.getZ()+r+1 && y>=home.pos.getY()+1-0.05 && y<home.pos.getY()+home.size+1;
-        if(!inside){data.releaseBed(villager.getUUID());BlockPos target=findSafeSpot(level,villager,home.pos,home.size);if(target!=null){villager.stopSleeping();villager.teleportTo(target.getX()+.5,target.getY(),target.getZ()+.5);}}
+        if(weather){
+            boolean insideForNightRoutine=keepResidentInsideDuringRain(level,data,villager,home,inside,!night);
+            if(!night||!insideForNightRoutine)return;
+        }
+        if(!inside){
+            data.releaseBed(villager.getUUID());
+            BlockPos target=findSafeSpot(level,villager,home.pos,home.size);
+            if(target!=null){
+                villager.stopSleeping();
+                villager.teleportTo(target.getX()+.5,target.getY(),target.getZ()+.5);
+            }
+        }
         else if(!night) { if(villager.isSleeping()) villager.stopSleeping(); }
         else if(villager.isSleeping()){
             BlockPos sleepingAt=villager.getSleepingPos().orElse(null);ResidenceData.BedClaim claim=data.bedClaim(villager.getUUID());
@@ -79,6 +93,79 @@ public class VillagerResidenceEvents {
             if(bed==null){bed=findAvailableBed(level,data,villager,home.pos,home.size);if(bed!=null&&!data.reserveBed(villager.getUUID(),level.dimension(),home.pos,bed))bed=null;}
             if(bed!=null){if(villager.blockPosition().distSqr(bed)<=4.0D)villager.startSleeping(bed);else villager.getNavigation().moveTo(bed.getX()+.5D,bed.getY(),bed.getZ()+.5D,.85D);}
         }
+    }
+    private boolean keepResidentInsideDuringRain(ServerLevel level,ResidenceData data,Villager villager,ResidenceData.Home home,boolean inside,boolean wander){
+        if(!inside){
+            data.releaseBed(villager.getUUID());
+            villager.stopSleeping();
+            if(hasActiveInternalPath(villager,home))return false;
+            BlockPos target=findSafeSpot(level,villager,home.pos,home.size);
+            if(target!=null){
+                villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+                Path path=villager.getNavigation().createPath(target,0);
+                if(path!=null&&path.canReach())villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET,new WalkTarget(target,.85F,0));
+            }
+            return false;
+        }
+
+        var brain=villager.getBrain();
+        var walkTarget=brain.getMemory(MemoryModuleType.WALK_TARGET);
+        if(walkTarget.isPresent()&&!insideResidence(walkTarget.get().getTarget().currentBlockPosition(),home)){
+            brain.eraseMemory(MemoryModuleType.WALK_TARGET);
+            villager.getNavigation().stop();
+            walkTarget=Optional.empty();
+        }
+        Path activePath=villager.getNavigation().getPath();
+        if(activePath!=null&&!pathStaysInside(activePath,home)){
+            brain.eraseMemory(MemoryModuleType.WALK_TARGET);
+            villager.getNavigation().stop();
+            walkTarget=Optional.empty();
+        }
+        if(!wander||walkTarget.isPresent()||!villager.getNavigation().isDone())return true;
+        if(villager.getRandom().nextInt(5)==0)return true;
+        BlockPos destination=findRandomReachableInteriorSpot(level,villager,home);
+        if(destination!=null)brain.setMemory(MemoryModuleType.WALK_TARGET,new WalkTarget(destination,.48F,1));
+        return true;
+    }
+    private boolean hasActiveInternalPath(Villager villager,ResidenceData.Home home){
+        Path path=villager.getNavigation().getPath();
+        if(path==null||villager.getNavigation().isDone())return false;
+        BlockPos target=villager.getNavigation().getTargetPos();
+        return target!=null&&insideResidence(target,home);
+    }
+    private boolean pathStaysInside(Path path,ResidenceData.Home home){
+        for(int i=path.getNextNodeIndex();i<path.getNodeCount();i++)if(!insideResidence(path.getNode(i).asBlockPos(),home))return false;
+        return true;
+    }
+    private boolean insideResidence(BlockPos pos,ResidenceData.Home home){
+        int r=home.size/2;
+        return pos.getX()>=home.pos.getX()-r&&pos.getX()<home.pos.getX()+r+1
+                &&pos.getZ()>=home.pos.getZ()-r&&pos.getZ()<home.pos.getZ()+r+1
+                &&pos.getY()>=home.pos.getY()+1&&pos.getY()<home.pos.getY()+home.size+1;
+    }
+    private BlockPos findRandomReachableInteriorSpot(ServerLevel level,Villager villager,ResidenceData.Home home){
+        int r=home.size/2;
+        List<BlockPos> candidates=new ArrayList<>();
+        for(int y=home.pos.getY()+1;y<home.pos.getY()+home.size+1;y++)
+            for(int x=home.pos.getX()-r;x<=home.pos.getX()+r;x++)
+                for(int z=home.pos.getZ()-r;z<=home.pos.getZ()+r;z++){
+                    BlockPos feet=new BlockPos(x,y,z);
+                    if(!level.hasChunkAt(feet)||!level.hasChunkAt(feet.above())||!level.hasChunkAt(feet.below()))continue;
+                    BlockState floor=level.getBlockState(feet.below()),at=level.getBlockState(feet),above=level.getBlockState(feet.above());
+                    if(!floor.isFaceSturdy(level,feet.below(),Direction.UP)||!at.getCollisionShape(level,feet).isEmpty()||!above.getCollisionShape(level,feet.above()).isEmpty())continue;
+                    if(at.getFluidState().isSource()||above.getFluidState().isSource()||at.isBurning(level,feet)||above.isBurning(level,feet.above()))continue;
+                    if(!level.noCollision(villager,new AABB(x+.15,y,z+.15,x+.85,y+1.95,z+.85)))continue;
+                    candidates.add(feet);
+                }
+        for(int attempt=0;attempt<24&&!candidates.isEmpty();attempt++){
+            int index=villager.getRandom().nextInt(candidates.size());
+            BlockPos candidate=candidates.remove(index);
+            if(candidate.distSqr(villager.blockPosition())<4.0D)continue;
+            Path path=villager.getNavigation().createPath(candidate,0);
+            if(path==null||!path.canReach()||!pathStaysInside(path,home))continue;
+            return candidate;
+        }
+        return null;
     }
     private BlockPos findAvailableBed(ServerLevel level,ResidenceData data,Villager villager,BlockPos anchor,int size){
         int r=size/2;
