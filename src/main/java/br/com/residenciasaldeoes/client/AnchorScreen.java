@@ -342,6 +342,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         if(renameOpen){if(x<dialogLeft||x>=dialogLeft+196||y<dialogTop||y>=dialogTop+82)return true;return super.mouseClicked(x,y,button);}
         if(personalizationOpen){if(x<dialogLeft||x>=dialogLeft+180||y<dialogTop||y>=dialogTop+112)return true;return super.mouseClicked(x,y,button);}
         if(skinOpen){
+            setFocused(null);
             if(x<skinDialogLeft||x>=skinDialogLeft+220||y<skinDialogTop||y>=skinDialogTop+180)return true;
             if(button==0&&x>=skinDialogLeft+SKIN_PREVIEW_LEFT&&x<skinDialogLeft+SKIN_PREVIEW_RIGHT&&y>=skinDialogTop+SKIN_PREVIEW_TOP&&y<skinDialogTop+SKIN_PREVIEW_BOTTOM){draggingSkinPreview=true;skinPreviewDragX=x;skinPreviewDragY=y;return true;}
             if(button==0&&hasSkinScrollbar()&&x>=skinScrollbarX()-2&&x<skinScrollbarX()+7&&y>=skinDialogTop+25&&y<skinDialogTop+110){setSkinScrollFromPointer(y);return true;}
