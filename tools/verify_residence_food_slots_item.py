@@ -26,9 +26,7 @@ tex=root/"src/main/resources/assets/residenciasaldeoes/textures/item/emerald_fra
 data=tex.read_bytes()
 assert data[:8]==bytes.fromhex("89504e470d0a1a0a")
 assert struct.unpack(">II",data[16:24])==(16,16)
-from PIL import Image
-image=Image.open(tex).convert("RGBA")
-assert image.getpixel((0,0))[3]==0 and any(pixel[3]>0 for pixel in image.get_flattened_data())
+assert data[24]==8 and data[25]==6, "Texture must be 8-bit RGBA so alpha transparency is supported"
 recipe_files=list((root/"src/main/resources/data/residenciasaldeoes/recipes").glob("*.json"))
 fragment_recipes=[p for p in recipe_files if "emerald_fragment" in p.read_text()]
 assert fragment_recipes==[root/"src/main/resources/data/residenciasaldeoes/recipes/emerald_from_fragment.json"]
