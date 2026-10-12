@@ -1,6 +1,7 @@
 package br.com.residenciasaldeoes.client;
 
 import br.com.residenciasaldeoes.ResidenciasDosAldeoes;
+import br.com.residenciasaldeoes.data.SkinApplicationMode;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -15,9 +16,14 @@ import java.util.UUID;
 public final class VillagerSkinTextures {
     private static final Map<UUID, ResourceLocation> TEXTURES = new HashMap<>();
     private static final Map<UUID, byte[]> PNGS = new HashMap<>();
+    private static final Map<UUID, SkinApplicationMode> MODES = new HashMap<>();
     private VillagerSkinTextures() {}
 
     public static void receive(UUID resident, String key, byte[] png) {
+        receive(resident, key, png, SkinApplicationMode.COMPLETE);
+    }
+
+    public static void receive(UUID resident, String key, byte[] png, SkinApplicationMode mode) {
         Minecraft minecraft = Minecraft.getInstance();
         if (key == null || key.isEmpty() || png == null || png.length == 0) {
             clear(resident);
@@ -38,6 +44,7 @@ public final class VillagerSkinTextures {
             dynamic = null; // TextureManager owns it and replaces/closes a prior texture at this ID.
             TEXTURES.put(resident, location);
             PNGS.put(resident, png.clone());
+            MODES.put(resident, mode == null ? SkinApplicationMode.COMPLETE : mode);
         } catch (Exception ignored) {
             // Keep the last valid skin if a new PNG is corrupt or unsupported.
         } finally {
@@ -47,14 +54,17 @@ public final class VillagerSkinTextures {
     }
 
     public static ResourceLocation get(UUID resident) { return TEXTURES.get(resident); }
+    public static SkinApplicationMode mode(UUID resident) { return MODES.getOrDefault(resident, SkinApplicationMode.COMPLETE); }
+    public static boolean isComplete(UUID resident) { return TEXTURES.containsKey(resident) && mode(resident) == SkinApplicationMode.COMPLETE; }
     public static byte[] getPng(UUID resident) { byte[] png=PNGS.get(resident);return png==null?null:png.clone(); }
-    public static void clear(UUID resident) { Minecraft minecraft=Minecraft.getInstance();ResourceLocation texture=TEXTURES.remove(resident);if(texture!=null)minecraft.getTextureManager().release(texture);PNGS.remove(resident); }
+    public static void clear(UUID resident) { Minecraft minecraft=Minecraft.getInstance();ResourceLocation texture=TEXTURES.remove(resident);if(texture!=null)minecraft.getTextureManager().release(texture);PNGS.remove(resident);MODES.remove(resident); }
 
     public static void clearAll() {
         Minecraft minecraft = Minecraft.getInstance();
         for (ResourceLocation texture : TEXTURES.values()) minecraft.getTextureManager().release(texture);
         TEXTURES.clear();
         PNGS.clear();
+        MODES.clear();
     }
 
     private static ResourceLocation textureLocation(UUID id) {

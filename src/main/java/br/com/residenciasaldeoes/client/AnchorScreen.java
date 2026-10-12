@@ -1,6 +1,7 @@
 package br.com.residenciasaldeoes.client;
 
 import br.com.residenciasaldeoes.data.ResidenceData;
+import br.com.residenciasaldeoes.data.SkinApplicationMode;
 import br.com.residenciasaldeoes.menu.AnchorMenu;
 import br.com.residenciasaldeoes.network.ModNetwork;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -37,11 +38,12 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     private double scrollbarDragStartY;
     private int scrollbarDragStart;
     private Button registerButton,renameButton,unlinkResidentButton,unlinkAllButton,previewButton;
-    private final List<Button> personalizationButtons=new ArrayList<>(),skinButtons=new ArrayList<>();
+    private final List<Button> personalizationButtons=new ArrayList<>(),skinButtons=new ArrayList<>(),skinModeButtons=new ArrayList<>();
     private final List<SkinChoice> skinChoices=new ArrayList<>();
     private Button skinConfirm,skinCancel;
     private int skinScroll,skinDialogLeft,skinDialogTop;
     private String pendingSkin="";
+    private SkinApplicationMode pendingSkinMode=SkinApplicationMode.COMPLETE;
     private Villager skinPreviewVillager;
     private EditBox renameField;
     private Button renameConfirm,renameCancel;
@@ -123,17 +125,27 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     private void openSkinDialog(){
         if(selected==null||!personalizationOpen)return;
         closeCustomization();skinOpen=true;skinScroll=0;skinChoices.clear();skinChoices.add(new SkinChoice("",Component.translatable("gui.residenciasaldeoes.original_skin").getString(),null));
-        String current=residents.stream().filter(r->r.id().equals(selected)).map(ModNetwork.ResidentEntry::skinKey).findFirst().orElse("");
+        ModNetwork.ResidentEntry selectedResident=residents.stream().filter(r->r.id().equals(selected)).findFirst().orElse(null);
+        String current=selectedResident==null?"":selectedResident.skinKey();
         pendingSkin=current;
+        pendingSkinMode=selectedResident==null?SkinApplicationMode.COMPLETE:selectedResident.skinMode();
         for(SkinFiles.SkinFile file:SkinFiles.list())skinChoices.add(new SkinChoice(file.id(),file.label(),file));
         if(!current.isEmpty()&&skinChoices.stream().noneMatch(o->o.id().equals(current)))skinChoices.add(new SkinChoice(current,Component.translatable("gui.residenciasaldeoes.current_skin",current).getString(),null));
-        skinDialogLeft=leftPos+(imageWidth-220)/2;skinDialogTop=topPos+(imageHeight-158)/2;
+        skinDialogLeft=leftPos+(imageWidth-220)/2;skinDialogTop=topPos+(imageHeight-180)/2;
         skinPreviewVillager=minecraft.level==null?null:EntityType.VILLAGER.create(minecraft.level);
         updateSkinPreview();
         setMainButtonsActive(false);
         rebuildSkinButtons();
-        skinConfirm=addStyledButton(skinDialogLeft+16,skinDialogTop+130,86,20,Component.literal("Confirmar"),b->confirmSkin(),0xFF0D4B25,0xFF70C982);
-        skinCancel=addStyledButton(skinDialogLeft+118,skinDialogTop+130,86,20,Component.literal("Cancelar"),b->closeSkinDialog(),0xFF0D4B25,0xFF70C982);
+        rebuildSkinModeButtons();
+        skinConfirm=addStyledButton(skinDialogLeft+16,skinDialogTop+153,86,20,Component.literal("Confirmar"),b->confirmSkin(),0xFF0D4B25,0xFF70C982);
+        skinCancel=addStyledButton(skinDialogLeft+118,skinDialogTop+153,86,20,Component.literal("Cancelar"),b->closeSkinDialog(),0xFF0D4B25,0xFF70C982);
+    }
+    private void rebuildSkinModeButtons(){
+        for(Button b:skinModeButtons)removeWidget(b);skinModeButtons.clear();
+        int fullFace=pendingSkinMode==SkinApplicationMode.COMPLETE?0xFF27603A:0xFF0D4B25;
+        int partialFace=pendingSkinMode==SkinApplicationMode.PARTIAL?0xFF27603A:0xFF0D4B25;
+        skinModeButtons.add(addStyledButton(skinDialogLeft+9,skinDialogTop+130,98,17,Component.translatable("gui.residenciasaldeoes.skin_mode_complete"),b->{pendingSkinMode=SkinApplicationMode.COMPLETE;updateSkinPreview();rebuildSkinModeButtons();},fullFace,0xFF70C982));
+        skinModeButtons.add(addStyledButton(skinDialogLeft+113,skinDialogTop+130,98,17,Component.translatable("gui.residenciasaldeoes.skin_mode_partial"),b->{pendingSkinMode=SkinApplicationMode.PARTIAL;updateSkinPreview();rebuildSkinModeButtons();},partialFace,0xFF70C982));
     }
     private void rebuildSkinButtons(){
         for(Button b:skinButtons)removeWidget(b);skinButtons.clear();
@@ -149,24 +161,27 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         if(skinPreviewVillager==null)return;
         if(pendingSkin.isEmpty()){VillagerSkinTextures.clear(skinPreviewVillager.getUUID());return;}
         SkinChoice option=skinChoices.stream().filter(o->o.id().equals(pendingSkin)).findFirst().orElse(null);
-        try{byte[] png=option!=null&&option.file()!=null?SkinFiles.read(option.file()):VillagerSkinTextures.getPng(selected);if(png!=null)VillagerSkinTextures.receive(skinPreviewVillager.getUUID(),pendingSkin,png);}catch(IOException ignored){}
+        try{byte[] png=option!=null&&option.file()!=null?SkinFiles.read(option.file()):VillagerSkinTextures.getPng(selected);if(png!=null)VillagerSkinTextures.receive(skinPreviewVillager.getUUID(),pendingSkin,png,pendingSkinMode);}catch(IOException ignored){}
     }
     private void confirmSkin(){
         if(!skinOpen||selected==null)return;
-        String current=residents.stream().filter(r->r.id().equals(selected)).map(ModNetwork.ResidentEntry::skinKey).findFirst().orElse("");
-        if(!pendingSkin.equals(current)){
-            if(pendingSkin.isEmpty())ModNetwork.assignSkin(menu.getPos(),selected,"",new byte[0]);
-            else{
-                SkinChoice choice=skinChoices.stream().filter(o->o.id().equals(pendingSkin)).findFirst().orElse(null);
-                if(choice==null||choice.file()==null)return; // Existing server texture is selectable but is not re-uploaded.
-                try{ModNetwork.assignSkin(menu.getPos(),selected,choice.id(),SkinFiles.read(choice.file()));}catch(IOException ignored){return;}
-            }
+        ModNetwork.ResidentEntry selectedResident=residents.stream().filter(r->r.id().equals(selected)).findFirst().orElse(null);
+        String current=selectedResident==null?"":selectedResident.skinKey();
+        SkinApplicationMode currentMode=selectedResident==null?SkinApplicationMode.COMPLETE:selectedResident.skinMode();
+        if(pendingSkin.isEmpty()&&!current.isEmpty())ModNetwork.assignSkin(menu.getPos(),selected,"",new byte[0],pendingSkinMode);
+        else if(!pendingSkin.isEmpty()&&!pendingSkin.equals(current)){
+            SkinChoice choice=skinChoices.stream().filter(o->o.id().equals(pendingSkin)).findFirst().orElse(null);
+            if(choice==null||choice.file()==null)return;
+            try{ModNetwork.assignSkin(menu.getPos(),selected,choice.id(),SkinFiles.read(choice.file()),pendingSkinMode);}catch(IOException ignored){return;}
+        }else if(!pendingSkin.isEmpty()&&pendingSkinMode!=currentMode){
+            ModNetwork.assignSkin(menu.getPos(),selected,pendingSkin,new byte[0],pendingSkinMode);
         }
         closeSkinDialog();openCustomization();
     }
     private void closeSkinDialog(){
         if(!skinOpen)return;
         for(Button b:skinButtons)removeWidget(b);skinButtons.clear();
+        for(Button b:skinModeButtons)removeWidget(b);skinModeButtons.clear();
         if(skinConfirm!=null)removeWidget(skinConfirm);if(skinCancel!=null)removeWidget(skinCancel);skinConfirm=null;skinCancel=null;
         skinOpen=false;if(skinPreviewVillager!=null)VillagerSkinTextures.clear(skinPreviewVillager.getUUID());skinPreviewVillager=null;setMainButtonsActive(true);openCustomization();
     }
@@ -185,7 +200,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         String newName=renameField.getValue().trim();
         if(newName.isEmpty())return;
         ModNetwork.renameResident(menu.getPos(),selected,newName);
-        List<ModNetwork.ResidentEntry> next=residents.stream().map(e->e.id().equals(selected)?new ModNetwork.ResidentEntry(e.id(),newName,e.bed(),e.work(),e.chest(),e.skinKey()):e).toList();
+        List<ModNetwork.ResidentEntry> next=residents.stream().map(e->e.id().equals(selected)?new ModNetwork.ResidentEntry(e.id(),newName,e.bed(),e.work(),e.chest(),e.skinKey(),e.skinMode()):e).toList();
         if(minecraft.level!=null)receiveResidents(minecraft.level.dimension().location(),menu.getPos(),next,previewOn);
         closeRename(true);
     }
@@ -250,10 +265,11 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     }
     private void renderSkinDialog(PoseStack p,int x,int y,float q){
         fill(p,leftPos+3,topPos+3,leftPos+imageWidth-3,topPos+imageHeight-3,0x99000000);
-        fill(p,skinDialogLeft,skinDialogTop,skinDialogLeft+220,skinDialogTop+158,0xFF30251C);fill(p,skinDialogLeft+2,skinDialogTop+2,skinDialogLeft+218,skinDialogTop+156,0xFF644A30);
+        fill(p,skinDialogLeft,skinDialogTop,skinDialogLeft+220,skinDialogTop+180,0xFF30251C);fill(p,skinDialogLeft+2,skinDialogTop+2,skinDialogLeft+218,skinDialogTop+178,0xFF644A30);
         Component heading=Component.translatable("gui.residenciasaldeoes.skin_title");font.draw(p,heading,skinDialogLeft+(220-font.width(heading))/2,skinDialogTop+9,0xFFFFEBCB);
         fill(p,skinDialogLeft+7,skinDialogTop+22,skinDialogLeft+213,skinDialogTop+111,0xFF393125);
         for(Button b:skinButtons)b.render(p,x,y,q);
+        for(Button b:skinModeButtons)b.render(p,x,y,q);
         if(skinChoices.isEmpty())font.draw(p,Component.translatable("gui.residenciasaldeoes.no_skins"),skinDialogLeft+12,skinDialogTop+32,0xFFD3C8AF);
         if(skinChoices.size()>5)renderSkinScrollbar(p);
         if(skinPreviewVillager!=null)InventoryScreen.renderEntityInInventory(skinDialogLeft+184,skinDialogTop+108,28,0.0F,0.0F,skinPreviewVillager);
@@ -270,7 +286,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     @Override public boolean mouseClicked(double x,double y,int button){
         if(renameOpen){if(x<dialogLeft||x>=dialogLeft+196||y<dialogTop||y>=dialogTop+82)return true;return super.mouseClicked(x,y,button);}
         if(personalizationOpen){if(x<dialogLeft||x>=dialogLeft+180||y<dialogTop||y>=dialogTop+112)return true;return super.mouseClicked(x,y,button);}
-        if(skinOpen){if(x<skinDialogLeft||x>=skinDialogLeft+220||y<skinDialogTop||y>=skinDialogTop+158)return true;if(button==0&&hasSkinScrollbar()&&x>=skinScrollbarX()-2&&x<skinScrollbarX()+7&&y>=skinDialogTop+25&&y<skinDialogTop+110){setSkinScrollFromPointer(y);return true;}return super.mouseClicked(x,y,button);}
+        if(skinOpen){if(x<skinDialogLeft||x>=skinDialogLeft+220||y<skinDialogTop||y>=skinDialogTop+180)return true;if(button==0&&hasSkinScrollbar()&&x>=skinScrollbarX()-2&&x<skinScrollbarX()+7&&y>=skinDialogTop+25&&y<skinDialogTop+110){setSkinScrollFromPointer(y);return true;}return super.mouseClicked(x,y,button);}
         if(button==0&&hasScrollbar()&&x>=scrollbarX()-2&&x<scrollbarX()+7&&y>=topPos+ROW_TOP&&y<topPos+ROW_TOP+LIST_HEIGHT){
             draggingScrollbar=true;scrollbarDragStartY=y;scrollbarDragStart=scroll;
             int thumbTop=scrollbarThumbTop();if(y<thumbTop||y>=thumbTop+scrollbarThumbHeight()){setScrollFromPointer(y);scrollbarDragStart=scroll;scrollbarDragStartY=y;}

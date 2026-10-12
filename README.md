@@ -1,4 +1,4 @@
-# Mod de Residências dos Aldeões 1.0.17
+# Mod de Residências dos Aldeões 1.0.18
 
 Minecraft Java 1.19.2 · Forge 43.5.0 · Java 17.
 
@@ -29,14 +29,15 @@ O arquivo [modelo_uv_aldeao_vanilla_1.19.2.png](docs/modelo_uv_aldeao_vanilla_1.
 
 As peças de chapéu e casaco são partes/camadas do modelo de aldeão. O desenho da skin deve cobrir as ilhas correspondentes quando quiser personalizar essas áreas. A galeria valida o tamanho e o formato PNG; ela não converte texturas de jogadores nem altera a geometria.
 
-Cada textura é atribuída ao UUID escolhido e salva/sincronizada pelos dados do mundo. A opção **Skin Original** remove a substituição; desvincular o morador também remove a skin gerenciada. O canal alfa original é mantido; pixels transparentes seguem o comportamento cutout do Minecraft e deixam a textura base abaixo aparecer. A skin é desenhada antes das camadas normais de profissão e nível, que continuam sendo renderizadas depois.
+Cada textura e modo é associado ao UUID escolhido e salvo nos dados do mundo. **Skin Completa** é o padrão e omite, somente para esse aldeão, a camada vanilla combinada de roupa do bioma/profissão e acessórios/nível. **Skin Parcial** aplica o PNG à base e preserva essa camada vanilla. O modo pode ser alternado sem importar o arquivo novamente. A opção **Skin Original** remove a substituição; desvincular o morador também remove a skin gerenciada. O canal alfa original é mantido; pixels transparentes seguem o comportamento cutout do Minecraft e deixam a textura base abaixo aparecer. O modelo e as animações vanilla continuam sendo usados.
 
-## Correção 1.0.17 da skin
+## Correção 1.0.18 das skins
 
-- Removido o preenchimento forçado do canal alfa, que convertia áreas transparentes em pixels pretos opacos.
-- A camada usa filtragem nearest-neighbor sem mipmaps para preservar o pixel art.
-- A skin é posicionada no início da lista de camadas do renderizador existente. Roupa/acessórios de profissão e insígnias continuam sendo desenhados pelas camadas vanilla por cima; o renderizador e o modelo de aldeão não são substituídos.
-- Trocas com PNG válido atualizam a textura dinâmica do UUID selecionado. Texturas anteriores são substituídas/liberadas pelo TextureManager; reset e logout liberam texturas.
+- A captura anexada mostrava a face customizada e o corpo vanilla. O código da 1.0.17 desenhava o PNG numa RenderLayer antes da VillagerProfessionLayer. Esta camada vanilla também desenha vestimenta por tipo de bioma, inclusive em aldeões desempregados; portanto, as camadas de profissão não eram a única causa.
+- A camada do mod permanece no renderer/modelo vanilla existente, mas agora a camada combinada vanilla é delegada por um wrapper que só a omite para residentes que tenham uma skin e estejam em modo Completo. Parcial continua delegando a renderização vanilla normalmente.
+- O modo e o PNG são sincronizados junto ao UUID e persistidos em SavedData. Saves anteriores sem `skin_mode` recebem o modo Completo ao carregar. A alteração de modo não retransmite o PNG ao servidor.
+- O canal alfa original continua preservado, com filtragem nearest-neighbor sem mipmaps. O renderizador, o modelo, os dados de profissão, as trocas, a IA e a geometria não são substituídos.
+- A galeria mantém a aparência aprovada; recebeu dois seletores para Completa/Parcial e uma área modal um pouco mais alta para acomodá-los.
 
 ## Correção de inicialização
 
@@ -44,4 +45,4 @@ O manipulador de desconexão agora é registrado no barramento Forge. Os eventos
 
 ## Compilação
 
-Com Java 17, execute `./gradlew clean build`. O JAR fica em `build/libs/residencias-dos-aldeoes-1.0.17.jar`.
+Com Java 17, execute `./gradlew clean build`. O JAR fica em `build/libs/residencias-dos-aldeoes-1.0.18.jar`.

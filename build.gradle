@@ -1,5 +1,5 @@
 plugins { id 'eclipse'; id 'maven-publish'; id 'net.minecraftforge.gradle' version '5.1.77' }
-version = '1.0.17'
+version = '1.0.18'
 group = 'br.com.residenciasaldeoes'
 archivesBaseName = 'residencias-dos-aldeoes'
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)

@@ -1,11 +1,13 @@
 package br.com.residenciasaldeoes.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import br.com.residenciasaldeoes.data.SkinApplicationMode;
 import net.minecraft.client.model.VillagerModel;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
+import net.minecraft.client.renderer.entity.layers.VillagerProfessionLayer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.npc.Villager;
@@ -16,18 +18,13 @@ import org.slf4j.Logger;
 import java.lang.reflect.Field;
 import java.util.List;
 
-/** Draws the resident texture on the vanilla model before vanilla profession/level overlays. */
+/** Applies a resident PNG to the original villager model and selects the vanilla outfit policy. */
 public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel<Villager>> {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     public VillagerSkinLayer(RenderLayerParent<Villager, VillagerModel<Villager>> parent) { super(parent); }
 
-    /**
-     * Forge's AddLayers hook only appends. Move this one layer to the beginning so the normal
-     * biome/profession/level layers render over it exactly as they do over the vanilla texture.
-     * Search by the inserted instance rather than a mapped private field name; this also works
-     * when an optional renderer mod subclasses VillagerRenderer.
-     */
+    /** Forge's hook appends layers; place this before the outfit layer for Skin Parcial. */
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static void installBeforeVanillaLayers(VillagerRenderer renderer) {
         VillagerSkinLayer layer = new VillagerSkinLayer(renderer);
@@ -38,8 +35,18 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
                 try {
                     field.setAccessible(true);
                     Object value = field.get(renderer);
-                    if (value instanceof List list && list.remove(layer)) {
+                    if (value instanceof List list && list.contains(layer)) {
+                        list.remove(layer);
+                        boolean foundOutfitLayer = false;
+                        for (int i = 0; i < list.size(); i++) {
+                            Object current = list.get(i);
+                            if (current instanceof VillagerProfessionLayer<?, ?>) {
+                                list.set(i, new ModeAwareProfessionLayer(renderer, (RenderLayer<Villager, VillagerModel<Villager>>) current));
+                                foundOutfitLayer = true;
+                            }
+                        }
                         list.add(0, layer);
+                        if (!foundOutfitLayer) LOGGER.warn("VillagerProfessionLayer was not found; complete skins cannot suppress vanilla biome/profession clothing on this renderer.");
                         return;
                     }
                 } catch (ReflectiveOperationException | RuntimeException ignored) {
@@ -47,7 +54,7 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
                 }
             }
         }
-        LOGGER.warn("Could not place villager skin before vanilla render layers; profession overlays may cover the custom texture.");
+        LOGGER.warn("Could not place villager skin before vanilla render layers; partial skins may render above vanilla outfits.");
     }
 
     @Override public void render(PoseStack poseStack, MultiBufferSource buffers, int packedLight, Villager villager,
@@ -57,5 +64,25 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
         if (skin == null) return;
         getParentModel().renderToBuffer(poseStack, buffers.getBuffer(RenderType.entityCutoutNoCull(skin)), packedLight,
                 OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
+    }
+
+    /** The vanilla profession layer also supplies biome clothing for unemployed villagers. */
+    private static final class ModeAwareProfessionLayer extends RenderLayer<Villager, VillagerModel<Villager>> {
+        private final RenderLayer<Villager, VillagerModel<Villager>> delegate;
+
+        private ModeAwareProfessionLayer(RenderLayerParent<Villager, VillagerModel<Villager>> parent,
+                                         RenderLayer<Villager, VillagerModel<Villager>> delegate) {
+            super(parent);
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void render(PoseStack poseStack, MultiBufferSource buffers, int packedLight, Villager villager,
+                           float limbSwing, float limbSwingAmount, float partialTick, float ageInTicks,
+                           float netHeadYaw, float headPitch) {
+            if (VillagerSkinTextures.isComplete(villager.getUUID())) return;
+            delegate.render(poseStack, buffers, packedLight, villager, limbSwing, limbSwingAmount,
+                    partialTick, ageInTicks, netHeadYaw, headPitch);
+        }
     }
 }

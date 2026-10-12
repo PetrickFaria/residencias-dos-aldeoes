@@ -29,12 +29,10 @@
 - Skin Original, desvinculação individual/coletiva, morte e destruição da âncora removem a textura gerenciada; o render vanilla reaparece sem alterar a entidade.
 - Dois PNGs demonstrativos são empacotados no mod e copiados para a pasta de configuração ao abrir a galeria pela primeira vez.
 
-## Versão 1.0.17 — Correção de transparência e ordem das camadas
+## Versão 1.0.17 — Correção inicial das skins
 
-- A causa do preto em pixels transparentes era a substituição de cada alfa pelo valor 255 em `VillagerSkinTextures.receive`.
-- A camada personalizada era adicionada ao fim da lista e re-renderizava o modelo inteiro; assim, cobria os acessórios profissionais, inclusive o chapéu de fazendeiro.
-- Agora a imagem RGBA é preservada, a textura usa filtragem nearest-neighbor e a camada é movida para antes das camadas vanilla existentes, que seguem renderizando sobre a skin.
-- O renderizador e o modelo não são substituídos; a associação por UUID, a persistência e a sincronização existentes permanecem.
+- A imagem RGBA é preservada, a textura usa filtragem nearest-neighbor e a camada é posicionada antes das camadas vanilla.
+- Essa mudança não resolveu a cobertura da vestimenta vanilla no corpo. A causa foi identificada na 1.0.18: a camada de profissão do aldeão também aplica a roupa do bioma a aldeões desempregados.
 
 ## Verificações e limitações da versão 1.0.17
 
@@ -45,6 +43,13 @@
 - A distribuição alternativa local do Gradle 7.5.1 também não pôde ser usada: `gradle-kotlin-dsl-7.5.1.jar` está corrompido (`ZipException: zip END header not found`). Não foi encontrado cache local utilizável do Gradle/Forge para compilar sem rede.
 - Foi preparado `.github/workflows/build.yml` com Ubuntu, Temurin Java 17, Gradle Wrapper do projeto e upload do JAR como artefato; o workflow ainda não foi executado porque não há conexão autorizada a um repositório GitHub nesta sessão.
 - O GitHub está disponível para conexão como integração, mas não está instalado/conectado. Criar ou usar um repositório privado e enviar o código requer autorização/conexão da conta do proprietário; nenhum repositório foi criado e nenhum código foi publicado.
-- Portanto, a versão 1.0.17 não foi compilada nesta sessão e não existe um JAR 1.0.17 validado para entregar. O JAR 1.0.16 anterior não contém estas correções e não deve ser usado como substituto.
+- A versão 1.0.17 foi compilada com sucesso no workflow GitHub Actions usando Temurin 17 e Gradle Wrapper 7.5.1; o JAR baixado foi validado como ZIP e continha `mods.toml`, classes e recursos da versão 1.0.17.
 - O cliente Minecraft não foi iniciado. Os testes A–G, incluindo renderização vanilla, PNG com regiões distintas, transparência, profissões, persistência, remoção e compatibilidade com Fresh Animations/EMF/ETF, permanecem pendentes de validação em jogo. A imagem recebida é uma captura RGB, não o arquivo de skin PNG original, e não permite validar sua paleta alfa/UV.
-- Não foi executada uma compilação/teste automatizado nesta sessão; as verificações acima são estáticas. A compilação é o próximo gate necessário antes da instalação.
+- Os testes visuais no jogo não foram realizados nessa versão.
+
+## Versão 1.0.18 — Skin Completa e Skin Parcial
+
+- `VillagerSkinLayer` continua usando o modelo vanilla original. Para modo Completo, um wrapper de `VillagerProfessionLayer` não delega a camada combinada de roupa de bioma/profissão e acessórios somente quando o UUID tem skin completa ativa. No modo Parcial, a camada original é delegada sem alterações.
+- `SkinApplicationMode`, `ResidenceData`, `ModNetwork`, `AnchorMenu`, `VillagerSkinTextures` e `AnchorScreen` guardam, sincronizam e mostram o modo por aldeão. Saves antigos sem modo são lidos como Completo; a remoção da skin e a desvinculação limpam o PNG e o modo junto.
+- A reflexão permanece localizada à lista de camadas do renderer porque o evento Forge `AddLayers` só acrescenta camadas; é usada para inserir a skin antes da camada vanilla e envolvê-la sem substituir o renderer ou o modelo. Se um renderer de terceiro impedir esse acesso/refletir sua lista, o log avisa que o modo Completo pode não conseguir ocultar a roupa.
+- A persistência, sincronização, seleção por UUID e UV continuam dependendo do PNG 64×64 do modelo de aldeão. O cliente de jogo não foi executado nesta sessão; os testes visuais A–H permanecem pendentes até validar dentro do Minecraft, inclusive com Fresh Animations/EMF/ETF.

@@ -3,6 +3,7 @@ package br.com.residenciasaldeoes.network;
 import br.com.residenciasaldeoes.ResidenciasDosAldeoes;
 import br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity;
 import br.com.residenciasaldeoes.data.ResidenceData;
+import br.com.residenciasaldeoes.data.SkinApplicationMode;
 import br.com.residenciasaldeoes.menu.AnchorMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -23,7 +24,7 @@ import javax.imageio.ImageIO;
 import java.util.function.Supplier;
 
 public final class ModNetwork {
- private static final String VERSION="5";
+ private static final String VERSION="6";
  public static final int MAX_SKIN_BYTES=262144;
  public static final SimpleChannel CHANNEL=NetworkRegistry.newSimpleChannel(new ResourceLocation(ResidenciasDosAldeoes.MODID,"main"),()->VERSION,VERSION::equals,VERSION::equals);
  private static int id; private ModNetwork(){}
@@ -40,13 +41,13 @@ public final class ModNetwork {
  public static void unlinkAll(BlockPos p){CHANNEL.sendToServer(new Action(p,6,0,null,""));}
  public static void setPreview(BlockPos p,boolean enabled){CHANNEL.sendToServer(new Action(p,7,enabled?1:0,null,""));}
  public static void requestResidents(BlockPos p){CHANNEL.sendToServer(new Action(p,8,0,null,""));}
- public static void assignSkin(BlockPos pos,UUID resident,String key,byte[] png){CHANNEL.sendToServer(new AssignSkin(pos,resident,key,png));}
- public static void broadcastSkin(UUID id,ResidenceData.ResidentSkin skin){if(skin==null){clearSkin(id);return;}CHANNEL.send(PacketDistributor.ALL.noArg(),new SkinSync(id,skin.key(),skin.png()));}
- public static void clearSkin(UUID id){CHANNEL.send(PacketDistributor.ALL.noArg(),new SkinSync(id,"",new byte[0]));}
- public static void sendSkin(ServerPlayer player,UUID id,ResidenceData.ResidentSkin skin){if(skin!=null)CHANNEL.send(PacketDistributor.PLAYER.with(()->player),new SkinSync(id,skin.key(),skin.png()));}
+ public static void assignSkin(BlockPos pos,UUID resident,String key,byte[] png,SkinApplicationMode mode){CHANNEL.sendToServer(new AssignSkin(pos,resident,key,png,mode));}
+ public static void broadcastSkin(UUID id,ResidenceData.ResidentSkin skin){if(skin==null){clearSkin(id);return;}CHANNEL.send(PacketDistributor.ALL.noArg(),new SkinSync(id,skin.key(),skin.png(),skin.mode()));}
+ public static void clearSkin(UUID id){CHANNEL.send(PacketDistributor.ALL.noArg(),new SkinSync(id,"",new byte[0],SkinApplicationMode.COMPLETE));}
+ public static void sendSkin(ServerPlayer player,UUID id,ResidenceData.ResidentSkin skin){if(skin!=null)CHANNEL.send(PacketDistributor.PLAYER.with(()->player),new SkinSync(id,skin.key(),skin.png(),skin.mode()));}
  public static void sendResidents(ServerPlayer p,BlockPos pos,List<ResidentEntry> e){CHANNEL.send(PacketDistributor.PLAYER.with(()->p),new Residents(p.level.dimension().location(),pos,e,previewEnabled(p,p.level.dimension().location(),pos)));}
  public static void sendPreviews(ServerPlayer p,List<PreviewEntry> e){CHANNEL.send(PacketDistributor.PLAYER.with(()->p),new Previews(e));}
- public record ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest,String skinKey){public ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest){this(id,name,bed,work,chest,"");}}
+ public record ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest,String skinKey,SkinApplicationMode skinMode){public ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest){this(id,name,bed,work,chest,"",SkinApplicationMode.COMPLETE);}public ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest,String skinKey){this(id,name,bed,work,chest,skinKey,SkinApplicationMode.COMPLETE);}}
  public record PreviewEntry(ResourceLocation dimension,BlockPos pos,int size,boolean permanent){}
  public record Action(BlockPos pos,int action,int value,UUID resident,String text){
   void encode(FriendlyByteBuf b){b.writeBlockPos(pos);b.writeVarInt(action);b.writeVarInt(value);b.writeBoolean(resident!=null);if(resident!=null)b.writeUUID(resident);b.writeUtf(text,128);}
@@ -69,17 +70,19 @@ public final class ModNetwork {
  private static String previewKey(ResourceLocation d,BlockPos p){return "residenciasaldeoes_preview_"+d.toString().replace(':','_')+"_"+p.asLong();}
  public static boolean previewEnabled(ServerPlayer p,ResourceLocation d,BlockPos pos){return p.getPersistentData().getBoolean(previewKey(d,pos));}
  public record Previews(List<PreviewEntry> entries){void encode(FriendlyByteBuf b){b.writeVarInt(entries.size());for(var e:entries){b.writeResourceLocation(e.dimension());b.writeBlockPos(e.pos());b.writeVarInt(e.size());b.writeBoolean(e.permanent());}}static Previews decode(FriendlyByteBuf b){int n=Math.min(256,b.readVarInt());List<PreviewEntry> a=new ArrayList<>(n);for(int i=0;i<n;i++)a.add(new PreviewEntry(b.readResourceLocation(),b.readBlockPos(),b.readVarInt(),b.readBoolean()));return new Previews(List.copyOf(a));}void handle(Supplier<NetworkEvent.Context> c){c.get().enqueueWork(()->DistExecutor.unsafeRunWhenOn(Dist.CLIENT,()->()->{br.com.residenciasaldeoes.client.ResidencePreview.setEntries(entries);br.com.residenciasaldeoes.client.AnchorScreen.receivePreviewStates(entries);}));c.get().setPacketHandled(true);}}
- public record Residents(ResourceLocation dimension,BlockPos pos,List<ResidentEntry> entries,boolean preview){void encode(FriendlyByteBuf b){b.writeResourceLocation(dimension);b.writeBlockPos(pos);b.writeVarInt(entries.size());for(var e:entries){b.writeUUID(e.id());b.writeUtf(e.name(),128);b.writeBoolean(e.bed());b.writeBoolean(e.work());b.writeBoolean(e.chest());b.writeUtf(e.skinKey(),64);}b.writeBoolean(preview);}static Residents decode(FriendlyByteBuf b){ResourceLocation dimension=b.readResourceLocation();BlockPos p=b.readBlockPos();int n=Math.min(64,b.readVarInt());List<ResidentEntry> e=new ArrayList<>(n);for(int i=0;i<n;i++)e.add(new ResidentEntry(b.readUUID(),b.readUtf(128),b.readBoolean(),b.readBoolean(),b.readBoolean(),b.readUtf(64)));return new Residents(dimension,p,List.copyOf(e),b.readBoolean());}void handle(Supplier<NetworkEvent.Context> c){c.get().enqueueWork(()->DistExecutor.unsafeRunWhenOn(Dist.CLIENT,()->()->br.com.residenciasaldeoes.client.AnchorScreen.receiveResidents(dimension,pos,entries,preview)));c.get().setPacketHandled(true);}}
- public record AssignSkin(BlockPos pos,UUID resident,String key,byte[] png){
-  void encode(FriendlyByteBuf b){b.writeBlockPos(pos);b.writeUUID(resident);b.writeUtf(key,64);b.writeByteArray(png);}
-  static AssignSkin decode(FriendlyByteBuf b){BlockPos p=b.readBlockPos();UUID id=b.readUUID();String key=b.readUtf(64);byte[] png=b.readByteArray(MAX_SKIN_BYTES);return new AssignSkin(p,id,key,png);}
+ public record Residents(ResourceLocation dimension,BlockPos pos,List<ResidentEntry> entries,boolean preview){void encode(FriendlyByteBuf b){b.writeResourceLocation(dimension);b.writeBlockPos(pos);b.writeVarInt(entries.size());for(var e:entries){b.writeUUID(e.id());b.writeUtf(e.name(),128);b.writeBoolean(e.bed());b.writeBoolean(e.work());b.writeBoolean(e.chest());b.writeUtf(e.skinKey(),64);b.writeBoolean(e.skinMode()==SkinApplicationMode.COMPLETE);}b.writeBoolean(preview);}static Residents decode(FriendlyByteBuf b){ResourceLocation dimension=b.readResourceLocation();BlockPos p=b.readBlockPos();int n=Math.min(64,b.readVarInt());List<ResidentEntry> e=new ArrayList<>(n);for(int i=0;i<n;i++)e.add(new ResidentEntry(b.readUUID(),b.readUtf(128),b.readBoolean(),b.readBoolean(),b.readBoolean(),b.readUtf(64),b.readBoolean()?SkinApplicationMode.COMPLETE:SkinApplicationMode.PARTIAL));return new Residents(dimension,p,List.copyOf(e),b.readBoolean());}void handle(Supplier<NetworkEvent.Context> c){c.get().enqueueWork(()->DistExecutor.unsafeRunWhenOn(Dist.CLIENT,()->()->br.com.residenciasaldeoes.client.AnchorScreen.receiveResidents(dimension,pos,entries,preview)));c.get().setPacketHandled(true);}}
+ public record AssignSkin(BlockPos pos,UUID resident,String key,byte[] png,SkinApplicationMode mode){
+  void encode(FriendlyByteBuf b){b.writeBlockPos(pos);b.writeUUID(resident);b.writeUtf(key,64);b.writeByteArray(png);b.writeBoolean(mode==SkinApplicationMode.COMPLETE);}
+  static AssignSkin decode(FriendlyByteBuf b){BlockPos p=b.readBlockPos();UUID id=b.readUUID();String key=b.readUtf(64);byte[] png=b.readByteArray(MAX_SKIN_BYTES);return new AssignSkin(p,id,key,png,b.readBoolean()?SkinApplicationMode.COMPLETE:SkinApplicationMode.PARTIAL);}
   void handle(Supplier<NetworkEvent.Context> c){ServerPlayer p=c.get().getSender();if(p==null)return;c.get().enqueueWork(()->{
    if(!(p.containerMenu instanceof AnchorMenu m)||!m.getPos().equals(pos)||!(p.level.getBlockEntity(pos) instanceof ResidentialAnchorBlockEntity))return;
    ServerLevel level=(ServerLevel)p.level;ResidenceData data=ResidenceData.get(level);ResidenceData.Home home=data.owner(resident);
    if(home==null||!home.dimension.equals(level.dimension())||!home.pos.equals(pos))return;
-   if(key.isEmpty()&&png.length==0){data.setResidentSkin(resident,"",new byte[0]);clearSkin(resident);return;}
-   if(!key.matches("[A-Za-z0-9._-]{1,64}")||!validPng64(png))return;
-   data.setResidentSkin(resident,key,png);broadcastSkin(resident,data.residentSkin(resident));
+   if(key.isEmpty()&&png.length==0){data.setResidentSkin(resident,"",new byte[0],mode);clearSkin(resident);m.sendResidentSnapshot(p);return;}
+   if(!key.matches("[A-Za-z0-9._-]{1,64}"))return;
+   if(png.length==0){if(!data.setResidentSkinMode(resident,key,mode))return;}
+   else {if(!validPng64(png))return;data.setResidentSkin(resident,key,png,mode);}
+   broadcastSkin(resident,data.residentSkin(resident));m.sendResidentSnapshot(p);
   });c.get().setPacketHandled(true);}
  }
  private static boolean validPng64(byte[] png){
@@ -89,9 +92,9 @@ public final class ModNetwork {
   try{var image=ImageIO.read(new ByteArrayInputStream(png));return image!=null&&image.getWidth()==64&&image.getHeight()==64;}catch(Exception invalid){return false;}
  }
  private static int readInt(byte[] b,int i){return (b[i]&255)<<24|(b[i+1]&255)<<16|(b[i+2]&255)<<8|(b[i+3]&255);}
- public record SkinSync(UUID resident,String key,byte[] png){
-  void encode(FriendlyByteBuf b){b.writeUUID(resident);b.writeUtf(key,64);b.writeByteArray(png);}
-  static SkinSync decode(FriendlyByteBuf b){return new SkinSync(b.readUUID(),b.readUtf(64),b.readByteArray(MAX_SKIN_BYTES));}
-  void handle(Supplier<NetworkEvent.Context> c){c.get().enqueueWork(()->DistExecutor.unsafeRunWhenOn(Dist.CLIENT,()->()->br.com.residenciasaldeoes.client.VillagerSkinTextures.receive(resident,key,png)));c.get().setPacketHandled(true);}
+ public record SkinSync(UUID resident,String key,byte[] png,SkinApplicationMode mode){
+  void encode(FriendlyByteBuf b){b.writeUUID(resident);b.writeUtf(key,64);b.writeByteArray(png);b.writeBoolean(mode==SkinApplicationMode.COMPLETE);}
+  static SkinSync decode(FriendlyByteBuf b){return new SkinSync(b.readUUID(),b.readUtf(64),b.readByteArray(MAX_SKIN_BYTES),b.readBoolean()?SkinApplicationMode.COMPLETE:SkinApplicationMode.PARTIAL);}
+  void handle(Supplier<NetworkEvent.Context> c){c.get().enqueueWork(()->DistExecutor.unsafeRunWhenOn(Dist.CLIENT,()->()->br.com.residenciasaldeoes.client.VillagerSkinTextures.receive(resident,key,png,mode)));c.get().setPacketHandled(true);}
  }
 }
