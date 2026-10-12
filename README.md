@@ -4,14 +4,14 @@ Minecraft Java 1.19.2 · Forge 43.5.0 · Java 17.
 
 ## Skins PNG para o aldeão vanilla
 
-As skins são texturas **64×64 pixels no UV do `VillagerModel` de Minecraft 1.19.2**. Elas não usam o UV nem o modelo de jogador. O modelo vanilla continua controlando nariz, cabeça, braços cruzados, pernas e animações; a textura escolhida é renderizada no próprio modelo do aldeão.
+As skins são texturas no UV do `VillagerModel` de Minecraft 1.19.2. PNGs quadrados de 64, 128, 256 ou 512 pixels são aceitos; como o modelo original usa UV 64×64, o cliente reamostra as maiores para 64×64 com nearest-neighbor. Elas não usam o UV nem o modelo de jogador. O modelo vanilla continua controlando nariz, cabeça, braços cruzados, pernas e animações; a textura escolhida é renderizada no próprio modelo do aldeão.
 
 Há duas maneiras de disponibilizar PNGs:
 
 1. Copie o arquivo para `config/residenciasaldeoes/skins/`.
 2. Ou coloque-o em um pacote de recursos ativo em `assets/residenciasaldeoes/skins/`.
 
-Use somente o nome do arquivo como identificador, sem `.png`, com letras, números, ponto, hífen ou sublinhado (até 64 caracteres). Ao abrir **Personalização → Alterar Skin**, a galeria lê a pasta de configuração e os pacotes de recursos ativos. Se o mesmo identificador existir nos dois locais, o PNG da pasta `config` prevalece. Os PNGs devem ter 64×64 e até 256 KiB. Reabra a tela depois de instalar ou alterar um arquivo.
+Use somente o nome do arquivo como identificador, sem `.png`, com letras, números, ponto, hífen ou sublinhado (até 64 caracteres). Ao abrir **Personalização → Alterar Skin**, a galeria lê a pasta de configuração e os pacotes de recursos ativos. Se o mesmo identificador existir nos dois locais, o PNG da pasta `config` prevalece. PNGs simples devem ter até 1,5 MB. Para roupa externa e acessórios, use um pacote ZIP compatível conforme a documentação abaixo. Reabra a tela depois de instalar ou alterar um arquivo.
 
 O arquivo [modelo_uv_aldeao_vanilla_1.19.2.png](docs/modelo_uv_aldeao_vanilla_1.19.2.png) é um guia de cores UV em tamanho real (64×64). Substitua as cores de guia ao pintar; não o selecione como skin final. A imagem é acompanhada pelo mapa dos retângulos de UV abaixo. Os intervalos usam coordenadas começando em zero e o limite final não está incluído.
 
@@ -31,13 +31,13 @@ As peças de chapéu e casaco são partes/camadas do modelo de aldeão. O desenh
 
 Cada textura e modo é associado ao UUID escolhido e salvo nos dados do mundo. **Skin Completa** é o padrão e omite, somente para esse aldeão, a camada vanilla combinada de roupa do bioma/profissão e acessórios/nível. **Skin Parcial** aplica o PNG à base e preserva essa camada vanilla. O modo pode ser alternado sem importar o arquivo novamente. A opção **Skin Original** remove a substituição; desvincular o morador também remove a skin gerenciada. O canal alfa original é mantido; pixels transparentes seguem o comportamento cutout do Minecraft e deixam a textura base abaixo aparecer. O modelo e as animações vanilla continuam sendo usados.
 
-## Correção 1.0.19 das skins
+## Modos de skin (1.0.18)
 
 - A captura anexada mostrava a face customizada e o corpo vanilla. O código da 1.0.17 desenhava o PNG numa RenderLayer antes da VillagerProfessionLayer. Esta camada vanilla também desenha vestimenta por tipo de bioma, inclusive em aldeões desempregados; portanto, as camadas de profissão não eram a única causa.
 - A camada do mod permanece no renderer/modelo vanilla existente, mas agora a camada combinada vanilla é delegada por um wrapper que só a omite para residentes que tenham uma skin e estejam em modo Completo. Parcial continua delegando a renderização vanilla normalmente.
 - O modo e o PNG são sincronizados junto ao UUID e persistidos em SavedData. Saves anteriores sem `skin_mode` recebem o modo Completo ao carregar. A alteração de modo não retransmite o PNG ao servidor.
 - O canal alfa original continua preservado, com filtragem nearest-neighbor sem mipmaps. O renderizador, o modelo, os dados de profissão, as trocas, a IA e a geometria não são substituídos.
-- A galeria mantém a aparência aprovada; recebeu dois seletores para Completa/Parcial e uma área modal um pouco mais alta para acomodá-los.
+- A galeria mantém a aparência aprovada e oferece os seletores Completa/Parcial.
 
 ## Correção de inicialização
 
@@ -53,3 +53,5 @@ Com Java 17, execute `./gradlew clean build`. O JAR fica em `build/libs/residenc
 Skins PNG antigas seguem suportadas. Para camadas externas e acessórios, consulte [o formato de pacote](docs/personalizacao-pacote-v1.md) e use o ZIP de exemplo em `examples/pacote-jaqueta-fones.zip`. Copie pacotes ou PNGs compatíveis para `config/residenciasaldeoes/skins` e selecione no menu **Personalização → Alterar Skin**.
 
 Pacotes são ZIPs com manifesto JSON e PNGs; o sistema valida caminhos, tamanhos, dimensões, número de componentes e cubos antes de persistir. Os dados são salvos e sincronizados por UUID. Camadas extras usam cubos ligados às partes vanilla `HEAD`, `BODY`, `ARMS`, `RIGHT_LEG` e `LEFT_LEG`.
+
+A prévia de personalização permite arrastar o aldeão para girá-lo horizontalmente e usar **Centralizar** para voltar à frente.

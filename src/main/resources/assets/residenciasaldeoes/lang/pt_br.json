@@ -31,7 +31,7 @@
   "gui.residenciasaldeoes.current_skin": "Atual: %s",
   "gui.residenciasaldeoes.skin_title": "Seleção de Skin",
   "gui.residenciasaldeoes.no_skins": "Nenhuma skin PNG encontrada.",
-  "gui.residenciasaldeoes.skin_folder_hint": "PNG 64×64 em config/residenciasaldeoes/skins",
+  "gui.residenciasaldeoes.skin_folder_hint": "PNG/ZIP em config/residenciasaldeoes/skins",
   "gui.residenciasaldeoes.rename_hint": "Nome do Aldeão",
   "gui.residenciasaldeoes.unlink_resident": "Desvincular Residente",
   "gui.residenciasaldeoes.unlink_all": "Desvincular Todos",
