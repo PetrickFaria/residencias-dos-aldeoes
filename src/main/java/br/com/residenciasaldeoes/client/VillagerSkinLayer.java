@@ -21,26 +21,38 @@ import java.util.List;
 /** Applies a resident PNG to the original villager model and selects the vanilla outfit policy. */
 public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel<Villager>> {
     private static final Logger LOGGER = LogUtils.getLogger();
+    private final boolean completeOverlay;
+    private boolean completeFallback;
 
-    public VillagerSkinLayer(RenderLayerParent<Villager, VillagerModel<Villager>> parent) { super(parent); }
+    public VillagerSkinLayer(RenderLayerParent<Villager, VillagerModel<Villager>> parent, boolean completeOverlay) {
+        super(parent);
+        this.completeOverlay = completeOverlay;
+    }
 
     /** Forge's hook appends layers; place this before the outfit layer for Skin Parcial. */
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static void installBeforeVanillaLayers(VillagerRenderer renderer) {
-        VillagerSkinLayer layer = new VillagerSkinLayer(renderer);
-        if (!renderer.addLayer(layer)) return;
+        VillagerSkinLayer partialLayer = new VillagerSkinLayer(renderer, false);
+        VillagerSkinLayer completeOverlay = new VillagerSkinLayer(renderer, true);
+        if (!renderer.addLayer(partialLayer)) return;
+        if (!renderer.addLayer(completeOverlay)) {
+            LOGGER.warn("Could not add the final villager-skin pass; complete skins may remain under later renderer layers.");
+            partialLayer.completeFallback = true;
+            return;
+        }
         for (Class<?> type = renderer.getClass(); type != null; type = type.getSuperclass()) {
             for (Field field : type.getDeclaredFields()) {
                 if (!List.class.isAssignableFrom(field.getType())) continue;
                 try {
                     field.setAccessible(true);
                     Object value = field.get(renderer);
-                    if (value instanceof List list && list.contains(layer)) {
+                    if (value instanceof List list && list.contains(partialLayer) && list.contains(completeOverlay)) {
                         // Build the replacement first. The previous implementation removed
                         // the skin layer before attempting a reflective list.set; if that
                         // mutation failed, the custom layer silently disappeared.
                         List<Object> replacement = new java.util.ArrayList<>(list);
-                        replacement.remove(layer);
+                        replacement.remove(partialLayer);
+                        replacement.remove(completeOverlay);
                         int wrapped = 0;
                         for (int i = 0; i < replacement.size(); i++) {
                             Object current = replacement.get(i);
@@ -49,11 +61,15 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
                                 wrapped++;
                             }
                         }
-                        replacement.add(0, layer);
+                        // Partial mode must be painted before the vanilla outfit. Complete
+                        // mode gets a second pass last, so opaque custom pixels also cover
+                        // any texture layer that would otherwise repaint the face/body.
+                        replacement.add(0, partialLayer);
+                        replacement.add(completeOverlay);
                         list.clear();
                         list.addAll(replacement);
                         if (wrapped == 0) LOGGER.warn("VillagerProfessionLayer was not found; complete skins cannot suppress vanilla biome/profession clothing on this renderer.");
-                        else LOGGER.info("Skin de aldeão instalada antes das camadas vanilla; {} camada(s) de vestimenta passam a respeitar Skin Completa/Parcial.", wrapped);
+                        else LOGGER.info("Skin do aldeão instalada em duas passagens; {} camada(s) vanilla respeitam Skin Completa/Parcial.", wrapped);
                         return;
                     }
                 } catch (ReflectiveOperationException | RuntimeException ignored) {
@@ -69,11 +85,30 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
                                  float netHeadYaw, float headPitch) {
         ResourceLocation skin = VillagerSkinTextures.get(villager.getUUID());
         if (skin == null) return;
-        getParentModel().renderToBuffer(poseStack, buffers.getBuffer(RenderType.entityCutoutNoCull(skin)), packedLight,
-                OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
         VillagerModel<Villager> model=getParentModel();
-        renderPieces(poseStack,buffers,packedLight,villager,model,VillagerSkinTextures.outerParts(villager.getUUID()));
-        renderPieces(poseStack,buffers,packedLight,villager,model,VillagerSkinTextures.accessories(villager.getUUID()));
+        boolean complete=VillagerSkinTextures.isComplete(villager.getUUID());
+        if (completeOverlay) {
+            if (!complete) return;
+            // This pass is deliberately last: a skin with opaque pixels must win over
+            // any renderer layer registered after the vanilla profession/biome layer.
+            renderSkin(poseStack,buffers,packedLight,skin);
+            renderCustomParts(poseStack,buffers,packedLight,villager,model);
+            return;
+        }
+        if (complete && !completeFallback) return;
+        renderSkin(poseStack,buffers,packedLight,skin);
+        renderCustomParts(poseStack,buffers,packedLight,villager,model);
+    }
+
+    private static void renderCustomParts(PoseStack poses,MultiBufferSource buffers,int light,Villager villager,
+                                          VillagerModel<Villager> model){
+        renderPieces(poses,buffers,light,villager,model,VillagerSkinTextures.outerParts(villager.getUUID()));
+        renderPieces(poses,buffers,light,villager,model,VillagerSkinTextures.accessories(villager.getUUID()));
+    }
+
+    private void renderSkin(PoseStack poses,MultiBufferSource buffers,int light,ResourceLocation skin){
+        getParentModel().renderToBuffer(poses,buffers.getBuffer(RenderType.entityCutoutNoCull(skin)),light,
+                OverlayTexture.NO_OVERLAY,1.0F,1.0F,1.0F,1.0F);
     }
 
     /** Extra clothing and accessories are cuboids attached in the local coordinates of vanilla model parts. */
