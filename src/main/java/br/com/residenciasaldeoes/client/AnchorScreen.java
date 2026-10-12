@@ -31,6 +31,9 @@ import java.util.ArrayList;
 
 public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     private static final int ROW_TOP=77,ROW_HEIGHT=13,VISIBLE_ROWS=5,LIST_HEIGHT=VISIBLE_ROWS*ROW_HEIGHT;
+    // Skin dialog preview viewport, local to the dialog rather than to the screen.
+    private static final int SKIN_PREVIEW_LEFT=154,SKIN_PREVIEW_RIGHT=213,SKIN_PREVIEW_TOP=22,SKIN_PREVIEW_BOTTOM=111;
+    private static final int SKIN_HINT_LEFT=8,SKIN_HINT_RIGHT=149,SKIN_HINT_TOP=112,SKIN_HINT_BOTTOM=129;
     private static final int REGISTER_BUTTON_Y=151,UNLINK_BUTTON_Y=175,PREVIEW_BUTTON_Y=199;
     private static final Map<String,Snapshot> CACHE=new HashMap<>();
     private List<ModNetwork.ResidentEntry> residents=List.of();
@@ -283,10 +286,35 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         for(Button b:skinModeButtons)b.render(p,x,y,q);
         if(skinChoices.isEmpty())font.draw(p,Component.translatable("gui.residenciasaldeoes.no_skins"),skinDialogLeft+12,skinDialogTop+32,0xFFD3C8AF);
         if(skinChoices.size()>5)renderSkinScrollbar(p);
-        if(skinPreviewVillager!=null)renderRotatingPreview(p,skinDialogLeft+184,skinDialogTop+105,36);
+        if(skinPreviewVillager!=null)renderSkinPreview(p);
         if(skinPreviewCenter!=null)skinPreviewCenter.render(p,x,y,q);
         if(skinConfirm!=null)skinConfirm.render(p,x,y,q);if(skinCancel!=null)skinCancel.render(p,x,y,q);
-        font.draw(p,Component.translatable("gui.residenciasaldeoes.skin_folder_hint"),skinDialogLeft+8,skinDialogTop+114,0xFFD3C8AF);
+        renderSkinFolderHint(p);
+    }
+    private void renderSkinPreview(PoseStack poses){
+        int x1=skinDialogLeft+SKIN_PREVIEW_LEFT,x2=skinDialogLeft+SKIN_PREVIEW_RIGHT;
+        int y1=skinDialogTop+SKIN_PREVIEW_TOP,y2=skinDialogTop+SKIN_PREVIEW_BOTTOM;
+        double guiScale=minecraft.getWindow().getGuiScale();
+        int sx=(int)Math.floor(x1*guiScale),ex=(int)Math.ceil(x2*guiScale);
+        int sy=(int)Math.floor(y1*guiScale),ey=(int)Math.ceil(y2*guiScale);
+        int scale=Math.min(36,Math.max(1,(SKIN_PREVIEW_BOTTOM-SKIN_PREVIEW_TOP-12)/2));
+        int centerX=(x1+x2)/2;
+        // In this inventory-style pose the entity's visual center sits just above
+        // the origin. Compensate proportionally so all GUI scales use the same center.
+        int originY=(y1+y2)/2+Math.round(scale/24.0F);
+        RenderSystem.enableScissor(sx,minecraft.getWindow().getHeight()-ey,ex-sx,ey-sy);
+        try{renderRotatingPreview(poses,centerX,originY,scale);}finally{RenderSystem.disableScissor();}
+    }
+    private void renderSkinFolderHint(PoseStack p){
+        int x=skinDialogLeft+SKIN_HINT_LEFT,y=skinDialogTop+SKIN_HINT_TOP;
+        int clipRight=skinDialogLeft+SKIN_HINT_RIGHT,clipBottom=skinDialogTop+SKIN_HINT_BOTTOM;
+        double guiScale=minecraft.getWindow().getGuiScale();
+        int sx=(int)Math.floor(x*guiScale),ex=(int)Math.ceil(clipRight*guiScale);
+        int sy=(int)Math.floor(y*guiScale),ey=(int)Math.ceil(clipBottom*guiScale);
+        RenderSystem.enableScissor(sx,minecraft.getWindow().getHeight()-ey,ex-sx,ey-sy);
+        List<net.minecraft.util.FormattedCharSequence> lines=font.split(Component.translatable("gui.residenciasaldeoes.skin_folder_hint"),SKIN_HINT_RIGHT-SKIN_HINT_LEFT-2);
+        for(int i=0;i<Math.min(2,lines.size());i++)font.draw(p,lines.get(i),x,skinDialogTop+SKIN_HINT_TOP+i*8,0xFFD3C8AF);
+        RenderSystem.disableScissor();
     }
     private void renderRotatingPreview(PoseStack poses,int x,int y,int scale){
         Lighting.setupForEntityInInventory();var dispatcher=minecraft.getEntityRenderDispatcher();poses.pushPose();poses.translate(x,y,1050.0D);poses.scale(1.0F,1.0F,-1.0F);poses.translate(0.0D,0.0D,1000.0D);poses.scale(scale,scale,scale);
@@ -305,7 +333,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     @Override public boolean mouseClicked(double x,double y,int button){
         if(renameOpen){if(x<dialogLeft||x>=dialogLeft+196||y<dialogTop||y>=dialogTop+82)return true;return super.mouseClicked(x,y,button);}
         if(personalizationOpen){if(x<dialogLeft||x>=dialogLeft+180||y<dialogTop||y>=dialogTop+112)return true;return super.mouseClicked(x,y,button);}
-        if(skinOpen){if(x<skinDialogLeft||x>=skinDialogLeft+220||y<skinDialogTop||y>=skinDialogTop+180)return true;if(button==0&&x>=skinDialogLeft+154&&x<skinDialogLeft+214&&y>=skinDialogTop+25&&y<skinDialogTop+108){draggingSkinPreview=true;skinPreviewDragX=x;return true;}if(button==0&&hasSkinScrollbar()&&x>=skinScrollbarX()-2&&x<skinScrollbarX()+7&&y>=skinDialogTop+25&&y<skinDialogTop+110){setSkinScrollFromPointer(y);return true;}return super.mouseClicked(x,y,button);}
+        if(skinOpen){if(x<skinDialogLeft||x>=skinDialogLeft+220||y<skinDialogTop||y>=skinDialogTop+180)return true;if(button==0&&x>=skinDialogLeft+SKIN_PREVIEW_LEFT&&x<skinDialogLeft+SKIN_PREVIEW_RIGHT&&y>=skinDialogTop+SKIN_PREVIEW_TOP&&y<skinDialogTop+SKIN_PREVIEW_BOTTOM){draggingSkinPreview=true;skinPreviewDragX=x;return true;}if(button==0&&hasSkinScrollbar()&&x>=skinScrollbarX()-2&&x<skinScrollbarX()+7&&y>=skinDialogTop+25&&y<skinDialogTop+110){setSkinScrollFromPointer(y);return true;}return super.mouseClicked(x,y,button);}
         if(button==0&&hasScrollbar()&&x>=scrollbarX()-2&&x<scrollbarX()+7&&y>=topPos+ROW_TOP&&y<topPos+ROW_TOP+LIST_HEIGHT){
             draggingScrollbar=true;scrollbarDragStartY=y;scrollbarDragStart=scroll;
             int thumbTop=scrollbarThumbTop();if(y<thumbTop||y>=thumbTop+scrollbarThumbHeight()){setScrollFromPointer(y);scrollbarDragStart=scroll;scrollbarDragStartY=y;}

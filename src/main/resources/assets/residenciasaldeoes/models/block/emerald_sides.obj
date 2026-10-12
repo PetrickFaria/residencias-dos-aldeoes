@@ -1,0 +1,57 @@
+mtllib emerald_sides.mtl
+o residential_anchor_side_crystals
+vt 0.0 0.0
+vt 1.0 0.0
+vt 0.5 1.0
+v 0.500000 0.500000 0.060000
+v 0.500000 0.700000 0.125000
+v 0.700000 0.500000 0.125000
+v 0.500000 0.300000 0.125000
+v 0.300000 0.500000 0.125000
+usemtl crystal_light
+f 1/1 2/2 3/3
+usemtl crystal_mid
+f 1/1 3/2 4/3
+usemtl crystal_dark
+f 1/1 4/2 5/3
+usemtl crystal_light
+f 1/1 5/2 2/3
+v 0.500000 0.500000 0.940000
+v 0.500000 0.700000 0.875000
+v 0.700000 0.500000 0.875000
+v 0.500000 0.300000 0.875000
+v 0.300000 0.500000 0.875000
+usemtl crystal_light
+f 6/1 8/2 7/3
+usemtl crystal_mid
+f 6/1 9/2 8/3
+usemtl crystal_dark
+f 6/1 10/2 9/3
+usemtl crystal_light
+f 6/1 7/2 10/3
+v 0.060000 0.500000 0.500000
+v 0.125000 0.700000 0.500000
+v 0.125000 0.500000 0.700000
+v 0.125000 0.300000 0.500000
+v 0.125000 0.500000 0.300000
+usemtl crystal_light
+f 11/1 13/2 12/3
+usemtl crystal_mid
+f 11/1 14/2 13/3
+usemtl crystal_dark
+f 11/1 15/2 14/3
+usemtl crystal_light
+f 11/1 12/2 15/3
+v 0.940000 0.500000 0.500000
+v 0.875000 0.700000 0.500000
+v 0.875000 0.500000 0.700000
+v 0.875000 0.300000 0.500000
+v 0.875000 0.500000 0.300000
+usemtl crystal_light
+f 16/1 17/2 18/3
+usemtl crystal_mid
+f 16/1 18/2 19/3
+usemtl crystal_dark
+f 16/1 19/2 20/3
+usemtl crystal_light
+f 16/1 20/2 17/3

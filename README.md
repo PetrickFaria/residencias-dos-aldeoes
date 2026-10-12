@@ -1,4 +1,4 @@
-# Mod de Residências dos Aldeões 1.0.19
+# Mod de Residências dos Aldeões 1.0.20
 
 Minecraft Java 1.19.2 · Forge 43.5.0 · Java 17.
 
@@ -45,7 +45,7 @@ O manipulador de desconexão agora é registrado no barramento Forge. Os eventos
 
 ## Compilação
 
-Com Java 17, execute `./gradlew clean build`. O JAR fica em `build/libs/residencias-dos-aldeoes-1.0.19.jar`.
+Com Java 17, execute `./gradlew clean build`. O JAR fica em `build/libs/residencias-dos-aldeoes-1.0.20.jar`.
 
 
 ## Personalização em camadas (1.0.19)
@@ -55,3 +55,8 @@ Skins PNG antigas seguem suportadas. Para camadas externas e acessórios, consul
 Pacotes são ZIPs com manifesto JSON e PNGs; o sistema valida caminhos, tamanhos, dimensões, número de componentes e cubos antes de persistir. Os dados são salvos e sincronizados por UUID. Camadas extras usam cubos ligados às partes vanilla `HEAD`, `BODY`, `ARMS`, `RIGHT_LEG` e `LEFT_LEG`.
 
 A prévia de personalização permite arrastar o aldeão para girá-lo horizontalmente e usar **Centralizar** para voltar à frente.
+
+
+## Ajustes visuais (1.0.20)
+
+A prévia 3D da tela de skins é centralizada e recortada dentro do painel escuro, mantendo rotação interativa e a área do botão **Centralizar** separada. O modelo residencial recebeu cantos de madeira maiores, um aro elevado no topo e esmeraldas laterais com faces triangulares reais. O ID do bloco e seus dados persistidos permanecem inalterados.

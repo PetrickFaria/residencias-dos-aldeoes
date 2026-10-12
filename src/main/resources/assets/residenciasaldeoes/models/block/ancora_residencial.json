@@ -10,6 +10,9 @@
     },
     "top_crystal": {
       "parent": "residenciasaldeoes:block/emerald_top_crystal"
+    },
+    "side_crystals": {
+      "parent": "residenciasaldeoes:block/emerald_side_crystals"
     }
   }
 }
