@@ -573,7 +573,7 @@ public class VillagerResidenceEvents {
         ResidenceData.get(level).unlinkConverted(level,villager,event.getOutcome());
     }
     @SubscribeEvent public void onVillagerDrops(LivingDropsEvent event){
-        if(!(event.getEntity() instanceof Villager villager)||villager.isBaby()||!(villager.level instanceof ServerLevel))return;
+        if(!(event.getEntity() instanceof Villager villager)||!(villager.level instanceof ServerLevel))return;
         CompoundTag persistent=villager.getPersistentData();
         String marker="residenciasaldeoes_fragment_drop_processed";
         if(persistent.getBoolean(marker))return;
