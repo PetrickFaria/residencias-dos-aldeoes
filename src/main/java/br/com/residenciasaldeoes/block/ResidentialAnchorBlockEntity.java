@@ -102,7 +102,7 @@ public class ResidentialAnchorBlockEntity extends BlockEntity implements Contain
     @Override public boolean stillValid(Player player){return !isRemoved()&&player.distanceToSqr(worldPosition.getX()+.5D,worldPosition.getY()+.5D,worldPosition.getZ()+.5D)<64.0D;}
     @Override protected void saveAdditional(CompoundTag tag){super.saveAdditional(tag);tag.putInt("size",size);tag.putLong("pending_fragments",pendingFragments);tag.putLong("last_production_game_time",lastProductionGameTime);tag.putLong("last_production_event_id",lastProductionEventId);ContainerHelper.saveAllItems(tag,outputItems);}
     @Override public void load(CompoundTag tag){super.load(tag);size=tag.contains("size")?tag.getInt("size"):3;pendingFragments=tag.getLong("pending_fragments");lastProductionGameTime=tag.contains("last_production_game_time")?tag.getLong("last_production_game_time"):Long.MIN_VALUE;lastProductionEventId=tag.contains("last_production_event_id")?tag.getLong("last_production_event_id"):Long.MIN_VALUE;outputItems.clear();ContainerHelper.loadAllItems(tag,outputItems);}
-    @Override public CompoundTag getUpdateTag(){CompoundTag t=super.getUpdateTag();t.putInt("size",size);return t;}
+    @Override public CompoundTag getUpdateTag(){CompoundTag t=super.getUpdateTag();saveAdditional(t);return t;}
     @Override public void handleUpdateTag(CompoundTag tag){load(tag);}
     @Override public ClientboundBlockEntityDataPacket getUpdatePacket(){return ClientboundBlockEntityDataPacket.create(this);}
 }

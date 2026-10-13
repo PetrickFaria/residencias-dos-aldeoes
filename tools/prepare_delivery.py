@@ -5,7 +5,7 @@ out=Path('artifact-output');out.mkdir(exist_ok=True)
 jar=Path('build/libs/residencias-dos-aldeoes-1.0.45.jar')
 shutil.copy2(jar,out/jar.name)
 subprocess.run(['git','archive','--format=zip','--output='+str(out/'residencias-dos-aldeoes-1.0.45-source.zip'),'HEAD'],check=True)
-for name in ['gametest-console.log','client-console.log']:
+for name in ['gametest-console.log','client-console.log','client-restore-console.log']:
     p=Path(name)
     if p.exists():shutil.copy2(p,out/name)
 if Path('build/screenshots').exists():shutil.copytree('build/screenshots',out/'screenshots',dirs_exist_ok=True)
@@ -22,7 +22,7 @@ Minecraft Java 1.19.2, Forge 43.5.0, Java 17.
 - Pagamento, agendamento, navegação, residentes, skins, modelos, baú, porta, drops e receitas preservados.
 - Build compilado; sete GameTests obrigatórios, incluindo migração, armazenamento/recarregamento NBT, excedente, interação do menu e transporte com dez slots.
 - Captura da interface real do cliente, quando disponível, em screenshots/visual-anchor-slots.png. Exige inspeção da imagem antes de declarar validação visual.
-- NBT e reconstrução da entidade de bloco testados; não foi realizado um reinício completo do processo do mundo, teste de modpacks ou descarregamento real de chunks.
+- NBT e reconstrução da entidade de bloco testados. Se client-restore-console.log contiver TEN_SLOTS_WORLD_RESTART_PASSED, dez pilhas foram verificadas após salvar e reabrir o mesmo mundo em um novo processo Minecraft. Não foram testados modpacks nem descarregamento real de chunks.
 
 Commit de compilação: {sha}.
 SHA-256 JAR: {hashlib.sha256(jar.read_bytes()).hexdigest()}.

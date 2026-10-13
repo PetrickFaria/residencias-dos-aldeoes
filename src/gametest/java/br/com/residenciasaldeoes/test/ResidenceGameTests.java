@@ -56,6 +56,7 @@ public final class ResidenceGameTests {
         anchor.recordDailyProduction(ResidenceData.get(h.getLevel()).nextProductionDawnEventId(),700);
         for(int i=0;i<10;i++)check(anchor.getItem(i).getCount()==64,"Capacity did not include slot "+i);
         check(anchor.getPendingFragments()==60,"Overflow lost");
+        check(anchor.getUpdateTag().getList("Items",10).size()==10,"Client update omitted output items");
         var saved=anchor.saveWithFullMetadata();
         ResidentialAnchorBlockEntity reloaded=new ResidentialAnchorBlockEntity(h.absolutePos(pos),anchor.getBlockState());
         reloaded.load(saved);

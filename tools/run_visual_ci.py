@@ -25,3 +25,17 @@ for name in ['visual-chests.png','visual-doors.png','visual-anchor-slots.png']:
 if result.returncode and 'Gradle build daemon disappeared unexpectedly' not in text:
     sys.exit(result.returncode)
 print('Real Minecraft client captured all three scenes; image inspection is still required.')
+
+# Reopen the same saved world in a fresh Minecraft JVM, without copying/resetting it.
+restore_log=Path('client-restore-console.log')
+with restore_log.open('w') as out:
+    restored=subprocess.run(['xvfb-run','-a','-s','-screen 0 1920x1080x24','bash','gradlew','--no-daemon','-Pvisual_check=true','-Pvisual_restore=true','runClient'],stdout=out,stderr=subprocess.STDOUT,timeout=180)
+restored_text=restore_log.read_text(errors='replace')
+print('\n'.join(restored_text.splitlines()[-25:]))
+if 'TEN_SLOTS_WORLD_RESTART_PASSED' not in restored_text:
+    sys.exit('Ten stored output stacks did not survive a complete Minecraft process restart.')
+if restored.returncode and 'Gradle build daemon disappeared unexpectedly' not in restored_text:
+    sys.exit(restored.returncode)
+p=Path('build/screenshots/visual-anchor-restored.png')
+if not p.exists():sys.exit('Restored anchor screenshot missing.')
+print('Fresh Minecraft process verified all ten stored stacks after reopening the saved world.')

@@ -26,6 +26,32 @@ public final class VisualClientCheck {
         Minecraft mc=Minecraft.getInstance();
         if(!requested&&mc.screen instanceof TitleScreen){requested=true;mc.createWorldOpenFlows().loadLevel(new TitleScreen(),"visual-check");}
         if(mc.player==null||mc.getSingleplayerServer()==null)return;
+        if(Boolean.getBoolean("residencias.visualRestore")){
+            if(!scene){
+                scene=true;var server=mc.getSingleplayerServer();var uuid=mc.player.getUUID();
+                server.execute(()->{
+                    var level=server.overworld();BlockPos pos=new BlockPos(1,-58,8);
+                    var blockEntity=level.getBlockEntity(pos);
+                    if(!(blockEntity instanceof br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity anchor))
+                        throw new IllegalStateException("Saved anchor missing after process restart");
+                    if(anchor.getContainerSize()!=10)throw new IllegalStateException("Saved inventory size changed");
+                    for(int i=0;i<10;i++)if(!anchor.getItem(i).is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())||anchor.getItem(i).getCount()!=i+1)
+                        throw new IllegalStateException("Saved output slot lost or duplicated: "+i);
+                    var player=server.getPlayerList().getPlayer(uuid);
+                    ResidenciasDosAldeoes.ANCHOR.get().use(level.getBlockState(pos),level,pos,player,
+                        net.minecraft.world.InteractionHand.MAIN_HAND,
+                        new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(pos),Direction.UP,pos,false));
+                    System.out.println("TEN_SLOTS_WORLD_RESTART_PASSED");
+                });
+            }
+            ticks++;
+            if(ticks==120){
+                if(!(mc.screen instanceof br.com.residenciasaldeoes.client.AnchorScreen))throw new IllegalStateException("Restored anchor GUI did not open");
+                Screenshot.grab(new File("../build"),"visual-anchor-restored.png",mc.getMainRenderTarget(),message->{});
+            }
+            if(ticks==150)mc.stop();
+            return;
+        }
         if(!scene){
             scene=true;
             mc.options.hideGui=false;

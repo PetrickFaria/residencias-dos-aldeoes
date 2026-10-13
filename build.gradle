@@ -51,6 +51,7 @@ sourceSets {
 minecraft.runs.client {
  if (project.hasProperty("visual_check")) {
   property "residencias.visualCheck", "true"
+  if (project.hasProperty("visual_restore")) property "residencias.visualRestore", "true"
   args "--width", "1600", "--height", "900"
  }
  mods { residenciasaldeoes { source sourceSets.visualTest } }
