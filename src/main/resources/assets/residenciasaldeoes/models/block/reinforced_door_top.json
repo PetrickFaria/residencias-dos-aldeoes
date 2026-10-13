@@ -1,76 +1,9 @@
 {
+  "parent": "minecraft:block/door_top_left",
+  "render_type": "minecraft:cutout",
   "textures": {
-    "panel": "residenciasaldeoes:block/reinforced_door_upper",
+    "bottom": "residenciasaldeoes:block/reinforced_door_lower",
+    "top": "residenciasaldeoes:block/reinforced_door_upper",
     "particle": "residenciasaldeoes:block/reinforced_door_upper"
-  },
-  "elements": [
-    {
-      "from": [
-        0,
-        0,
-        7
-      ],
-      "to": [
-        16,
-        16,
-        9
-      ],
-      "faces": {
-        "north": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#panel"
-        },
-        "south": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#panel"
-        },
-        "west": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#panel"
-        },
-        "east": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#panel"
-        },
-        "up": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#panel"
-        },
-        "down": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#panel"
-        }
-      }
-    }
-  ]
+  }
 }

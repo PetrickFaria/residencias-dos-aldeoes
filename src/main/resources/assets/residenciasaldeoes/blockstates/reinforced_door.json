@@ -17,11 +17,11 @@
       "y": 90
     },
     "facing=north,half=lower,hinge=right,open=false,powered=false": {
-      "model": "residenciasaldeoes:block/reinforced_door_bottom",
+      "model": "residenciasaldeoes:block/reinforced_door_bottom_closed_right",
       "y": 0
     },
     "facing=north,half=lower,hinge=right,open=false,powered=true": {
-      "model": "residenciasaldeoes:block/reinforced_door_bottom",
+      "model": "residenciasaldeoes:block/reinforced_door_bottom_closed_right",
       "y": 0
     },
     "facing=north,half=lower,hinge=right,open=true,powered=false": {
@@ -49,11 +49,11 @@
       "y": 90
     },
     "facing=north,half=upper,hinge=right,open=false,powered=false": {
-      "model": "residenciasaldeoes:block/reinforced_door_top",
+      "model": "residenciasaldeoes:block/reinforced_door_top_closed_right",
       "y": 0
     },
     "facing=north,half=upper,hinge=right,open=false,powered=true": {
-      "model": "residenciasaldeoes:block/reinforced_door_top",
+      "model": "residenciasaldeoes:block/reinforced_door_top_closed_right",
       "y": 0
     },
     "facing=north,half=upper,hinge=right,open=true,powered=false": {
@@ -81,11 +81,11 @@
       "y": 180
     },
     "facing=east,half=lower,hinge=right,open=false,powered=false": {
-      "model": "residenciasaldeoes:block/reinforced_door_bottom",
+      "model": "residenciasaldeoes:block/reinforced_door_bottom_closed_right",
       "y": 90
     },
     "facing=east,half=lower,hinge=right,open=false,powered=true": {
-      "model": "residenciasaldeoes:block/reinforced_door_bottom",
+      "model": "residenciasaldeoes:block/reinforced_door_bottom_closed_right",
       "y": 90
     },
     "facing=east,half=lower,hinge=right,open=true,powered=false": {
@@ -113,11 +113,11 @@
       "y": 180
     },
     "facing=east,half=upper,hinge=right,open=false,powered=false": {
-      "model": "residenciasaldeoes:block/reinforced_door_top",
+      "model": "residenciasaldeoes:block/reinforced_door_top_closed_right",
       "y": 90
     },
     "facing=east,half=upper,hinge=right,open=false,powered=true": {
-      "model": "residenciasaldeoes:block/reinforced_door_top",
+      "model": "residenciasaldeoes:block/reinforced_door_top_closed_right",
       "y": 90
     },
     "facing=east,half=upper,hinge=right,open=true,powered=false": {
@@ -145,11 +145,11 @@
       "y": 270
     },
     "facing=south,half=lower,hinge=right,open=false,powered=false": {
-      "model": "residenciasaldeoes:block/reinforced_door_bottom",
+      "model": "residenciasaldeoes:block/reinforced_door_bottom_closed_right",
       "y": 180
     },
     "facing=south,half=lower,hinge=right,open=false,powered=true": {
-      "model": "residenciasaldeoes:block/reinforced_door_bottom",
+      "model": "residenciasaldeoes:block/reinforced_door_bottom_closed_right",
       "y": 180
     },
     "facing=south,half=lower,hinge=right,open=true,powered=false": {
@@ -177,11 +177,11 @@
       "y": 270
     },
     "facing=south,half=upper,hinge=right,open=false,powered=false": {
-      "model": "residenciasaldeoes:block/reinforced_door_top",
+      "model": "residenciasaldeoes:block/reinforced_door_top_closed_right",
       "y": 180
     },
     "facing=south,half=upper,hinge=right,open=false,powered=true": {
-      "model": "residenciasaldeoes:block/reinforced_door_top",
+      "model": "residenciasaldeoes:block/reinforced_door_top_closed_right",
       "y": 180
     },
     "facing=south,half=upper,hinge=right,open=true,powered=false": {
@@ -209,11 +209,11 @@
       "y": 0
     },
     "facing=west,half=lower,hinge=right,open=false,powered=false": {
-      "model": "residenciasaldeoes:block/reinforced_door_bottom",
+      "model": "residenciasaldeoes:block/reinforced_door_bottom_closed_right",
       "y": 270
     },
     "facing=west,half=lower,hinge=right,open=false,powered=true": {
-      "model": "residenciasaldeoes:block/reinforced_door_bottom",
+      "model": "residenciasaldeoes:block/reinforced_door_bottom_closed_right",
       "y": 270
     },
     "facing=west,half=lower,hinge=right,open=true,powered=false": {
@@ -241,11 +241,11 @@
       "y": 0
     },
     "facing=west,half=upper,hinge=right,open=false,powered=false": {
-      "model": "residenciasaldeoes:block/reinforced_door_top",
+      "model": "residenciasaldeoes:block/reinforced_door_top_closed_right",
       "y": 270
     },
     "facing=west,half=upper,hinge=right,open=false,powered=true": {
-      "model": "residenciasaldeoes:block/reinforced_door_top",
+      "model": "residenciasaldeoes:block/reinforced_door_top_closed_right",
       "y": 270
     },
     "facing=west,half=upper,hinge=right,open=true,powered=false": {

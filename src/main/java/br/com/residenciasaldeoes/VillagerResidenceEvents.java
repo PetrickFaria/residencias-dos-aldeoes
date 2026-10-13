@@ -54,39 +54,38 @@ public class VillagerResidenceEvents {
     private static final long RETURN_TIMEOUT_TICKS=300L;
     private static final long THREAT_RETURN_TIMEOUT_TICKS=150L;
     private static final long RETURN_RETRY_TICKS=20L;
-    private static final long PRODUCTION_TIME_OF_DAY=200L; // 00:10 at 20 ticks per displayed minute
-    private static final long COLLECTION_TIME_OF_DAY=3_000L; // 02:30
+    private static final long TICKS_AFTER_DAWN_FOR_PAYMENT=200L;
+    private static final long TICKS_AFTER_PAYMENT_FOR_COLLECTION=1_200L;
     private static final String EMERALD_TRANSFER="residenciasaldeoes_emerald_transfer";
     @SubscribeEvent public void onProductionLevelTick(TickEvent.LevelTickEvent event){
         if(event.phase!=TickEvent.Phase.END||!(event.level instanceof ServerLevel level))return;
         long productionGameTime=level.getServer().overworld().getGameTime();
         long levelGameTime=level.getGameTime(),dayTime=level.getDayTime();
         DawnSample previous=PRODUCTION_CLOCKS.put(level,new DawnSample(levelGameTime,dayTime));
-        if(previous!=null){
-            long period=Math.floorDiv(levelGameTime,DAY_LENGTH);
-            if(crossedTarget(previous.dayTime(),dayTime,PRODUCTION_TIME_OF_DAY))
-                processProductionDawn(level,productionGameTime,period);
-            if(crossedTarget(previous.dayTime(),dayTime,COLLECTION_TIME_OF_DAY))
-                beginScheduledCollections(level,period);
-        }
-        if(productionGameTime%20L==0L)processLoadedProduction(level,productionGameTime);
+        if(previous!=null&&crossedNaturalDawn(previous,new DawnSample(levelGameTime,dayTime)))
+            processProductionDawn(level,productionGameTime,Math.floorDiv(levelGameTime,DAY_LENGTH));
+        processLoadedProduction(level,productionGameTime);
+        beginScheduledCollections(level,productionGameTime);
     }
-    private static boolean crossedTarget(long before,long after,long target){
-        long oldTime=Math.floorMod(before,DAY_LENGTH),newTime=Math.floorMod(after,DAY_LENGTH);
-        if(after>before)return oldTime<target&&newTime>=target;
-        // A large clock rewind through midnight is treated as crossing the target once;
-        // the persisted game-day key prevents time commands from paying twice that day.
-        return before>after&&before-after>DAY_LENGTH/2L&&oldTime>target&&newTime>=target;
+    private static boolean crossedNaturalDawn(DawnSample before,DawnSample after){
+        // A real server tick advances both clocks by one. Large /time set jumps are ignored.
+        return after.gameTime()-before.gameTime()==1L&&after.dayTime()-before.dayTime()==1L
+                &&Math.floorMod(before.dayTime(),DAY_LENGTH)==DAY_LENGTH-1L
+                &&Math.floorMod(after.dayTime(),DAY_LENGTH)==0L;
     }
     @SubscribeEvent public void onProductionSleepFinished(SleepFinishedTimeEvent event){
-        if(event.getLevel() instanceof ServerLevel level)
-            PRODUCTION_CLOCKS.put(level,new DawnSample(level.getGameTime(),event.getNewTime()));
+        if(event.getLevel() instanceof ServerLevel level){
+            long levelTime=event.getNewTime();
+            PRODUCTION_CLOCKS.put(level,new DawnSample(level.getGameTime(),levelTime));
+            processProductionDawn(level,level.getServer().overworld().getGameTime(),Math.floorDiv(level.getGameTime(),DAY_LENGTH));
+        }
     }
     private void processProductionDawn(ServerLevel level,long gameTime,long productionPeriod){
         ResidenceData data=ResidenceData.get(level);
         if(!data.acceptProductionDawn(level.dimension(),productionPeriod))return;
-        for(ResidenceData.Home home:new ArrayList<>(data.homes()))if(home.dimension.equals(level.dimension()))data.queueProductionDawn(home,gameTime);
-        processLoadedProduction(level,gameTime);
+        for(ResidenceData.Home home:new ArrayList<>(data.homes()))
+            if(home.dimension.equals(level.dimension())&&!home.residents.isEmpty())
+                data.queueProductionDawn(home,gameTime+TICKS_AFTER_DAWN_FOR_PAYMENT,productionPeriod);
     }
     private void processLoadedProduction(ServerLevel level,long currentGameTime){
         ResidenceData data=ResidenceData.get(level);
@@ -94,20 +93,27 @@ public class VillagerResidenceEvents {
             if(!home.dimension.equals(level.dimension())||!level.hasChunkAt(home.pos))continue;
             if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor))continue;
             anchor.flushPendingFragments();
-            for(long dawnGameTime:new ArrayList<>(home.pendingProductionDawns)){
+            for(ResidenceData.PendingProduction task:new ArrayList<>(home.pendingProduction)){
+                if(currentGameTime<task.dueGameTime())continue;
                 int[] resources=AnchorMenu.countResources(level,home.pos,anchor.getSize());
                 List<UUID> residents=new ArrayList<>(home.residents);
                 int fragments=calculateDailyFragments(residents,resources);
-                boolean recorded=anchor.recordDailyProduction(dawnGameTime,fragments);
-                if(recorded&&fragments>0)playProductionBell(level,residents);
-                data.completeProductionDawn(home,dawnGameTime);
+                boolean recorded=anchor.recordDailyProduction(task.dueGameTime(),fragments);
+                if(recorded&&fragments>0){
+                    playProductionBell(level,residents);
+                    long period=task.period()==Long.MIN_VALUE?Math.floorDiv(level.getDayTime(),DAY_LENGTH):task.period();
+                    data.queueCollection(home,period,currentGameTime+TICKS_AFTER_PAYMENT_FOR_COLLECTION);
+                }
+                data.completeProductionDawn(home,task);
             }
         }
     }
-    private void beginScheduledCollections(ServerLevel level,long period){
+    private void beginScheduledCollections(ServerLevel level,long currentGameTime){
         ResidenceData data=ResidenceData.get(level);
         for(ResidenceData.Home home:new ArrayList<>(data.homes())){
-            if(!home.dimension.equals(level.dimension())||home.residents.isEmpty()||period<=home.lastCollectionPeriod)continue;
+            if(!home.dimension.equals(level.dimension())||home.residents.isEmpty())continue;
+            ResidenceData.PendingCollection pending=data.dueCollection(home,currentGameTime);
+            if(pending==null)continue;
             UUID first=home.residents.iterator().next();
             if(!(level.getEntity(first) instanceof Villager villager)||villager.getPersistentData().contains(EMERALD_TRANSFER))continue;
             if(!level.hasChunkAt(home.pos)||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor)||anchor.isEmpty())continue;
@@ -116,9 +122,9 @@ public class VillagerResidenceEvents {
             BlockPos homeApproach=findApproach(level,home.pos,villager);
             BlockPos chestApproach=findApproach(level,chest,villager);
             if(homeApproach==null||chestApproach==null)continue;
-            if(!data.acceptCollectionPeriod(home,period))continue;
-            CompoundTag job=new CompoundTag();job.putLong("anchor",home.pos.asLong());job.putLong("chest",chest.asLong());job.putLong("period",period);job.putLong("started",level.getGameTime());job.put("previous_hand",villager.getItemBySlot(EquipmentSlot.MAINHAND).save(new CompoundTag()));job.putLong("home_approach",homeApproach.asLong());job.putLong("chest_approach",chestApproach.asLong());job.putInt("stage",0);
+            CompoundTag job=new CompoundTag();job.putLong("anchor",home.pos.asLong());job.putLong("chest",chest.asLong());job.putLong("period",pending.period());job.putLong("started",currentGameTime);job.put("previous_hand",villager.getItemBySlot(EquipmentSlot.MAINHAND).save(new CompoundTag()));job.putLong("home_approach",homeApproach.asLong());job.putLong("chest_approach",chestApproach.asLong());job.putInt("stage",0);
             villager.getPersistentData().put(EMERALD_TRANSFER,job);
+            data.completeCollection(home,pending);
         }
     }
     private static BlockPos findEmeraldChest(ServerLevel level,ResidenceData.Home home,Villager villager){
@@ -204,12 +210,9 @@ public class VillagerResidenceEvents {
         return total;
     }
     private void playProductionBell(ServerLevel level,List<UUID> residents){
-        List<Villager> loaded=new ArrayList<>();
-        for(UUID resident:residents)if(level.getEntity(resident) instanceof Villager villager)loaded.add(villager);
-        for(Villager villager:loaded){
-            long nearby=loaded.stream().filter(other->other.distanceToSqr(villager)<=36.0D).count();
-            float volume=(float)(0.65D/Math.sqrt(Math.max(1L,nearby)));
-            level.playSound(null,villager.blockPosition(),SoundEvents.BELL_BLOCK,SoundSource.NEUTRAL,volume,1.0F);
+        for(UUID resident:residents)if(level.getEntity(resident) instanceof Villager villager){
+            level.playSound(null,villager.blockPosition(),SoundEvents.VILLAGER_NO,SoundSource.NEUTRAL,0.75F,1.0F);
+            return;
         }
     }
     @SubscribeEvent public void onVillagerJoin(EntityJoinLevelEvent event){if(event.getEntity() instanceof Villager v&&event.getLevel() instanceof ServerLevel sl){ResidenceData data=ResidenceData.get(sl);data.applyPendingNameRestoration(v);if(data.owner(v.getUUID())!=null)data.applyResidentName(v);}}
@@ -535,5 +538,5 @@ public class VillagerResidenceEvents {
                 ||!(villager.level instanceof ServerLevel level))return;
         ResidenceData.get(level).unlinkConverted(level,villager,event.getOutcome());
     }
-    @SubscribeEvent public void onDeath(LivingDeathEvent event){if(event.getEntity() instanceof Villager v&&v.level instanceof ServerLevel sl)ResidenceData.get(sl).unlink(sl,v.getUUID());}
+    @SubscribeEvent public void onDeath(LivingDeathEvent event){if(event.getEntity() instanceof Villager v&&v.level instanceof ServerLevel sl){if(v.getPersistentData().contains(EMERALD_TRANSFER))finishEmeraldTransfer(sl,v,v.getPersistentData().getCompound(EMERALD_TRANSFER),true);ResidenceData.get(sl).unlink(sl,v.getUUID());}}
 }

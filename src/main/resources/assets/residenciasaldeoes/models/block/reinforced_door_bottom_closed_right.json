@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/door_bottom_right",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "bottom": "residenciasaldeoes:block/reinforced_door_lower",
+    "top": "residenciasaldeoes:block/reinforced_door_upper",
+    "particle": "residenciasaldeoes:block/reinforced_door_lower"
+  }
+}

@@ -7,22 +7,16 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
-import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.phys.shapes.CollisionContext;
-import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.Material;
 
 /** Iron-door durability and redstone behavior with a hand-operated wooden door interaction. */
 public final class ReinforcedDoorBlock extends DoorBlock {
-    private static final VoxelShape NORTH_SOUTH = Block.box(0, 0, 7, 16, 16, 9);
-    private static final VoxelShape EAST_WEST = Block.box(7, 0, 0, 9, 16, 16);
     public ReinforcedDoorBlock() {
         super(BlockBehaviour.Properties.of(Material.WOOD)
                 .strength(5.0F, 5.0F)
@@ -30,20 +24,7 @@ public final class ReinforcedDoorBlock extends DoorBlock {
                 .noOcclusion());
     }
 
-    /** The model is centered in the block. Match both its closed and 90-degree open positions. */
-    private static VoxelShape panelShape(BlockState state) {
-        boolean alongX = state.getValue(FACING).getAxis() == net.minecraft.core.Direction.Axis.X;
-        if (state.getValue(OPEN)) alongX = !alongX;
-        return alongX ? EAST_WEST : NORTH_SOUTH;
-    }
-
-    @Override public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return panelShape(state);
-    }
-
-    @Override public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return panelShape(state);
-    }
+    // Keep DoorBlock's vanilla placement, hinge, open/closed collision and selection shapes.
 
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player,
