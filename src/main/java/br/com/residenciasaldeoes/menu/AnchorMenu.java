@@ -27,7 +27,8 @@ public class AnchorMenu extends AbstractContainerMenu {
  public AnchorMenu(int id,Inventory i,BlockPos p){super(ResidenciasDosAldeoes.ANCHOR_MENU.get(),id);pos=p;ownerPlayer=i.player;
   BlockEntity anchor=i.player.level.getBlockEntity(p);
   Container output=anchor instanceof br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity be?be:new SimpleContainer(5);
-  for(int slot=0;slot<5;slot++){final int index=slot;addSlot(new Slot(output,index,72+slot*21,210){@Override public boolean mayPlace(ItemStack stack){return false;}});}
+  int outputRowLeft=(292-(5*18+4*3))/2;
+  for(int slot=0;slot<5;slot++){final int index=slot;addSlot(new Slot(output,index,outputRowLeft+slot*21,210){@Override public boolean mayPlace(ItemStack stack){return false;}});}
  
   addDataSlot(new DataSlot(){public int get(){BlockEntity b=i.player.level.getBlockEntity(p);return b instanceof br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity a?a.getResidentCount():0;}public void set(int v){syncedResidents=v;}});
   addDataSlot(new DataSlot(){public int get(){BlockEntity b=i.player.level.getBlockEntity(p);return b instanceof br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity a?a.getSize():3;}public void set(int v){syncedSize=v;}});

@@ -63,7 +63,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     private record Snapshot(List<ModNetwork.ResidentEntry> entries,boolean preview) {}
     private record SkinChoice(String id,String label,SkinFiles.SkinFile file) {}
 
-    public AnchorScreen(AnchorMenu m,Inventory i,Component t){super(m,i,t);imageWidth=246;imageHeight=232;}
+    public AnchorScreen(AnchorMenu m,Inventory i,Component t){super(m,i,t);imageWidth=292;imageHeight=232;}
     private static String cacheKey(ResourceLocation dimension,BlockPos pos){return dimension+"|"+pos.asLong();}
 
     public static void receiveResidents(ResourceLocation dimension,BlockPos pos,List<ModNetwork.ResidentEntry> entries,boolean preview){
@@ -92,12 +92,14 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     @Override protected void init(){
         super.init();titleLabelX=(imageWidth-font.width(title))/2;titleLabelY=7;inventoryLabelY=1000;
         if(minecraft.level!=null){Snapshot s=CACHE.get(cacheKey(minecraft.level.dimension().location(),menu.getPos()));if(s!=null)applySnapshot(s.entries(),s.preview());}
-        for(int i=0;i<5;i++){final int size=ResidenceData.DIMENSIONS[i];addStyledButton(leftPos+8+i*46,topPos+33,43,17,Component.literal(size+"x"+size),b->ModNetwork.action(menu.getPos(),0,size),0xFF0D4B25,0xFF70C982);}
-        registerButton=addStyledButton(leftPos+8,topPos+REGISTER_BUTTON_Y,112,20,Component.translatable("gui.residenciasaldeoes.register"),b->ModNetwork.action(menu.getPos(),1,0),0xFF0D4B25,0xFF70C982);
-        renameButton=addStyledButton(leftPos+126,topPos+REGISTER_BUTTON_Y,112,20,Component.translatable("gui.residenciasaldeoes.customization"),b->openCustomization(),0xFF0D4B25,0xFF70C982);renameButton.active=selected!=null;
-        unlinkResidentButton=addStyledButton(leftPos+8,topPos+UNLINK_BUTTON_Y,112,20,Component.literal("Desvincular Residente"),b->{if(selected!=null)ModNetwork.unlinkResident(menu.getPos(),selected);},0xFF0D4B25,0xFF70C982);unlinkResidentButton.active=selected!=null;
-        unlinkAllButton=addStyledButton(leftPos+126,topPos+UNLINK_BUTTON_Y,112,20,unlinkAllLabel(),b->{if(confirmAll){ModNetwork.unlinkAll(menu.getPos());confirmAll=false;}else confirmAll=true;b.setMessage(unlinkAllLabel());},0xFF0D4B25,0xFF70C982);
-        previewButton=addStyledButton(leftPos+8,topPos+PREVIEW_BUTTON_Y,230,20,previewLabel(),b->{previewOn=!previewOn;b.setMessage(previewLabel());ModNetwork.setPreview(menu.getPos(),previewOn);},0xFF0D4B25,0xFF70C982);
+        int sizeRowLeft=(imageWidth-(5*43+4*3))/2;
+        for(int i=0;i<5;i++){final int size=ResidenceData.DIMENSIONS[i];addStyledButton(leftPos+sizeRowLeft+i*46,topPos+33,43,17,Component.literal(size+"x"+size),b->ModNetwork.action(menu.getPos(),0,size),0xFF0D4B25,0xFF70C982);}
+        int actionRowLeft=(imageWidth-230)/2;
+        registerButton=addStyledButton(leftPos+actionRowLeft,topPos+REGISTER_BUTTON_Y,112,20,Component.translatable("gui.residenciasaldeoes.register"),b->ModNetwork.action(menu.getPos(),1,0),0xFF0D4B25,0xFF70C982);
+        renameButton=addStyledButton(leftPos+actionRowLeft+118,topPos+REGISTER_BUTTON_Y,112,20,Component.translatable("gui.residenciasaldeoes.customization"),b->openCustomization(),0xFF0D4B25,0xFF70C982);renameButton.active=selected!=null;
+        unlinkResidentButton=addStyledButton(leftPos+actionRowLeft,topPos+UNLINK_BUTTON_Y,112,20,Component.literal("Desvincular Residente"),b->{if(selected!=null)ModNetwork.unlinkResident(menu.getPos(),selected);},0xFF0D4B25,0xFF70C982);unlinkResidentButton.active=selected!=null;
+        unlinkAllButton=addStyledButton(leftPos+actionRowLeft+118,topPos+UNLINK_BUTTON_Y,112,20,unlinkAllLabel(),b->{if(confirmAll){ModNetwork.unlinkAll(menu.getPos());confirmAll=false;}else confirmAll=true;b.setMessage(unlinkAllLabel());},0xFF0D4B25,0xFF70C982);
+        previewButton=addStyledButton(leftPos+actionRowLeft,topPos+PREVIEW_BUTTON_Y,230,20,previewLabel(),b->{previewOn=!previewOn;b.setMessage(previewLabel());ModNetwork.setPreview(menu.getPos(),previewOn);},0xFF0D4B25,0xFF70C982);
         // Pull an authoritative snapshot when a screen opens; the client cache is
         // only a fast initial display and may belong to an earlier menu session.
         ModNetwork.requestResidents(menu.getPos());

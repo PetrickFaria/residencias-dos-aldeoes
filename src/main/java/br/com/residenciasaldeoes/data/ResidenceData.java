@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.LivingEntity;
 import java.util.*;
 
 /** Persisted links for all residential anchors in one world. */
@@ -109,14 +110,24 @@ public class ResidenceData extends SavedData {
         setDirty(); return "ok";
     }
     public void unlink(ServerLevel level, UUID id) {
-        ResidentNameState state=residentNameStates.get(id);var entity=level.getEntity(id);
-        if(state!=null){if(entity instanceof Villager v)restoreName(v,state);else pendingNameRestorations.put(id,state);}
-        else if(entity==null&&pendingDefaultNameRemoval.contains(id))pendingNameRestorations.put(id,new ResidentNameState(null,false,residentName(id)));
+        unlink(level,id,level.getEntity(id) instanceof LivingEntity living?living:null);
+    }
+    /** Removes a resident after vanilla entity conversion, applying only its tracked mod name to the replacement. */
+    public void unlinkConverted(ServerLevel level,Villager original,LivingEntity replacement){
+        unlink(level,original.getUUID(),replacement);
+    }
+    private void unlink(ServerLevel level,UUID id,LivingEntity entity) {
+        ResidentNameState state=residentNameStates.get(id);
+        if(state!=null){if(entity!=null)restoreName(entity,state);else pendingNameRestorations.put(id,state);}
+        else if(pendingDefaultNameRemoval.remove(id)){
+            ResidentNameState legacyDefault=new ResidentNameState(null,false,residentName(id));
+            if(entity!=null)restoreName(entity,legacyDefault);else pendingNameRestorations.put(id,legacyDefault);
+        }
         if(residentSkins.remove(id)!=null)br.com.residenciasaldeoes.network.ModNetwork.clearSkin(id);
         unlink(id);
     }
     public void unlink(UUID id) { releaseBed(id);residentSkins.remove(id);Home h=owner(id); if(h!=null){h.residents.remove(id);owners.remove(id);residentNames.remove(id);residentNameStates.remove(id);setDirty();} }
-    private static void restoreName(Villager villager,ResidentNameState state){
+    private static void restoreName(LivingEntity villager,ResidentNameState state){
         String currentName=villager.hasCustomName()?villager.getCustomName().getString():null;
         String expected=state.managedName()!=null?state.managedName():state.originalName();
         if(!Objects.equals(currentName,expected))return;
