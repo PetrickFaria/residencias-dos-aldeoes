@@ -21,9 +21,10 @@ register_start=events.index("@SubscribeEvent public void onRegister(PlayerIntera
 register_end=events.index("@SubscribeEvent public void onVillagerConversion",register_start)
 register_handler=events[register_start:register_end]
 assert register_handler.index("event.setCanceled(true)") < register_handler.index("ResidenceData.get(level).link(level,pos,villager)")
-assert "imageWidth=292;imageHeight=232" in screen, "Widened panel must provide room for all four resource indicators"
+assert "imageWidth=272;imageHeight=232" in screen, "Refined panel must remain compact while fitting four resource indicators"
 assert "drawStatus(p,\"Comida\",e.food()" in screen and "listClipRight()" in screen
-assert "int outputRowLeft=(292-(5*18+4*3))/2;" in menu
+assert "int outputRowLeft=(272-(5*18+4*3))/2;" in menu
+assert "fill(p,sx,sy,sx+18,sy+18,0xFF342419)" in screen and "fill(p,sx+1,sy+1,sx+17,sy+17,0xFFB18A5E)" in screen
 assert "mayPlace(ItemStack stack){return false;}" in menu, "The five preview slots remain output only"
 assert lang["gui.residenciasaldeoes.anchor_title"]=="Bloco Residencial"
 assert lang["item.residenciasaldeoes.emerald_fragment"]=="Fragmento de Esmeralda"
