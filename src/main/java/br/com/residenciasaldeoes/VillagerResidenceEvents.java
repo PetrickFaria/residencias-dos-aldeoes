@@ -577,6 +577,7 @@ public class VillagerResidenceEvents {
         if(!(event.getEntity() instanceof Villager villager)
                 ||!(event.getOutcome() instanceof net.minecraft.world.entity.monster.ZombieVillager)
                 ||!(villager.level instanceof ServerLevel level))return;
+        if(villager.getPersistentData().contains(EMERALD_TRANSFER))finishEmeraldTransfer(level,villager,villager.getPersistentData().getCompound(EMERALD_TRANSFER),true);
         ResidenceData.get(level).unlinkConverted(level,villager,event.getOutcome());
     }
     @SubscribeEvent public void onVillagerDrops(LivingDropsEvent event){

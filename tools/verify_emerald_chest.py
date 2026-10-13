@@ -14,14 +14,19 @@ assert 'if (!stack.isEmpty() && !canPlaceItem(slot, stack)) return;' in be
 assert 'takeAvailableFragments()' in anchor and 'restoreFragments(' in anchor
 assert 'pending_emerald_collections' in (java/'data/ResidenceData.java').read_text()
 assert 'villager.getNavigation().moveTo' in events and 'insertFragments(stack)' in events
-assert 'super.render(entity, partialTick, pose, buffers, light, overlay)' in renderer
-assert 'EMERALD_CHEST_BODY' in renderer and 'renderSingleBlock(body, pose, buffers, light, OverlayTexture.NO_OVERLAY)' in renderer
+assert 'super.render(' not in renderer and 'implements BlockEntityRenderer' in renderer
+assert 'EMERALD_CHEST_BODY' in renderer and 'renderSingleBlock(body,pose,buffers,light,OverlayTexture.NO_OVERLAY)' in renderer
 model=json.loads((resources/'assets/residenciasaldeoes/models/item/emerald_chest.json').read_text())
-assert model['parent']=='residenciasaldeoes:block/emerald_chest_model'
+assert model['loader']=='forge:composite' and set(model['children'])=={'body','lid'}
 assert model['display']['gui']['scale']==[0.7,0.7,0.7]
 body_model=json.loads((resources/'assets/residenciasaldeoes/models/block/emerald_chest_body.json').read_text())
 anchor_model=json.loads((resources/'assets/residenciasaldeoes/models/block/ancora_residencial_body.json').read_text())
-assert body_model['elements'][0]['faces']['north']['texture']=='#front'
+assert body_model['textures']==anchor_model['textures']
+assert max(e['to'][1] for e in body_model['elements'])<=13
+assert 'entity.getOpenNess(partialTick)' in renderer
+assert 'renderSingleBlock(lid,pose,buffers,light,OverlayTexture.NO_OVERLAY)' in renderer
+menu=(java/'menu/EmeraldChestMenu.java').read_text()
+assert 'boolean mayPlace(ItemStack stack)' in menu and 'i<27' in menu
 assert body_model['textures']['side']==anchor_model['textures']['side']
 assert body_model['textures']['wood']==anchor_model['textures']['wood']
 assert body_model['textures']['corner']==anchor_model['textures']['corner']

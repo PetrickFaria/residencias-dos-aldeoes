@@ -19,7 +19,8 @@ jobs:
       - name: Build installable mod
         run: bash gradlew --no-daemon clean build
       - name: Run actual Forge GameTest server
-        run: bash gradlew --no-daemon runGameTestServer
+        timeout-minutes: 8
+        run: python3 tools/run_gametest_ci.py
       - name: Upload mod and GameTest evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -27,6 +28,7 @@ jobs:
           name: residencias-dos-aldeoes-1.0.44
           path: |
             build/libs/*.jar
+            gametest-console.log
             run-gametest/logs/
             run-gametest/*.xml
           if-no-files-found: warn
