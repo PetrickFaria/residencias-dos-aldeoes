@@ -11,6 +11,9 @@ assert 'ItemStack.isSameItemSameTags' in be and 'stack.shrink(moved)' in be and 
 assert 'new InvWrapper(this)' in be and 'if (!stack.isEmpty() && !stack.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())) return stack;' in be
 assert 'return LazyOptional.empty()' not in be
 assert 'if (!stack.isEmpty() && !canPlaceItem(slot, stack)) return;' in be
+assert 'return slot >= 0 && slot < getContainerSize()' in be and 'stack.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())' in be
+assert 'ContainerHelper.saveAllItems' not in be and 'void load(' not in be
+assert 'if (!stack.isEmpty() && !stack.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())) return stack;' in be
 assert 'takeAvailableFragments()' in anchor and 'restoreFragments(' in anchor
 assert 'pending_emerald_collections' in (java/'data/ResidenceData.java').read_text()
 assert 'villager.getNavigation().moveTo' in events and 'insertFragments(stack)' in events

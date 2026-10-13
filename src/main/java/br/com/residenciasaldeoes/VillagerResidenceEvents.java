@@ -7,6 +7,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -24,6 +25,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.living.LivingDropsEvent;
+import net.minecraftforge.event.CommandEvent;
 import net.minecraftforge.event.entity.living.LivingConversionEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.LivingSpawnEvent;
@@ -39,6 +42,7 @@ public class VillagerResidenceEvents {
     private record DawnSample(long gameTime,long dayTime){}
     private static final Map<ServerLevel,DawnSample> PRODUCTION_CLOCKS=new WeakHashMap<>();
     private static final long DAY_LENGTH=24_000L;
+    private static final long DAWN_COMMAND_WINDOW_TICKS=1_200L;
     private static final String UNLINK="residenciasaldeoes_unlink";
     private static final String REG="residenciasaldeoes_register", POS="residenciasaldeoes_anchor", DIM="residenciasaldeoes_dimension";
     private static final String RETURN_ACTIVE="residenciasaldeoes_home_return_active";
@@ -54,18 +58,42 @@ public class VillagerResidenceEvents {
     private static final long RETURN_TIMEOUT_TICKS=300L;
     private static final long THREAT_RETURN_TIMEOUT_TICKS=150L;
     private static final long RETURN_RETRY_TICKS=20L;
-    private static final long DAWN_COMMAND_WINDOW_TICKS=1_200L;
     private static final long TICKS_AFTER_DAWN_FOR_PAYMENT=200L;
     private static final long TICKS_AFTER_PAYMENT_FOR_COLLECTION=1_200L;
     private static final String EMERALD_TRANSFER="residenciasaldeoes_emerald_transfer";
+    /**
+     * Captures /time changes before a same-tick set/add can be overwritten by the level sampler.
+     * The predicted clock sample also prevents the corresponding END tick from counting twice.
+     */
+    @SubscribeEvent public void onTimeCommand(CommandEvent event){
+        var context=event.getParseResults().getContext();
+        if(!(context.getSource().getLevel() instanceof ServerLevel level))return;
+        String input=context.getInput().trim();
+        if(input.startsWith("/"))input=input.substring(1);
+        String[] parts=input.split("\\s+");
+        if(parts.length<3||!parts[0].equals("time"))return;
+        String action=parts[1];
+        if(!action.equals("set")&&!action.equals("add"))return;
+        long before=level.getDayTime(),target;
+        try{
+            if(action.equals("set")){
+                target=switch(parts[2]){case "day"->1_000L;case "noon"->6_000L;case "night"->13_000L;case "midnight"->18_000L;default->Long.parseLong(parts[2]);};
+            }else target=before+Long.parseLong(parts[2]);
+        }catch(NumberFormatException ignored){return;}
+        long oldTime=Math.floorMod(before,DAY_LENGTH),newTime=Math.floorMod(target,DAY_LENGTH);
+        boolean setIntoDawn=action.equals("set")&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
+        boolean addIntoDawn=action.equals("add")&&oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
+        PRODUCTION_CLOCKS.put(level,new DawnSample(level.getGameTime(),target));
+        if(setIntoDawn||addIntoDawn)
+            processProductionDawn(level,level.getServer().overworld().getGameTime());
+    }
     @SubscribeEvent public void onProductionLevelTick(TickEvent.LevelTickEvent event){
         if(event.phase!=TickEvent.Phase.END||!(event.level instanceof ServerLevel level))return;
         long productionGameTime=level.getServer().overworld().getGameTime();
         long levelGameTime=level.getGameTime(),dayTime=level.getDayTime();
         DawnSample previous=PRODUCTION_CLOCKS.put(level,new DawnSample(levelGameTime,dayTime));
-        if(previous==null ? Math.floorMod(dayTime,DAY_LENGTH)<=DAWN_COMMAND_WINDOW_TICKS
-                : crossedNaturalDawn(previous,new DawnSample(levelGameTime,dayTime)))
-            processProductionDawn(level,productionGameTime,Math.floorDiv(levelGameTime,DAY_LENGTH));
+        if(previous!=null&&crossedNaturalDawn(previous,new DawnSample(levelGameTime,dayTime)))
+            processProductionDawn(level,productionGameTime);
         processLoadedProduction(level,productionGameTime);
         beginScheduledCollections(level,productionGameTime);
     }
@@ -75,26 +103,25 @@ public class VillagerResidenceEvents {
         boolean naturalTick=after.gameTime()-before.gameTime()==1L&&after.dayTime()-before.dayTime()==1L
                 &&oldTime==DAY_LENGTH-1L&&newTime==0L;
         if(naturalTick)return true;
-        // Treat a direct time command into the first dawn minute as a dawn event.
-        // The persisted game-time period still limits this to one payment per server day.
+        // Treat direct command and other valid clock adjustments into dawn as transitions.
         boolean adjustedClock=after.gameTime()>=before.gameTime()
                 &&after.gameTime()-before.gameTime()<=1L
                 &&after.dayTime()-before.dayTime()!=1L;
-        return adjustedClock&&oldTime!=newTime&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
+        return adjustedClock&&oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
     }
     @SubscribeEvent public void onProductionSleepFinished(SleepFinishedTimeEvent event){
         if(event.getLevel() instanceof ServerLevel level){
             long levelTime=event.getNewTime();
             PRODUCTION_CLOCKS.put(level,new DawnSample(level.getGameTime(),levelTime));
-            processProductionDawn(level,level.getServer().overworld().getGameTime(),Math.floorDiv(level.getGameTime(),DAY_LENGTH));
+            processProductionDawn(level,level.getServer().overworld().getGameTime());
         }
     }
-    private void processProductionDawn(ServerLevel level,long gameTime,long productionPeriod){
+    private void processProductionDawn(ServerLevel level,long gameTime){
         ResidenceData data=ResidenceData.get(level);
-        if(!data.acceptProductionDawn(level.dimension(),productionPeriod))return;
+        long eventId=data.nextProductionDawnEventId();
         for(ResidenceData.Home home:new ArrayList<>(data.homes()))
             if(home.dimension.equals(level.dimension())&&!home.residents.isEmpty())
-                data.queueProductionDawn(home,gameTime+TICKS_AFTER_DAWN_FOR_PAYMENT,productionPeriod);
+                data.queueProductionDawn(home,gameTime+TICKS_AFTER_DAWN_FOR_PAYMENT,eventId);
     }
     private void processLoadedProduction(ServerLevel level,long currentGameTime){
         ResidenceData data=ResidenceData.get(level);
@@ -107,11 +134,11 @@ public class VillagerResidenceEvents {
                 int[] resources=AnchorMenu.countResources(level,home.pos,anchor.getSize());
                 List<UUID> residents=new ArrayList<>(home.residents);
                 int fragments=calculateDailyFragments(residents,resources);
-                boolean recorded=anchor.recordDailyProduction(task.dueGameTime(),fragments);
+                long eventId=task.period()==Long.MIN_VALUE?data.nextProductionDawnEventId():task.period();
+                boolean recorded=anchor.recordDailyProduction(eventId,fragments);
                 if(recorded&&fragments>0){
                     playProductionBell(level,residents);
-                    long period=task.period()==Long.MIN_VALUE?Math.floorDiv(level.getDayTime(),DAY_LENGTH):task.period();
-                    data.queueCollection(home,period,currentGameTime+TICKS_AFTER_PAYMENT_FOR_COLLECTION);
+                    data.queueCollection(home,eventId,currentGameTime+TICKS_AFTER_PAYMENT_FOR_COLLECTION);
                 }
                 data.completeProductionDawn(home,task);
             }
@@ -219,10 +246,8 @@ public class VillagerResidenceEvents {
         return total;
     }
     private void playProductionBell(ServerLevel level,List<UUID> residents){
-        for(UUID resident:residents)if(level.getEntity(resident) instanceof Villager villager){
+        for(UUID resident:residents)if(level.getEntity(resident) instanceof Villager villager)
             level.playSound(null,villager.blockPosition(),SoundEvents.VILLAGER_NO,SoundSource.NEUTRAL,0.75F,1.0F);
-            return;
-        }
     }
     @SubscribeEvent public void onVillagerJoin(EntityJoinLevelEvent event){if(event.getEntity() instanceof Villager v&&event.getLevel() instanceof ServerLevel sl){ResidenceData data=ResidenceData.get(sl);data.applyPendingNameRestoration(v);if(data.owner(v.getUUID())!=null)data.applyResidentName(v);}}
     @SubscribeEvent public void onStartTracking(PlayerEvent.StartTracking event){if(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player&&event.getTarget() instanceof Villager villager&&player.level instanceof ServerLevel level&&level.dimension().equals(villager.level.dimension())){ResidenceData.ResidentSkin skin=ResidenceData.get(level).residentSkin(villager.getUUID());if(skin!=null)br.com.residenciasaldeoes.network.ModNetwork.sendSkin(player,villager.getUUID(),skin);}}
@@ -547,5 +572,14 @@ public class VillagerResidenceEvents {
                 ||!(villager.level instanceof ServerLevel level))return;
         ResidenceData.get(level).unlinkConverted(level,villager,event.getOutcome());
     }
-    @SubscribeEvent public void onDeath(LivingDeathEvent event){if(event.getEntity() instanceof Villager v&&v.level instanceof ServerLevel sl){int count=v.getRandom().nextInt(4)==0?2:1;v.spawnAtLocation(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),count);if(v.getPersistentData().contains(EMERALD_TRANSFER))finishEmeraldTransfer(sl,v,v.getPersistentData().getCompound(EMERALD_TRANSFER),true);ResidenceData.get(sl).unlink(sl,v.getUUID());}}
+    @SubscribeEvent public void onVillagerDrops(LivingDropsEvent event){
+        if(!(event.getEntity() instanceof Villager villager)||villager.isBaby()||!(villager.level instanceof ServerLevel))return;
+        CompoundTag persistent=villager.getPersistentData();
+        String marker="residenciasaldeoes_fragment_drop_processed";
+        if(persistent.getBoolean(marker))return;
+        persistent.putBoolean(marker,true);
+        int count=villager.getRandom().nextFloat()<0.75F?1:2;
+        event.getDrops().add(new ItemEntity(villager.level,villager.getX(),villager.getY(),villager.getZ(),new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),count)));
+    }
+    @SubscribeEvent public void onDeath(LivingDeathEvent event){if(event.getEntity() instanceof Villager v&&v.level instanceof ServerLevel sl){if(v.getPersistentData().contains(EMERALD_TRANSFER))finishEmeraldTransfer(sl,v,v.getPersistentData().getCompound(EMERALD_TRANSFER),true);ResidenceData.get(sl).unlink(sl,v.getUUID());}}
 }
