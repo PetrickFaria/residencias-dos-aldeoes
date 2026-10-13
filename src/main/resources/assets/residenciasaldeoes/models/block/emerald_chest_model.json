@@ -2,21 +2,17 @@
   "parent": "minecraft:block/block",
   "loader": "forge:composite",
   "textures": {
-    "particle": "residenciasaldeoes:block/emerald_panel",
-    "panel": "residenciasaldeoes:block/emerald_panel"
+    "particle": "residenciasaldeoes:block/emerald_panel"
   },
   "children": {
     "body": {
       "parent": "residenciasaldeoes:block/emerald_chest_body"
     },
     "side_crystals": {
-      "parent": "residenciasaldeoes:block/emerald_side_crystals"
+      "parent": "residenciasaldeoes:block/emerald_chest_side_crystals"
     },
     "side_trim": {
-      "parent": "residenciasaldeoes:block/emerald_side_trim"
-    },
-    "front_panel": {
-      "parent": "residenciasaldeoes:block/emerald_chest_front_panel"
+      "parent": "residenciasaldeoes:block/emerald_chest_side_trim"
     }
   }
 }

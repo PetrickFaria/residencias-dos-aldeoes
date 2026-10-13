@@ -1,0 +1,108 @@
+package br.com.residenciasaldeoes.test;
+
+import br.com.residenciasaldeoes.ResidenciasDosAldeoes;
+import br.com.residenciasaldeoes.VillagerResidenceEvents;
+import br.com.residenciasaldeoes.block.*;
+import br.com.residenciasaldeoes.data.ResidenceData;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.state.properties.DoorHingeSide;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.items.IItemHandler;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import java.lang.reflect.Method;
+
+@GameTestHolder("residenciasaldeoes")
+@PrefixGameTestTemplate(false)
+public final class ResidenceGameTests {
+    private static final String JOB="residenciasaldeoes_emerald_transfer";
+    private static void check(boolean condition,String message){if(!condition)throw new net.minecraft.gametest.framework.GameTestAssertException(message);}
+    private static Object invoke(String name,Class<?>[] types,Object... args){
+        try{Method m=VillagerResidenceEvents.class.getDeclaredMethod(name,types);m.setAccessible(true);return m.invoke(new VillagerResidenceEvents(),args);}
+        catch(Exception e){throw new RuntimeException(e);}
+    }
+    private static void floor(GameTestHelper h){for(int x=0;x<16;x++)for(int z=0;z<16;z++)h.setBlock(new BlockPos(x,1,z),Blocks.STONE);}
+    @GameTest(template="empty",timeoutTicks=100)
+    public static void chest_filter_and_capacity(GameTestHelper h){
+        h.setBlock(new BlockPos(2,2,2),ResidenciasDosAldeoes.EMERALD_CHEST.get());
+        EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(new BlockPos(2,2,2));
+        IItemHandler handler=chest.getCapability(ForgeCapabilities.ITEM_HANDLER).orElseThrow(()->new AssertionError("Missing item handler"));
+        ItemStack dirt=new ItemStack(Items.DIRT,17);
+        check(handler.insertItem(0,dirt,false).getCount()==17,"Invalid items consumed");
+        check(dirt.getCount()==17&&chest.isEmpty(),"Invalid insertion mutated storage/source");
+        for(int i=0;i<27;i++)chest.setItem(i,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
+        ItemStack remainder=new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),12);
+        check(chest.insertFragments(remainder)==0&&remainder.getCount()==12,"Full chest lost fragments");
+        net.minecraft.nbt.CompoundTag saved=chest.saveWithFullMetadata();
+        chest.load(saved);check(chest.getItem(26).getCount()==64,"NBT persistence failed");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100)
+    public static void door_states(GameTestHelper h){
+        floor(h);
+        int x=2;
+        for(Direction facing:Direction.Plane.HORIZONTAL){
+            BlockPos p=new BlockPos(x++,2,2);
+            for(DoorHingeSide hinge:DoorHingeSide.values())for(boolean open:new boolean[]{false,true}){
+                var state=ResidenciasDosAldeoes.REINFORCED_DOOR.get().defaultBlockState().setValue(DoorBlock.FACING,facing).setValue(DoorBlock.HINGE,hinge).setValue(DoorBlock.OPEN,open);
+                h.setBlock(p,state);h.setBlock(p.above(),state.setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER));
+                var reference=Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING,facing).setValue(DoorBlock.HINGE,hinge).setValue(DoorBlock.OPEN,open);
+                check(state.getCollisionShape(h.getLevel(),h.absolutePos(p)).bounds().equals(reference.getCollisionShape(h.getLevel(),h.absolutePos(p)).bounds()),"Door collision changed");
+            }
+        }
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=2600)
+    public static void physical_transport_after_payment(GameTestHelper h){
+        floor(h);
+        BlockPos homePos=new BlockPos(6,2,6),chestPos=new BlockPos(10,2,6);
+        h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(chestPos,ResidenciasDosAldeoes.EMERALD_CHEST.get());
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(homePos);anchor.setSize(11);
+        EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(chestPos);
+        Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));first.setAge(0);
+        ResidenceData data=ResidenceData.get(h.getLevel());
+        check(data.link(h.getLevel(),h.absolutePos(homePos),first).equals("ok"),"Link failed");
+        var home=data.home(h.getLevel(),h.absolutePos(homePos));
+        long id=data.nextProductionDawnEventId();
+        // Use the real production processor and its existing amount calculation/scheduling.
+        data.queueProductionDawn(home,h.getLevel().getServer().overworld().getGameTime(),id);
+        invoke("processLoadedProduction",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},h.getLevel(),h.getLevel().getServer().overworld().getGameTime());
+        int produced=anchor.getItem(0).getCount();check(produced>0,"No payment");
+        double startX=first.getX();
+        h.runAtTickTime(1190,()->check(chest.isEmpty()&&!first.getPersistentData().contains(JOB),"Collection started before 1200 ticks"));
+        h.succeedWhen(()->{
+            check(!chest.isEmpty(),"Waiting for physical deposit");
+            check(chest.getItem(0).getCount()==produced,"Lost or duplicated fragments");
+            check(Math.abs(first.getX()-startX)>2,"Villager did not walk");
+            check(anchor.isEmpty(),"Anchor not collected");
+        });
+    }
+    @GameTest(template="empty",timeoutTicks=100)
+    public static void adult_drops_and_baby_exclusion(GameTestHelper h){
+        Villager adult=h.spawn(EntityType.VILLAGER,new BlockPos(2,2,2));adult.setAge(0);
+        Villager baby=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,2));baby.setAge(-24000);
+        VillagerResidenceEvents events=new VillagerResidenceEvents();int twos=0;
+        for(int i=0;i<10000;i++){
+            adult.getPersistentData().remove("residenciasaldeoes_fragment_drop_processed");
+            java.util.Collection<net.minecraft.world.entity.item.ItemEntity> drops=new java.util.ArrayList<>();
+            var event=new net.minecraftforge.event.entity.living.LivingDropsEvent(adult,net.minecraft.world.damagesource.DamageSource.GENERIC,drops,5,false);
+            events.onVillagerDrops(event);events.onVillagerDrops(event);
+            check(drops.size()==1,"Duplicate drop");int count=drops.iterator().next().getItem().getCount();
+            check(count==1||count==2,"Invalid count");if(count==2)twos++;
+        }
+        check(twos>850&&twos<1150,"Distribution outside tolerance: "+twos);
+        java.util.Collection<net.minecraft.world.entity.item.ItemEntity> drops=new java.util.ArrayList<>();
+        events.onVillagerDrops(new net.minecraftforge.event.entity.living.LivingDropsEvent(baby,net.minecraft.world.damagesource.DamageSource.GENERIC,drops,0,false));
+        check(drops.isEmpty(),"Baby received fragments");h.succeed();
+    }
+}

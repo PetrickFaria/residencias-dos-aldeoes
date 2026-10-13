@@ -1,10 +1,12 @@
 {
   "variants": {
     "facing=north,lid=false": {
-      "model": "residenciasaldeoes:block/emerald_chest_model"
+      "model": "residenciasaldeoes:block/emerald_chest_model",
+      "y": 0
     },
     "facing=north,lid=true": {
-      "model": "residenciasaldeoes:block/emerald_chest_lid_model"
+      "model": "residenciasaldeoes:block/emerald_chest_lid_model",
+      "y": 0
     },
     "facing=east,lid=false": {
       "model": "residenciasaldeoes:block/emerald_chest_model",

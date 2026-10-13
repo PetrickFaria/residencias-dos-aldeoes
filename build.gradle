@@ -29,3 +29,18 @@ mixin {
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 jar { manifest { attributes(['Specification-Title':'residenciasaldeoes','Specification-Vendor':'OpenAI','Specification-Version':'1','Implementation-Title':project.name,'Implementation-Version':project.jar.archiveVersion]) } }
 jar.finalizedBy('reobfJar')
+
+sourceSets {
+ gametest { compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath; runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath }
+}
+configurations {
+ gametestImplementation.extendsFrom implementation
+ gametestCompileOnly.extendsFrom compileOnly
+}
+minecraft.runs {
+ gameTestServer {
+  workingDirectory project.file('run-gametest')
+  property 'forge.enabledGameTestNamespaces', 'residenciasaldeoes'
+  mods { residenciasaldeoes { source sourceSets.main; source sourceSets.gametest } }
+ }
+}

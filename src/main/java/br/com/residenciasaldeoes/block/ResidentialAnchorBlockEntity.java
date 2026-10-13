@@ -67,7 +67,10 @@ public class ResidentialAnchorBlockEntity extends BlockEntity implements Contain
         for(int slot=0;slot<OUTPUT_SLOTS;slot++){
             ItemStack current=outputItems.get(slot);
             if(!current.isEmpty()&&current.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())){
-                cargo.add(current.copy());outputItems.set(slot,ItemStack.EMPTY);
+                int moved=Math.min(64,current.getCount());
+                ItemStack carried=current.copy();carried.setCount(moved);cargo.add(carried);current.shrink(moved);
+                if(current.isEmpty())outputItems.set(slot,ItemStack.EMPTY);
+                break;
             }
         }
         if(!cargo.isEmpty()){setChanged();level.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);}

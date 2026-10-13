@@ -1,0 +1,40 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "gem": "residenciasaldeoes:block/emerald_facet"
+  },
+  "elements": [
+    {
+      "from": [
+        7,
+        12,
+        -0.5
+      ],
+      "to": [
+        9,
+        14,
+        1
+      ],
+      "faces": {
+        "north": {
+          "texture": "#gem"
+        },
+        "south": {
+          "texture": "#gem"
+        },
+        "east": {
+          "texture": "#gem"
+        },
+        "west": {
+          "texture": "#gem"
+        },
+        "up": {
+          "texture": "#gem"
+        },
+        "down": {
+          "texture": "#gem"
+        }
+      }
+    }
+  ]
+}
