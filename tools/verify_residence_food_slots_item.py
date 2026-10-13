@@ -10,7 +10,7 @@ main=(root/"src/main/java/br/com/residenciasaldeoes/ResidenciasDosAldeoes.java")
 lang=json.loads((root/"src/main/resources/assets/residenciasaldeoes/lang/pt_br.json").read_text())
 assert "if(b==Blocks.CAKE)cakes++" in menu and "idx<resources[3]*2" in menu
 assert "drawStatus(p,\"Comida\",e.food()" in screen and "boolean food" in network
-assert "for(int slot=0;slot<5;slot++)" in menu and "mayPlace(ItemStack stack){return false;}" in menu
+assert "for(int slot=0;slot<ResidentialAnchorBlockEntity.OUTPUT_SLOTS;slot++)" in menu and "mayPlace(ItemStack stack){return false;}" in menu
 assert "implements Container" in be and "ContainerHelper.saveAllItems(tag,outputItems)" in be and "ContainerHelper.loadAllItems(tag,outputItems)" in be
 assert "setOutputItem(int slot,ItemStack stack)" in be
 assert "RETURN_TIMEOUT_TICKS=300L" in events and "THREAT_RETURN_TIMEOUT_TICKS=150L" in events
@@ -23,9 +23,9 @@ register_handler=events[register_start:register_end]
 assert register_handler.index("event.setCanceled(true)") < register_handler.index("ResidenceData.get(level).link(level,pos,villager)")
 assert "imageWidth=272;imageHeight=232" in screen, "Refined panel must remain compact while fitting four resource indicators"
 assert "drawStatus(p,\"Comida\",e.food()" in screen and "listClipRight()" in screen
-assert "int outputRowLeft=(272-(5*18+4*3))/2;" in menu
+assert "int outputRowLeft=(272-(ResidentialAnchorBlockEntity.OUTPUT_SLOTS*18+(ResidentialAnchorBlockEntity.OUTPUT_SLOTS-1)*3))/2;" in menu
 assert "fill(p,sx,sy,sx+18,sy+18,0xFF342419)" in screen and "fill(p,sx+1,sy+1,sx+17,sy+17,0xFFB18A5E)" in screen
-assert "mayPlace(ItemStack stack){return false;}" in menu, "The five preview slots remain output only"
+assert "mayPlace(ItemStack stack){return false;}" in menu, "The ten output slots remain output only"
 assert lang["gui.residenciasaldeoes.anchor_title"]=="Bloco Residencial"
 assert lang["item.residenciasaldeoes.emerald_fragment"]=="Fragmento de Esmeralda"
 assert 'EMERALD_FRAGMENT = ITEMS.register("emerald_fragment"' in main

@@ -1,4 +1,4 @@
-name: Build and Forge GameTest 1.0.44
+name: Build and Forge GameTest 1.0.45
 on:
   push:
   pull_request:
@@ -16,6 +16,13 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+      - name: Verify output and preserved behavior
+        run: |
+          python3 tools/verify_daily_production.py
+          python3 tools/verify_residence_food_slots_item.py
+          python3 tools/verify_reinforced_door.py
+          python3 tools/verify_emerald_chest.py
+          python3 tools/verify_fragment_drops.py
       - name: Build installable mod
         run: bash gradlew --no-daemon clean build
       - name: Run actual Forge GameTest server
@@ -31,7 +38,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.44
+          name: residencias-dos-aldeoes-1.0.45
           path: |
             build/libs/*.jar
             gametest-console.log

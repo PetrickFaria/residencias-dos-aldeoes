@@ -78,10 +78,12 @@ assert 10*200==2000 and 10*1200==12000
 
 def deposit(slots,pending):
     slots=list(slots)
-    for i in range(5):
+    for i in range(len(slots)):
         move=min(64-slots[i],pending);slots[i]+=move;pending-=move
     return slots,pending
 assert deposit([0,0,0,0,0],21)==([21,0,0,0,0],0)
 assert deposit([60,0,0,0,0],21)==([64,17,0,0,0],0)
 assert deposit([64,64,64,64,64],21)==([64,64,64,64,64],21)
+assert deposit([64]*10,21)==([64]*10,21)
+assert deposit([64]*5+[0]*5,21)==([64]*5+[21]+[0]*4,0)
 print('Event-relative production, persistence, deduplication, and quantity checks passed; Minecraft runtime checks remain separate.')

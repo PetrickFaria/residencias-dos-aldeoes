@@ -17,7 +17,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.server.level.ServerLevel;
 
 public class ResidentialAnchorBlockEntity extends BlockEntity implements Container {
-    private static final int OUTPUT_SLOTS=5;
+    public static final int OUTPUT_SLOTS=10;
     private int size = 3;
     private final NonNullList<ItemStack> outputItems=NonNullList.withSize(OUTPUT_SLOTS,ItemStack.EMPTY);
     private long pendingFragments;
@@ -30,7 +30,7 @@ public class ResidentialAnchorBlockEntity extends BlockEntity implements Contain
     public boolean setSize(int value){if(!(level instanceof ServerLevel sl))return false;ResidenceData data=ResidenceData.get(sl);ResidenceData.Home home=data.home(sl,worldPosition);int oldSize=home.size;if(!data.setSize(home,value))return false;size=value;setChanged();sl.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);if(oldSize!=value)VillagerResidenceEvents.onResidenceSizeChanged(sl,home,data);return true;}
     /** Server-only insertion point for future output systems; menu interactions cannot place items. */
     public boolean setOutputItem(int slot,ItemStack stack){
-        if(slot<0||slot>=OUTPUT_SLOTS||stack==null||level==null||level.isClientSide)return false;
+        if(slot<0||slot>=OUTPUT_SLOTS||stack==null||(!stack.isEmpty()&&!stack.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get()))||level==null||level.isClientSide)return false;
         ItemStack copy=stack.copy();if(!copy.isEmpty()&&copy.getCount()>copy.getMaxStackSize())copy.setCount(copy.getMaxStackSize());
         outputItems.set(slot,copy);flushPendingFragments();setChanged();level.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);return true;
     }
@@ -48,15 +48,20 @@ public class ResidentialAnchorBlockEntity extends BlockEntity implements Contain
     public void flushPendingFragments(){
         if(pendingFragments<=0||level==null||level.isClientSide)return;
         boolean changed=false;
+        // Complete existing piles before allocating empty slots, even if an earlier slot is empty.
         for(int slot=0;slot<OUTPUT_SLOTS&&pendingFragments>0;slot++){
             ItemStack current=outputItems.get(slot);
-            if(current.isEmpty()){
-                int moved=(int)Math.min(64L,pendingFragments);
-                outputItems.set(slot,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),moved));
-                pendingFragments-=moved;changed=true;
-            }else if(current.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())){
+            if(!current.isEmpty()&&current.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())){
                 int moved=(int)Math.min((long)Math.max(0,current.getMaxStackSize()-current.getCount()),pendingFragments);
                 if(moved>0){current.grow(moved);pendingFragments-=moved;changed=true;}
+            }
+        }
+        for(int slot=0;slot<OUTPUT_SLOTS&&pendingFragments>0;slot++){
+            if(outputItems.get(slot).isEmpty()){
+                ItemStack produced=new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get());
+                int moved=(int)Math.min((long)produced.getMaxStackSize(),pendingFragments);
+                produced.setCount(moved);outputItems.set(slot,produced);
+                pendingFragments-=moved;changed=true;
             }
         }
         if(changed){setChanged();level.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);}
@@ -96,7 +101,7 @@ public class ResidentialAnchorBlockEntity extends BlockEntity implements Contain
     @Override public void clearContent(){for(int slot=0;slot<OUTPUT_SLOTS;slot++)outputItems.set(slot,ItemStack.EMPTY);setChanged();flushPendingFragments();}
     @Override public boolean stillValid(Player player){return !isRemoved()&&player.distanceToSqr(worldPosition.getX()+.5D,worldPosition.getY()+.5D,worldPosition.getZ()+.5D)<64.0D;}
     @Override protected void saveAdditional(CompoundTag tag){super.saveAdditional(tag);tag.putInt("size",size);tag.putLong("pending_fragments",pendingFragments);tag.putLong("last_production_game_time",lastProductionGameTime);tag.putLong("last_production_event_id",lastProductionEventId);ContainerHelper.saveAllItems(tag,outputItems);}
-    @Override public void load(CompoundTag tag){super.load(tag);size=tag.contains("size")?tag.getInt("size"):3;pendingFragments=tag.getLong("pending_fragments");lastProductionGameTime=tag.contains("last_production_game_time")?tag.getLong("last_production_game_time"):Long.MIN_VALUE;lastProductionEventId=tag.contains("last_production_event_id")?tag.getLong("last_production_event_id"):Long.MIN_VALUE;ContainerHelper.loadAllItems(tag,outputItems);}
+    @Override public void load(CompoundTag tag){super.load(tag);size=tag.contains("size")?tag.getInt("size"):3;pendingFragments=tag.getLong("pending_fragments");lastProductionGameTime=tag.contains("last_production_game_time")?tag.getLong("last_production_game_time"):Long.MIN_VALUE;lastProductionEventId=tag.contains("last_production_event_id")?tag.getLong("last_production_event_id"):Long.MIN_VALUE;outputItems.clear();ContainerHelper.loadAllItems(tag,outputItems);}
     @Override public CompoundTag getUpdateTag(){CompoundTag t=super.getUpdateTag();t.putInt("size",size);return t;}
     @Override public void handleUpdateTag(CompoundTag tag){load(tag);}
     @Override public ClientboundBlockEntityDataPacket getUpdatePacket(){return ClientboundBlockEntityDataPacket.create(this);}

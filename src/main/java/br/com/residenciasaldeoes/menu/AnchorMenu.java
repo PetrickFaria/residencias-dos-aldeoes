@@ -1,6 +1,7 @@
 package br.com.residenciasaldeoes.menu;
 
 import br.com.residenciasaldeoes.ResidenciasDosAldeoes;
+import br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity;
 import br.com.residenciasaldeoes.data.ResidenceData;
 import br.com.residenciasaldeoes.network.ModNetwork;
 import net.minecraft.core.BlockPos;
@@ -26,15 +27,15 @@ public class AnchorMenu extends AbstractContainerMenu {
  public AnchorMenu(int id,Inventory i,FriendlyByteBuf b){this(id,i,b.readBlockPos());}
  public AnchorMenu(int id,Inventory i,BlockPos p){super(ResidenciasDosAldeoes.ANCHOR_MENU.get(),id);pos=p;ownerPlayer=i.player;
   BlockEntity anchor=i.player.level.getBlockEntity(p);
-  Container output=anchor instanceof br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity be?be:new SimpleContainer(5);
-  int outputRowLeft=(272-(5*18+4*3))/2;
-  for(int slot=0;slot<5;slot++){final int index=slot;addSlot(new Slot(output,index,outputRowLeft+slot*21,210){@Override public boolean mayPlace(ItemStack stack){return false;}});}
+  Container output=anchor instanceof br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity be?be:new SimpleContainer(ResidentialAnchorBlockEntity.OUTPUT_SLOTS);
+  int outputRowLeft=(272-(ResidentialAnchorBlockEntity.OUTPUT_SLOTS*18+(ResidentialAnchorBlockEntity.OUTPUT_SLOTS-1)*3))/2;
+  for(int slot=0;slot<ResidentialAnchorBlockEntity.OUTPUT_SLOTS;slot++){final int index=slot;addSlot(new Slot(output,index,outputRowLeft+slot*21,210){@Override public boolean mayPlace(ItemStack stack){return false;}});}
  
   addDataSlot(new DataSlot(){public int get(){BlockEntity b=i.player.level.getBlockEntity(p);return b instanceof br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity a?a.getResidentCount():0;}public void set(int v){syncedResidents=v;}});
   addDataSlot(new DataSlot(){public int get(){BlockEntity b=i.player.level.getBlockEntity(p);return b instanceof br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity a?a.getSize():3;}public void set(int v){syncedSize=v;}});
  }
  @Override public ItemStack quickMoveStack(Player player,int index){
-  if(index<0||index>=5)return ItemStack.EMPTY;
+  if(index<0||index>=ResidentialAnchorBlockEntity.OUTPUT_SLOTS)return ItemStack.EMPTY;
   Slot slot=slots.get(index);if(!slot.hasItem()||!slot.mayPickup(player))return ItemStack.EMPTY;
   ItemStack before=slot.getItem().copy();ItemStack offered=before.copy();int count=offered.getCount();
   player.getInventory().add(offered);int moved=count-offered.getCount();if(moved<=0)return ItemStack.EMPTY;

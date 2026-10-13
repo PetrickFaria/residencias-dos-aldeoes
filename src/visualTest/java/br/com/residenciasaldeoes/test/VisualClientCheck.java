@@ -69,6 +69,28 @@ public final class VisualClientCheck {
             server.execute(()->server.getPlayerList().getPlayer(uuid).teleportTo(server.overworld(),14,-56,18.5,180F,22F));
         }
         if(ticks==340)Screenshot.grab(new File("../build"),"visual-doors.png",mc.getMainRenderTarget(),message->{});
-        if(ticks==370)mc.stop();
+        if(ticks==360){
+            var server=mc.getSingleplayerServer();var uuid=mc.player.getUUID();
+            server.execute(()->{
+                var level=server.overworld();var player=server.getPlayerList().getPlayer(uuid);
+                BlockPos pos=new BlockPos(1,-58,8);
+                player.teleportTo(level,1.5,-58,10.5,180F,20F);
+                var anchor=(br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity)level.getBlockEntity(pos);
+                for(int i=0;i<anchor.getContainerSize();i++)anchor.setOutputItem(i,new net.minecraft.world.item.ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),i+1));
+                anchor.setSize(11);
+                var villager=net.minecraft.world.entity.EntityType.VILLAGER.create(level);
+                villager.moveTo(2.5,-58,8.5,0F,0F);villager.setAge(0);level.addFreshEntity(villager);
+                br.com.residenciasaldeoes.data.ResidenceData.get(level).link(level,pos,villager);
+                ResidenciasDosAldeoes.ANCHOR.get().use(level.getBlockState(pos),level,pos,player,
+                    net.minecraft.world.InteractionHand.MAIN_HAND,
+                    new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(pos),Direction.UP,pos,false));
+            });
+        }
+        if(ticks==420){
+            if(!(mc.screen instanceof br.com.residenciasaldeoes.client.AnchorScreen)||mc.player.containerMenu.slots.size()!=10)
+                throw new IllegalStateException("Anchor screen with ten slots did not open");
+            Screenshot.grab(new File("../build"),"visual-anchor-slots.png",mc.getMainRenderTarget(),message->{});
+        }
+        if(ticks==450)mc.stop();
     }
 }

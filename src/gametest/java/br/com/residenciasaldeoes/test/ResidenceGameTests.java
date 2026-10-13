@@ -33,6 +33,61 @@ public final class ResidenceGameTests {
     }
     private static void floor(GameTestHelper h){for(int x=0;x<16;x++)for(int z=0;z<16;z++)h.setBlock(new BlockPos(x,1,z),Blocks.STONE);}
     @GameTest(template="empty",timeoutTicks=100)
+    public static void ten_output_slots_and_legacy_nbt(GameTestHelper h){
+        BlockPos pos=new BlockPos(2,2,2);
+        h.setBlock(pos,ResidenciasDosAldeoes.ANCHOR.get());
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(pos);
+        check(anchor.getContainerSize()==10,"Anchor must expose ten slots");
+        var legacy=net.minecraft.core.NonNullList.withSize(5,ItemStack.EMPTY);
+        for(int i=0;i<5;i++)legacy.set(i,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),i+10));
+        net.minecraft.nbt.CompoundTag old=new net.minecraft.nbt.CompoundTag();
+        net.minecraft.world.ContainerHelper.saveAllItems(old,legacy);
+        anchor.setOutputItem(9,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),33));
+        anchor.load(old);
+        for(int i=0;i<5;i++)check(anchor.getItem(i).getCount()==i+10,"Legacy slot moved/lost/duplicated: "+i);
+        for(int i=5;i<10;i++)check(anchor.getItem(i).isEmpty(),"New legacy slot not empty: "+i);
+        check(!anchor.setOutputItem(9,new ItemStack(Items.DIRT,5)),"Output accepted invalid item");
+        anchor.clearContent();
+        anchor.setOutputItem(9,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),60));
+        long event=ResidenceData.get(h.getLevel()).nextProductionDawnEventId();
+        anchor.recordDailyProduction(event,10);
+        check(anchor.getItem(9).getCount()==64&&anchor.getItem(0).getCount()==6,"Existing pile not filled before empty slot");
+        anchor.clearContent();
+        anchor.recordDailyProduction(ResidenceData.get(h.getLevel()).nextProductionDawnEventId(),700);
+        for(int i=0;i<10;i++)check(anchor.getItem(i).getCount()==64,"Capacity did not include slot "+i);
+        check(anchor.getPendingFragments()==60,"Overflow lost");
+        var saved=anchor.saveWithFullMetadata();
+        ResidentialAnchorBlockEntity reloaded=new ResidentialAnchorBlockEntity(h.absolutePos(pos),anchor.getBlockState());
+        reloaded.load(saved);
+        h.getLevel().removeBlockEntity(h.absolutePos(pos));h.getLevel().setBlockEntity(reloaded);
+        for(int i=0;i<10;i++)check(reloaded.getItem(i).getCount()==64,"Reload lost slot "+i);
+        check(reloaded.getPendingFragments()==60,"Reload lost overflow");
+        var player=net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(h.getLevel());
+        player.getInventory().clearContent();
+        var menu=new br.com.residenciasaldeoes.menu.AnchorMenu(1,player.getInventory(),h.absolutePos(pos));
+        check(menu.slots.size()==10,"Menu does not expose ten slots");
+        for(int i=0;i<10;i++){
+            var slot=menu.slots.get(i);
+            check(!slot.mayPlace(new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())),"Manual fragment insertion allowed");
+            check(!slot.mayPlace(new ItemStack(Items.DIRT)),"Manual dirt insertion allowed");
+            check(slot.y==210&&slot.x==32+i*21,"Slots not centered in a single bottom row");
+        }
+        check(menu.quickMoveStack(player,9).getCount()==64,"Cannot withdraw tenth slot with shift-click");
+        check(player.getInventory().countItem(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())==64,"Withdrawal lost items");
+        check(reloaded.getItem(9).getCount()==60&&reloaded.getPendingFragments()==0,"Overflow not replenished");
+        menu.clicked(9,0,net.minecraft.world.inventory.ClickType.PICKUP,player);
+        check(menu.getCarried().getCount()==60&&reloaded.getItem(9).isEmpty(),"Normal withdrawal failed");
+        menu.clicked(9,0,net.minecraft.world.inventory.ClickType.PICKUP,player);
+        check(menu.getCarried().getCount()==60&&reloaded.getItem(9).isEmpty(),"Manual insertion consumed items");
+        int cargo=0;
+        while(!reloaded.isEmpty()){
+            var trip=reloaded.takeAvailableFragments();check(!trip.isEmpty(),"Transport cannot read remaining slots");
+            for(ItemStack stack:trip)cargo+=stack.getCount();
+        }
+        check(cargo+64+menu.getCarried().getCount()==700,"Collection lost or duplicated fragments");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100)
     public static void chest_filter_and_capacity(GameTestHelper h){
         h.setBlock(new BlockPos(2,2,2),ResidenciasDosAldeoes.EMERALD_CHEST.get());
         EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(new BlockPos(2,2,2));
@@ -99,7 +154,9 @@ public final class ResidenceGameTests {
         // Use the real production processor and its existing amount calculation/scheduling.
         data.queueProductionDawn(home,h.getLevel().getServer().overworld().getGameTime(),id);
         invoke("processLoadedProduction",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},h.getLevel(),h.getLevel().getServer().overworld().getGameTime());
-        int produced=anchor.getItem(0).getCount();check(produced>0,"No payment");
+        int producedPayment=anchor.getItem(0).getCount();check(producedPayment>0,"No payment");
+        anchor.setOutputItem(9,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),17));
+        int produced=producedPayment+17;
         double startX=first.getX();
         h.runAtTickTime(1190,()->check(chest.isEmpty()&&!first.getPersistentData().contains(JOB),"Collection started before 1200 ticks"));
         h.runAtTickTime(1202,()->ResidenciasDosAldeoes.REINFORCED_DOOR.get().setOpen(null,h.getLevel(),h.getLevel().getBlockState(h.absolutePos(deliveryDoor)),h.absolutePos(deliveryDoor),false));
@@ -126,9 +183,9 @@ public final class ResidenceGameTests {
         Villager replacement=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));replacement.setAge(0);
         check(data.link(h.getLevel(),h.absolutePos(hp),replacement).equals("ok"),"Replacement link failed");
         var home=data.home(h.getLevel(),h.absolutePos(hp));
-        long id=data.nextProductionDawnEventId();anchor.recordDailyProduction(id,65);
+        long id=data.nextProductionDawnEventId();anchor.recordDailyProduction(id,325);
         data.queueCollection(home,id,h.getLevel().getServer().overworld().getGameTime());
-        long secondId=data.nextProductionDawnEventId();anchor.recordDailyProduction(secondId,65);
+        long secondId=data.nextProductionDawnEventId();anchor.recordDailyProduction(secondId,325);
         data.queueCollection(home,secondId,h.getLevel().getServer().overworld().getGameTime());
         h.runAtTickTime(5,()->{
             var cargo=first.getPersistentData().getCompound(JOB).getList("cargo",10);
@@ -137,22 +194,22 @@ public final class ResidenceGameTests {
             var restored=first.getPersistentData().getCompound(JOB).getList("cargo",10);
             check(restored.size()==1&&ItemStack.of(restored.getCompound(0)).getCount()==64,"Cargo failed NBT roundtrip");
             first.hurt(net.minecraft.world.damagesource.DamageSource.GENERIC,1000F);
-            int recovered=(int)anchor.getPendingFragments();for(int i=0;i<5;i++)recovered+=anchor.getItem(i).getCount();
-            check(recovered==130,"Resident death lost or duplicated in-transit fragments");
+            int recovered=(int)anchor.getPendingFragments();for(int i=0;i<anchor.getContainerSize();i++)recovered+=anchor.getItem(i).getCount();
+            check(recovered==650,"Resident death lost or duplicated in-transit fragments");
         });
         h.runAtTickTime(180,()->{
-            int total=(int)anchor.getPendingFragments();for(int i=0;i<5;i++)total+=anchor.getItem(i).getCount();
+            int total=(int)anchor.getPendingFragments();for(int i=0;i<anchor.getContainerSize();i++)total+=anchor.getItem(i).getCount();
             var cargo=replacement.getPersistentData().getCompound(JOB).getList("cargo",10);
             check(cargo.size()<=1,"Transport has more than one slot");
             for(int i=0;i<cargo.size();i++){int count=ItemStack.of(cargo.getCompound(i)).getCount();check(count<=64,"Slot exceeded 64");total+=count;}
-            check(total==130,"Full chest caused loss/duplication");
+            check(total==650,"Full chest caused loss/duplication");
             check(chest.getItem(26).getCount()==64,"Full chest was overwritten");
             // Existing full contents are extracted normally, leaving room for queued cargo.
             for(int i=0;i<27;i++)chest.removeItem(i,64);
         });
         h.succeedWhen(()->{
             int total=0;for(int i=0;i<27;i++)total+=chest.getItem(i).getCount();
-            check(total==130,"Waiting for multiple safe trips");
+            check(total==650,"Waiting for multiple safe trips");
             check(anchor.isEmpty()&&anchor.getPendingFragments()==0,"Fragments remain at anchor");
             check(home.pendingCollections.isEmpty(),"Old collection tasks were not drained");
         });

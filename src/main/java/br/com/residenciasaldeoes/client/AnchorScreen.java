@@ -3,6 +3,7 @@ package br.com.residenciasaldeoes.client;
 import br.com.residenciasaldeoes.data.ResidenceData;
 import br.com.residenciasaldeoes.data.SkinApplicationMode;
 import br.com.residenciasaldeoes.menu.AnchorMenu;
+import br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity;
 import br.com.residenciasaldeoes.network.ModNetwork;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -229,8 +230,8 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         fill(p,leftPos,topPos,leftPos+imageWidth,topPos+imageHeight,0xFF30251C);fill(p,leftPos+3,topPos+3,leftPos+imageWidth-3,topPos+imageHeight-3,0xFF59442E);
         fill(p,leftPos+6,topPos+30,leftPos+imageWidth-6,topPos+31,0xFF876A45);fill(p,leftPos+7,topPos+74,leftPos+imageWidth-7,topPos+ROW_TOP+LIST_HEIGHT+2,0xFF393125);
         fill(p,leftPos+8,topPos+75,leftPos+imageWidth-8,topPos+76,0xFF6B5438);
-        int slotLeft=(imageWidth-(5*18+4*3))/2;
-        for(int slot=0;slot<5;slot++){
+        int slotLeft=(imageWidth-(ResidentialAnchorBlockEntity.OUTPUT_SLOTS*18+(ResidentialAnchorBlockEntity.OUTPUT_SLOTS-1)*3))/2;
+        for(int slot=0;slot<ResidentialAnchorBlockEntity.OUTPUT_SLOTS;slot++){
             int sx=leftPos+slotLeft+slot*21,sy=topPos+210;
             fill(p,sx,sy,sx+18,sy+18,0xFF342419);
             fill(p,sx+1,sy+1,sx+17,sy+17,0xFFB18A5E);
