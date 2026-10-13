@@ -2,6 +2,7 @@ package br.com.residenciasaldeoes;
 
 import br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity;
 import br.com.residenciasaldeoes.data.ResidenceData;
+import br.com.residenciasaldeoes.menu.AnchorMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -23,10 +24,14 @@ import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.level.SleepFinishedTimeEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import java.util.*;
 
 public class VillagerResidenceEvents {
+    private record DawnSample(long gameTime,long dayTime){}
+    private static final Map<ServerLevel,DawnSample> PRODUCTION_CLOCKS=new WeakHashMap<>();
+    private static final long RESIDENT_MATURITY_TICKS=6_000L;
     private static final String UNLINK="residenciasaldeoes_unlink";
     private static final String REG="residenciasaldeoes_register", POS="residenciasaldeoes_anchor", DIM="residenciasaldeoes_dimension";
     private static final String RETURN_ACTIVE="residenciasaldeoes_home_return_active";
@@ -42,6 +47,57 @@ public class VillagerResidenceEvents {
     private static final long RETURN_TIMEOUT_TICKS=300L;
     private static final long THREAT_RETURN_TIMEOUT_TICKS=150L;
     private static final long RETURN_RETRY_TICKS=20L;
+    @SubscribeEvent public void onProductionLevelTick(TickEvent.LevelTickEvent event){
+        if(event.phase!=TickEvent.Phase.END||!(event.level instanceof ServerLevel level))return;
+        long gameTime=level.getServer().overworld().getGameTime(),dayTime=level.getDayTime();
+        DawnSample previous=PRODUCTION_CLOCKS.put(level,new DawnSample(gameTime,dayTime));
+        if(previous!=null){
+            long gameDelta=gameTime-previous.gameTime(),dayDelta=dayTime-previous.dayTime();
+            long before=Math.floorMod(previous.dayTime(),24_000L),after=Math.floorMod(dayTime,24_000L);
+            // Natural dawn advances one server tick and one day-time tick across the cycle boundary.
+            if(gameDelta==1L&&dayDelta==1L&&before>=23_999L&&after<=1L)processProductionDawn(level,gameTime);
+        }
+        if(gameTime%20L==0L)processLoadedProduction(level,gameTime);
+    }
+    @SubscribeEvent public void onProductionSleepFinished(SleepFinishedTimeEvent event){
+        if(!(event.getLevel() instanceof ServerLevel level))return;
+        long gameTime=level.getServer().overworld().getGameTime();
+        PRODUCTION_CLOCKS.put(level,new DawnSample(gameTime,event.getNewTime()));
+        processProductionDawn(level,gameTime);
+    }
+    private void processProductionDawn(ServerLevel level,long gameTime){
+        ResidenceData data=ResidenceData.get(level);
+        if(!data.acceptProductionDawn(level.dimension(),gameTime))return;
+        for(ResidenceData.Home home:new ArrayList<>(data.homes()))if(home.dimension.equals(level.dimension()))data.queueProductionDawn(home,gameTime);
+        processLoadedProduction(level,gameTime);
+    }
+    private void processLoadedProduction(ServerLevel level,long currentGameTime){
+        ResidenceData data=ResidenceData.get(level);
+        for(ResidenceData.Home home:new ArrayList<>(data.homes())){
+            if(!home.dimension.equals(level.dimension())||!level.hasChunkAt(home.pos))continue;
+            if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor))continue;
+            anchor.flushPendingFragments();
+            for(long dawnGameTime:new ArrayList<>(home.pendingProductionDawns)){
+                int fragments=calculateDailyFragments(level,data,home,anchor,dawnGameTime,currentGameTime);
+                anchor.recordDailyProduction(dawnGameTime,fragments);
+                data.completeProductionDawn(home,dawnGameTime);
+            }
+        }
+    }
+    private int calculateDailyFragments(ServerLevel level,ResidenceData data,ResidenceData.Home home,ResidentialAnchorBlockEntity anchor,long dawnGameTime,long currentGameTime){
+        int[] resources=AnchorMenu.countResources(level,home.pos,anchor.getSize());
+        List<UUID> residents=new ArrayList<>(home.residents);int total=0;
+        for(int index=0;index<residents.size();index++){
+            UUID resident=residents.get(index);long linkedAt=data.residentLinkedAtGameTime(resident,currentGameTime);
+            if(dawnGameTime<linkedAt||dawnGameTime-linkedAt<RESIDENT_MATURITY_TICKS)continue;
+            total+=3;
+            if(index<resources[0])total++;
+            if(index<resources[1])total++;
+            if(index<resources[2])total++;
+            if(index<resources[3]*2)total++;
+        }
+        return total;
+    }
     @SubscribeEvent public void onVillagerJoin(EntityJoinLevelEvent event){if(event.getEntity() instanceof Villager v&&event.getLevel() instanceof ServerLevel sl){ResidenceData data=ResidenceData.get(sl);data.applyPendingNameRestoration(v);if(data.owner(v.getUUID())!=null)data.applyResidentName(v);}}
     @SubscribeEvent public void onStartTracking(PlayerEvent.StartTracking event){if(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player&&event.getTarget() instanceof Villager villager&&player.level instanceof ServerLevel level&&level.dimension().equals(villager.level.dimension())){ResidenceData.ResidentSkin skin=ResidenceData.get(level).residentSkin(villager.getUUID());if(skin!=null)br.com.residenciasaldeoes.network.ModNetwork.sendSkin(player,villager.getUUID(),skin);}}
     @SubscribeEvent public void onVillageCatSpawn(LivingSpawnEvent.CheckSpawn event) {

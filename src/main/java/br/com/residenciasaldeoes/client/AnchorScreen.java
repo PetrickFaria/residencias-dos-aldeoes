@@ -63,7 +63,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     private record Snapshot(List<ModNetwork.ResidentEntry> entries,boolean preview) {}
     private record SkinChoice(String id,String label,SkinFiles.SkinFile file) {}
 
-    public AnchorScreen(AnchorMenu m,Inventory i,Component t){super(m,i,t);imageWidth=292;imageHeight=232;}
+    public AnchorScreen(AnchorMenu m,Inventory i,Component t){super(m,i,t);imageWidth=272;imageHeight=232;}
     private static String cacheKey(ResourceLocation dimension,BlockPos pos){return dimension+"|"+pos.asLong();}
 
     public static void receiveResidents(ResourceLocation dimension,BlockPos pos,List<ModNetwork.ResidentEntry> entries,boolean preview){
@@ -229,6 +229,12 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         fill(p,leftPos,topPos,leftPos+imageWidth,topPos+imageHeight,0xFF30251C);fill(p,leftPos+3,topPos+3,leftPos+imageWidth-3,topPos+imageHeight-3,0xFF59442E);
         fill(p,leftPos+6,topPos+30,leftPos+imageWidth-6,topPos+31,0xFF876A45);fill(p,leftPos+7,topPos+74,leftPos+imageWidth-7,topPos+ROW_TOP+LIST_HEIGHT+2,0xFF393125);
         fill(p,leftPos+8,topPos+75,leftPos+imageWidth-8,topPos+76,0xFF6B5438);
+        int slotLeft=(imageWidth-(5*18+4*3))/2;
+        for(int slot=0;slot<5;slot++){
+            int sx=leftPos+slotLeft+slot*21,sy=topPos+210;
+            fill(p,sx,sy,sx+18,sy+18,0xFF342419);
+            fill(p,sx+1,sy+1,sx+17,sy+17,0xFFB18A5E);
+        }
     }
     private void setSkinDialogWidgetsVisible(boolean visible){
         Button[] buttons={registerButton,renameButton,unlinkResidentButton,unlinkAllButton,previewButton,skinConfirm,skinCancel,skinPreviewCenter};
@@ -259,8 +265,8 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         if(skinOpen)renderSkinDialog(p,x,y,q);
         renderTooltip(p,x,y);
     }
-    private int drawStatus(PoseStack p,String label,boolean ready,int x,int y){font.draw(p,Component.literal(label),x,y,0xFFE5DFD2);x+=font.width(label)+2;font.draw(p,Component.literal(ready?"✓":"×"),x,y,ready?0xFF59D982:0xFFE96A5C);return x+font.width(ready?"✓":"×")+4;}
-    private int drawSeparator(PoseStack p,int x,int y){font.draw(p,Component.literal("|"),x,y,0xFFAA9878);return x+font.width("|")+4;}
+    private int drawStatus(PoseStack p,String label,boolean ready,int x,int y){font.draw(p,Component.literal(label),x,y,0xFFE5DFD2);x+=font.width(label)+1;font.draw(p,Component.literal(ready?"✓":"×"),x,y,ready?0xFF59D982:0xFFE96A5C);return x+font.width(ready?"✓":"×")+2;}
+    private int drawSeparator(PoseStack p,int x,int y){font.draw(p,Component.literal("|"),x,y,0xFFAA9878);return x+font.width("|")+2;}
     private boolean hasScrollbar(){return residents.size()>VISIBLE_ROWS;}
     private int scrollbarX(){return leftPos+imageWidth-11;}
     private int listClipRight(){return hasScrollbar()?scrollbarX()-2:leftPos+imageWidth-7;}
