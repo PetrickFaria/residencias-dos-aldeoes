@@ -54,6 +54,7 @@ public class VillagerResidenceEvents {
     private static final long RETURN_TIMEOUT_TICKS=300L;
     private static final long THREAT_RETURN_TIMEOUT_TICKS=150L;
     private static final long RETURN_RETRY_TICKS=20L;
+    private static final long DAWN_COMMAND_WINDOW_TICKS=1_200L;
     private static final long TICKS_AFTER_DAWN_FOR_PAYMENT=200L;
     private static final long TICKS_AFTER_PAYMENT_FOR_COLLECTION=1_200L;
     private static final String EMERALD_TRANSFER="residenciasaldeoes_emerald_transfer";
@@ -68,10 +69,17 @@ public class VillagerResidenceEvents {
         beginScheduledCollections(level,productionGameTime);
     }
     private static boolean crossedNaturalDawn(DawnSample before,DawnSample after){
-        // A real server tick advances both clocks by one. Large /time set jumps are ignored.
-        return after.gameTime()-before.gameTime()==1L&&after.dayTime()-before.dayTime()==1L
-                &&Math.floorMod(before.dayTime(),DAY_LENGTH)==DAY_LENGTH-1L
-                &&Math.floorMod(after.dayTime(),DAY_LENGTH)==0L;
+        long oldTime=Math.floorMod(before.dayTime(),DAY_LENGTH);
+        long newTime=Math.floorMod(after.dayTime(),DAY_LENGTH);
+        boolean naturalTick=after.gameTime()-before.gameTime()==1L&&after.dayTime()-before.dayTime()==1L
+                &&oldTime==DAY_LENGTH-1L&&newTime==0L;
+        if(naturalTick)return true;
+        // Treat a direct time command into the first dawn minute as a dawn event.
+        // The persisted game-time period still limits this to one payment per server day.
+        boolean adjustedClock=after.gameTime()>=before.gameTime()
+                &&after.gameTime()-before.gameTime()<=1L
+                &&after.dayTime()-before.dayTime()!=1L;
+        return adjustedClock&&oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
     }
     @SubscribeEvent public void onProductionSleepFinished(SleepFinishedTimeEvent event){
         if(event.getLevel() instanceof ServerLevel level){

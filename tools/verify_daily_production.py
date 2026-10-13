@@ -15,6 +15,9 @@ assert 'SleepFinishedTimeEvent' in events and 'event.getNewTime()' in events
 assert 'crossedNaturalDawn(previous,new DawnSample(levelGameTime,dayTime))' in events
 assert 'after.gameTime()-before.gameTime()==1L' in events
 assert 'after.dayTime()-before.dayTime()==1L' in events
+assert 'DAWN_COMMAND_WINDOW_TICKS=1_200L' in events
+assert 'boolean adjustedClock=' in events
+assert 'oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS' in events
 assert 'TICKS_AFTER_DAWN_FOR_PAYMENT=200L' in events
 assert 'TICKS_AFTER_PAYMENT_FOR_COLLECTION=1_200L' in events
 assert 'gameTime+TICKS_AFTER_DAWN_FOR_PAYMENT' in events
@@ -54,6 +57,12 @@ assert crosses_natural_dawn(500,501,23999,24000)
 assert not crosses_natural_dawn(500,501,12000,13000)
 assert not crosses_natural_dawn(500,501,13000,23000)
 assert not crosses_natural_dawn(500,501,23999,0)
+def commanded_dawn(before_game,after_game,before_day,after_day):
+    old,before=before_day%24000,after_day%24000
+    return (after_game>=before_game and after_game-before_game<=1 and after_day-before_day!=1
+            and old>1200 and before<=1200)
+assert commanded_dawn(500,500,23000,0) and commanded_dawn(500,501,13000,1000)
+assert not commanded_dawn(500,500,10000,13000) and not commanded_dawn(500,501,13000,23000)
 payment=10000+200
 assert payment+1200==11400
 
