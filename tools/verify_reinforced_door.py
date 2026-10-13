@@ -23,10 +23,10 @@ states=json.loads((resources/'assets/residenciasaldeoes/blockstates/reinforced_d
 assert len(states)==64
 assert all(states[k]['model'].split('/')[-1].startswith('reinforced_door_') for k in states)
 # The base model rotations and hinge-dependent open rotations must match vanilla DoorBlock states.
-facing_y={'north':0,'east':90,'south':180,'west':270}
+facing_y={'north':270,'east':0,'south':90,'west':180}
 for key,value in states.items():
     parts=dict(piece.split('=') for piece in key.split(','))
-    expected=(facing_y[parts['facing']]+90)%360
+    expected=facing_y[parts['facing']]
     if parts['open']=='true':
         expected=(expected+(90 if parts['hinge']=='left' else -90))%360
     assert value.get('y',0)==expected,(key,value.get('y',0),expected)

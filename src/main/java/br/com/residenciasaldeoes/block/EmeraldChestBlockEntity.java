@@ -35,6 +35,10 @@ public final class EmeraldChestBlockEntity extends ChestBlockEntity {
         super.setItem(slot, stack);
     }
 
+    @Override protected net.minecraft.world.inventory.AbstractContainerMenu createMenu(int id,net.minecraft.world.entity.player.Inventory inventory) {
+        return new br.com.residenciasaldeoes.menu.EmeraldChestMenu(id,inventory,this);
+    }
+
     /** Hoppers may deposit fragments and extract contents, but cannot insert other items. */
     @Override public <T> LazyOptional<T> getCapability(Capability<T> capability, Direction side) {
         if (capability == ForgeCapabilities.ITEM_HANDLER) return itemHandler.cast();

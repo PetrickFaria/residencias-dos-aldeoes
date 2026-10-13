@@ -91,10 +91,8 @@ public class VillagerResidenceEvents {
         if(event.phase!=TickEvent.Phase.END||!(event.level instanceof ServerLevel level))return;
         long productionGameTime=level.getServer().overworld().getGameTime();
         long levelGameTime=level.getGameTime(),dayTime=level.getDayTime();
-        DawnSample current=new DawnSample(levelGameTime,dayTime);
-        DawnSample previous=PRODUCTION_CLOCKS.put(level,current);
-        boolean firstLoadedDawn=previous==null&&Math.floorMod(dayTime,DAY_LENGTH)<=DAWN_COMMAND_WINDOW_TICKS;
-        if(firstLoadedDawn||(previous!=null&&crossedNaturalDawn(previous,current)))
+        DawnSample previous=PRODUCTION_CLOCKS.put(level,new DawnSample(levelGameTime,dayTime));
+        if(previous!=null&&crossedNaturalDawn(previous,new DawnSample(levelGameTime,dayTime)))
             processProductionDawn(level,productionGameTime);
         processLoadedProduction(level,productionGameTime);
         beginScheduledCollections(level,productionGameTime);
@@ -109,7 +107,7 @@ public class VillagerResidenceEvents {
         boolean adjustedClock=after.gameTime()>=before.gameTime()
                 &&after.gameTime()-before.gameTime()<=1L
                 &&after.dayTime()-before.dayTime()!=1L;
-        return adjustedClock&&oldTime!=newTime&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
+        return adjustedClock&&oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
     }
     @SubscribeEvent public void onProductionSleepFinished(SleepFinishedTimeEvent event){
         if(event.getLevel() instanceof ServerLevel level){
@@ -131,18 +129,12 @@ public class VillagerResidenceEvents {
             if(!home.dimension.equals(level.dimension())||!level.hasChunkAt(home.pos))continue;
             if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor))continue;
             anchor.flushPendingFragments();
-            for(ResidenceData.PendingProduction pendingTask:new ArrayList<>(home.pendingProduction)){
-                if(currentGameTime<pendingTask.dueGameTime())continue;
-                ResidenceData.PendingProduction task=pendingTask;
-                long eventId=task.period();
-                if(eventId==Long.MIN_VALUE){
-                    eventId=data.nextProductionDawnEventId();
-                    data.adoptLegacyProductionDawn(home,task,eventId);
-                    task=new ResidenceData.PendingProduction(task.dueGameTime(),eventId);
-                }
+            for(ResidenceData.PendingProduction task:new ArrayList<>(home.pendingProduction)){
+                if(currentGameTime<task.dueGameTime())continue;
                 int[] resources=AnchorMenu.countResources(level,home.pos,anchor.getSize());
                 List<UUID> residents=new ArrayList<>(home.residents);
                 int fragments=calculateDailyFragments(residents,resources);
+                long eventId=task.period()==Long.MIN_VALUE?data.nextProductionDawnEventId():task.period();
                 boolean recorded=anchor.recordDailyProduction(eventId,fragments);
                 if(recorded&&fragments>0){
                     playProductionBell(level,residents);
@@ -160,7 +152,8 @@ public class VillagerResidenceEvents {
             if(pending==null)continue;
             UUID first=home.residents.iterator().next();
             if(!(level.getEntity(first) instanceof Villager villager)||villager.getPersistentData().contains(EMERALD_TRANSFER))continue;
-            if(!level.hasChunkAt(home.pos)||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor)||anchor.isEmpty())continue;
+            if(!level.hasChunkAt(home.pos)||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor))continue;
+            if(anchor.isEmpty()){data.completeCollection(home,pending);continue;}
             BlockPos chest=findEmeraldChest(level,home,villager);
             if(chest==null)continue;
             BlockPos homeApproach=findApproach(level,home.pos,villager);
@@ -168,12 +161,12 @@ public class VillagerResidenceEvents {
             if(homeApproach==null||chestApproach==null)continue;
             CompoundTag job=new CompoundTag();job.putLong("anchor",home.pos.asLong());job.putLong("chest",chest.asLong());job.putLong("period",pending.period());job.putLong("started",currentGameTime);job.put("previous_hand",villager.getItemBySlot(EquipmentSlot.MAINHAND).save(new CompoundTag()));job.putLong("home_approach",homeApproach.asLong());job.putLong("chest_approach",chestApproach.asLong());job.putInt("stage",0);
             villager.getPersistentData().put(EMERALD_TRANSFER,job);
-            data.completeCollection(home,pending);
+
         }
     }
     private static BlockPos findEmeraldChest(ServerLevel level,ResidenceData.Home home,Villager villager){
         int radius=home.size/2;List<BlockPos> candidates=new ArrayList<>();
-        for(int y=home.pos.getY()+1;y<=home.pos.getY()+home.size;y++)
+        for(int y=home.pos.getY()-1;y<=home.pos.getY()+home.size;y++)
             for(int x=home.pos.getX()-radius;x<=home.pos.getX()+radius;x++)
                 for(int z=home.pos.getZ()-radius;z<=home.pos.getZ()+radius;z++){
                     BlockPos pos=new BlockPos(x,y,z);
@@ -190,12 +183,18 @@ public class VillagerResidenceEvents {
         }
         approaches.sort(Comparator.<BlockPos>comparingDouble(p->villager.blockPosition().distSqr(p)).thenComparing(Comparator.naturalOrder()));
         for(BlockPos candidate:approaches){net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().createPath(candidate,0);if(path!=null&&path.canReach())return candidate;}
+        // Follow partial paths when the target is initially beyond the navigation search range.
+        // Inventory operations still require physical arrival at the chosen approach.
+        for(BlockPos candidate:approaches){net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().createPath(candidate,0);if(path!=null&&path.getNodeCount()>1)return candidate;}
         return null;
     }
     private boolean tickEmeraldTransfer(ServerLevel level,Villager villager){
-        if(villager.tickCount%5!=0)return true;
+
         if(!villager.getPersistentData().contains(EMERALD_TRANSFER))return false;
         CompoundTag job=villager.getPersistentData().getCompound(EMERALD_TRANSFER);
+        villager.getBrain().stopAll(level,villager);
+        villager.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
+        villager.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.PATH);
         if(level.getGameTime()-job.getLong("started")>12_000L){finishEmeraldTransfer(level,villager,job,true);return true;}
         ResidenceData.Home owner=ResidenceData.get(level).owner(villager.getUUID());
         if(owner==null||!owner.dimension.equals(level.dimension())||job.getLong("anchor")!=owner.pos.asLong()){
@@ -209,14 +208,18 @@ public class VillagerResidenceEvents {
             if(job.getInt("stage")==0){
                 if(!(level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor)){finishEmeraldTransfer(level,villager,job,true);return true;}
                 List<ItemStack> cargo=anchor.takeAvailableFragments();
-                if(cargo.isEmpty()){finishEmeraldTransfer(level,villager,job,false);return true;}
+                if(cargo.isEmpty()){
+                    ResidenceData data=ResidenceData.get(level);
+                    ResidenceData.PendingCollection pending=data.dueCollection(owner,level.getServer().overworld().getGameTime());
+                    if(pending!=null&&pending.period()==job.getLong("period"))data.completeCollection(owner,pending);
+                    finishEmeraldTransfer(level,villager,job,false);return true;}
                 ListTag items=new ListTag();for(ItemStack stack:cargo)items.add(stack.save(new CompoundTag()));job.put("cargo",items);job.putInt("stage",1);villager.getPersistentData().put(EMERALD_TRANSFER,job);
-                villager.setItemSlot(EquipmentSlot.MAINHAND,cargo.get(0).copy());
+
             }else if(stage==1){
                 if(!(level.getBlockEntity(chestPos) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity chest)){finishEmeraldTransfer(level,villager,job,true);return true;}
                 List<ItemStack> cargo=readTransferCargo(job);List<ItemStack> remainder=new ArrayList<>();
                 for(ItemStack stack:cargo){chest.insertFragments(stack);if(!stack.isEmpty())remainder.add(stack);}
-                if(remainder.isEmpty())finishEmeraldTransfer(level,villager,job,false);
+                if(remainder.isEmpty()){job.remove("cargo");job.putInt("stage",0);villager.getPersistentData().put(EMERALD_TRANSFER,job);}
                 else{ListTag items=new ListTag();for(ItemStack stack:remainder)items.add(stack.save(new CompoundTag()));job.put("cargo",items);job.putInt("stage",2);villager.getPersistentData().put(EMERALD_TRANSFER,job);}
             }else{
                 List<ItemStack> remainder=readTransferCargo(job);
@@ -224,10 +227,30 @@ public class VillagerResidenceEvents {
                 else for(ItemStack stack:remainder)if(!stack.isEmpty())villager.spawnAtLocation(stack);
                 finishEmeraldTransfer(level,villager,job,false);
             }
-        }else if(villager.getNavigation().isDone()||villager.tickCount%40==0){
+        }else if(villager.getNavigation().isDone()||villager.tickCount%10==0){
             villager.getNavigation().moveTo(target.getX()+.5D,target.getY(),target.getZ()+.5D,.8D);
         }
+        openTransferDoors(level,villager);
         return true;
+    }
+    private static void openTransferDoors(ServerLevel level,Villager villager){
+        net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().getPath();
+        if(path==null)return;
+        for(int index=Math.max(0,path.getNextNodeIndex()-1);index<Math.min(path.getNodeCount(),path.getNextNodeIndex()+2);index++){
+            BlockPos pos=path.getNode(index).asBlockPos();
+            if(villager.blockPosition().distSqr(pos)>4D)continue;
+            var state=level.getBlockState(pos);
+            if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock door
+                    &&state.getMaterial()==net.minecraft.world.level.material.Material.WOOD
+                    &&!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
+                door.setOpen(villager,level,state,pos,true);
+                java.util.Set<net.minecraft.core.GlobalPos> doors=villager.getBrain()
+                        .getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.DOORS_TO_CLOSE)
+                        .orElseGet(java.util.HashSet::new);
+                doors.add(net.minecraft.core.GlobalPos.of(level.dimension(),pos));
+                villager.getBrain().setMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.DOORS_TO_CLOSE,doors);
+            }
+        }
     }
     private static List<ItemStack> readTransferCargo(CompoundTag job){
         List<ItemStack> items=new ArrayList<>();ListTag list=job.getList("cargo",Tag.TAG_COMPOUND);
@@ -578,6 +601,7 @@ public class VillagerResidenceEvents {
         if(!(event.getEntity() instanceof Villager villager)
                 ||!(event.getOutcome() instanceof net.minecraft.world.entity.monster.ZombieVillager)
                 ||!(villager.level instanceof ServerLevel level))return;
+        if(villager.getPersistentData().contains(EMERALD_TRANSFER))finishEmeraldTransfer(level,villager,villager.getPersistentData().getCompound(EMERALD_TRANSFER),true);
         ResidenceData.get(level).unlinkConverted(level,villager,event.getOutcome());
     }
     @SubscribeEvent public void onVillagerDrops(LivingDropsEvent event){
@@ -586,7 +610,7 @@ public class VillagerResidenceEvents {
         String marker="residenciasaldeoes_fragment_drop_processed";
         if(persistent.getBoolean(marker))return;
         persistent.putBoolean(marker,true);
-        int count=villager.getRandom().nextFloat()<0.75F?1:2;
+        int count=villager.getRandom().nextInt(10)==0?2:1;
         event.getDrops().add(new ItemEntity(villager.level,villager.getX(),villager.getY(),villager.getZ(),new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),count)));
     }
     @SubscribeEvent public void onDeath(LivingDeathEvent event){if(event.getEntity() instanceof Villager v&&v.level instanceof ServerLevel sl){if(v.getPersistentData().contains(EMERALD_TRANSFER))finishEmeraldTransfer(sl,v,v.getPersistentData().getCompound(EMERALD_TRANSFER),true);ResidenceData.get(sl).unlink(sl,v.getUUID());}}

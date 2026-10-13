@@ -16,22 +16,18 @@ assert 'CommandEvent' in events and 'onTimeCommand(CommandEvent event)' in event
 assert 'processProductionDawn(level,productionGameTime)' in events
 assert 'nextProductionDawnEventId()' in data and 'period<=previous' not in data
 assert 'recordDailyProduction(eventId,fragments)' in events
-assert 'adoptLegacyProductionDawn(home,task,eventId)' in events
-assert 'public void adoptLegacyProductionDawn(Home home,PendingProduction legacy,long eventId)' in data
-assert 'task=new ResidenceData.PendingProduction(task.dueGameTime(),eventId)' in events
 assert 'last_production_event_id' in be
-assert 'firstLoadedDawn=previous==null&&Math.floorMod(dayTime,DAY_LENGTH)<=DAWN_COMMAND_WINDOW_TICKS' in events
-assert 'crossedNaturalDawn(previous,current)' in events
+assert 'crossedNaturalDawn(previous,new DawnSample(levelGameTime,dayTime))' in events
 assert 'after.gameTime()-before.gameTime()==1L' in events
 assert 'after.dayTime()-before.dayTime()==1L' in events
 assert 'DAWN_COMMAND_WINDOW_TICKS=1_200L' in events
 assert 'boolean adjustedClock=' in events
-assert 'oldTime!=newTime&&newTime<=DAWN_COMMAND_WINDOW_TICKS' in events
+assert 'oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS' in events
 assert 'TICKS_AFTER_DAWN_FOR_PAYMENT=200L' in events
 assert 'TICKS_AFTER_PAYMENT_FOR_COLLECTION=1_200L' in events
 assert 'gameTime+TICKS_AFTER_DAWN_FOR_PAYMENT' in events
 assert 'currentGameTime+TICKS_AFTER_PAYMENT_FOR_COLLECTION' in events
-assert 'currentGameTime<pendingTask.dueGameTime()' in events
+assert 'currentGameTime<task.dueGameTime()' in events
 assert 'RESIDENT_MATURITY_TICKS' not in events
 assert 'next_production_dawn_event_id' in data and 'lastAcceptedDawnGameTime' in data
 assert 'queueCollection(Home home,long eventId,long dueGameTime)' in data

@@ -7,21 +7,19 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
-import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.material.Material;
 
-/** Non-placeable render state used to draw anchor-matched chest body details. */
 public final class EmeraldChestBodyBlock extends Block {
+    public static final net.minecraft.world.level.block.state.properties.BooleanProperty LID = net.minecraft.world.level.block.state.properties.BooleanProperty.create("lid");
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
-    public static final BooleanProperty LID = BooleanProperty.create("lid");
 
     public EmeraldChestBodyBlock() {
         super(BlockBehaviour.Properties.of(Material.STONE).strength(-1.0F, 3600000.0F)
                 .sound(SoundType.STONE).noOcclusion().noCollission());
-        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(LID, false));
+        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(LID,false));
     }
 
     @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, net.minecraft.world.level.block.state.BlockState> builder) {
-        builder.add(FACING, LID);
+        builder.add(FACING,LID);
     }
 }
