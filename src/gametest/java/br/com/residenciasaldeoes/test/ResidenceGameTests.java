@@ -162,7 +162,7 @@ public final class ResidenceGameTests {
     @GameTest(template="empty",timeoutTicks=100)
     public static void adult_drops_and_baby_exclusion(GameTestHelper h){
         Villager adult=h.spawn(EntityType.VILLAGER,new BlockPos(2,2,2));adult.setAge(0);
-        Villager baby=h.spawn(EntityType.VILLAGER,new BlockPos(10,2,2));baby.setAge(-24000);
+        Villager baby=h.spawn(EntityType.VILLAGER,new BlockPos(14,2,14));baby.setAge(-24000);
         VillagerResidenceEvents events=new VillagerResidenceEvents();int twos=0;
         for(int i=0;i<10000;i++){
             adult.getPersistentData().remove("residenciasaldeoes_fragment_drop_processed");
@@ -183,6 +183,23 @@ public final class ResidenceGameTests {
                 new net.minecraft.world.phys.AABB(adult.blockPosition()).inflate(2),item->item.getItem().is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get()));
         check(actualDrops.size()==1,"Actual environmental death did not produce one exclusive fragment stack");
         check(actualDrops.get(0).getItem().getCount()<=2,"Actual death exceeded two fragments");
+        h.setBlock(new BlockPos(12,2,8),ResidenciasDosAldeoes.ANCHOR.get());
+        ((ResidentialAnchorBlockEntity)h.getBlockEntity(new BlockPos(12,2,8))).setSize(11);
+        var fake=net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(h.getLevel());
+        var creature=h.spawn(EntityType.SKELETON,new BlockPos(13,2,5));
+        for(boolean resident:new boolean[]{false,true})for(int cause=0;cause<3;cause++){
+            if(!resident&&cause==0)continue; // Common environmental death was checked above.
+            BlockPos pos=new BlockPos(resident?8:2,2,2+cause*4);
+            Villager target=h.spawn(EntityType.VILLAGER,pos);target.setAge(0);
+            if(resident)check(ResidenceData.get(h.getLevel()).link(h.getLevel(),h.absolutePos(new BlockPos(12,2,8)),target).equals("ok"),"Resident death fixture failed to link");
+            var source=cause==0?net.minecraft.world.damagesource.DamageSource.GENERIC:
+                    cause==1?net.minecraft.world.damagesource.DamageSource.playerAttack(fake):net.minecraft.world.damagesource.DamageSource.mobAttack(creature);
+            target.hurt(source,1000F);
+            var spawned=h.getLevel().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                    new net.minecraft.world.phys.AABB(h.absolutePos(pos)).inflate(2),item->item.getItem().is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get()));
+            check(spawned.size()==1&&spawned.get(0).getItem().getCount()>=1&&spawned.get(0).getItem().getCount()<=2,
+                    "Invalid actual death drops: resident="+resident+" cause="+cause);
+        }
         baby.hurt(net.minecraft.world.damagesource.DamageSource.GENERIC,1000F);
         var babyDrops=h.getLevel().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
                 new net.minecraft.world.phys.AABB(baby.blockPosition()).inflate(2),item->item.getItem().is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get()));
