@@ -27,6 +27,10 @@ assert recipe["key"]["D"]["tag"] == "residenciasaldeoes:vanilla_doors"
 doors = json.loads((resources / "data/residenciasaldeoes/tags/items/vanilla_doors.json").read_text())["values"]
 assert len(doors) == 8 and all(x.startswith("minecraft:") and x.endswith("_door") for x in doors)
 assert all(not any(term in x for term in ("trapdoor", "fence_gate")) for x in doors)
+axe = json.loads((resources / "data/minecraft/tags/blocks/mineable/axe.json").read_text())
+assert "residenciasaldeoes:ancora_residencial" in axe["values"]
+assert "residenciasaldeoes:reinforced_door" in axe["values"]
+assert "residenciasaldeoes:emerald_chest" in axe["values"]
 wooden = json.loads((resources / "data/minecraft/tags/blocks/wooden_doors.json").read_text())
 assert wooden["replace"] is False and "residenciasaldeoes:reinforced_door" in wooden["values"]
 loot = json.loads((resources / "data/residenciasaldeoes/loot_tables/blocks/reinforced_door.json").read_text())

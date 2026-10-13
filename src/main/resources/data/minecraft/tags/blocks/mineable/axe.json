@@ -1,6 +1,8 @@
 {
   "replace": false,
   "values": [
-    "residenciasaldeoes:emerald_chest"
+    "residenciasaldeoes:emerald_chest",
+    "residenciasaldeoes:ancora_residencial",
+    "residenciasaldeoes:reinforced_door"
   ]
 }
