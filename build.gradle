@@ -44,3 +44,14 @@ minecraft.runs {
   mods { residenciasaldeoes { source sourceSets.main; source sourceSets.gametest } }
  }
 }
+
+sourceSets {
+ visualTest { compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath; runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath }
+}
+minecraft.runs.client {
+ if (project.hasProperty("visual_check")) {
+  property "residencias.visualCheck", "true"
+  args "--width", "1600", "--height", "900"
+ }
+ mods { residenciasaldeoes { source sourceSets.visualTest } }
+}
