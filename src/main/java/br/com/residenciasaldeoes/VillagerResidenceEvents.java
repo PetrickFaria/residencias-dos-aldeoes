@@ -67,8 +67,8 @@ public class VillagerResidenceEvents {
      */
     @SubscribeEvent public void onTimeCommand(CommandEvent event){
         var context=event.getParseResults().getContext();
-        if(!(context.getSource().getLevel() instanceof ServerLevel level))return;
-        String input=context.getInput().trim();
+        ServerLevel level=context.getSource().getLevel();
+        String input=event.getParseResults().getReader().getString().trim();
         if(input.startsWith("/"))input=input.substring(1);
         String[] parts=input.split("\\s+");
         if(parts.length<3||!parts[0].equals("time"))return;

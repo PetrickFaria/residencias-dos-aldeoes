@@ -14,7 +14,7 @@ public final class EmeraldChestBodyBlock extends Block {
 
     public EmeraldChestBodyBlock() {
         super(BlockBehaviour.Properties.of(Material.STONE).strength(-1.0F, 3600000.0F)
-                .sound(SoundType.STONE).noOcclusion().noCollission().noDrops());
+                .sound(SoundType.STONE).noOcclusion().noCollission());
         registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
     }
 
