@@ -1,18 +1,18 @@
 {
   "variants": {
     "facing=north": {
-      "model": "residenciasaldeoes:block/ancora_residencial"
+      "model": "residenciasaldeoes:block/emerald_chest_model"
     },
     "facing=south": {
-      "model": "residenciasaldeoes:block/ancora_residencial",
+      "model": "residenciasaldeoes:block/emerald_chest_model",
       "y": 180
     },
     "facing=west": {
-      "model": "residenciasaldeoes:block/ancora_residencial",
+      "model": "residenciasaldeoes:block/emerald_chest_model",
       "y": 270
     },
     "facing=east": {
-      "model": "residenciasaldeoes:block/ancora_residencial",
+      "model": "residenciasaldeoes:block/emerald_chest_model",
       "y": 90
     }
   }
