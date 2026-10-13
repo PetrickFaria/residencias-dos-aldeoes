@@ -30,6 +30,8 @@ jobs:
         run: python tools/verify_daily_production.py
       - name: Verify reinforced door registration, recipe, and assets
         run: python tools/verify_reinforced_door.py
+      - name: Verify villager emerald-fragment death drops
+        run: python tools/verify_fragment_drops.py
       - name: Verify emerald chest storage and collection flow
         run: python tools/verify_emerald_chest.py
       - name: Build with the project Gradle wrapper
