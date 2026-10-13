@@ -57,4 +57,6 @@ Minecraft Java 1.19.2, Forge 43.5.0, Java 17.
 
 for name,label in [('visual-chests.png','SCREENSHOT_CHESTS_BASE64'),('visual-doors.png','SCREENSHOT_DOORS_BASE64')]:
     p=Path('build/screenshots')/name
-    if p.exists():print(label+'='+base64.b64encode(p.read_bytes()).decode())
+    if p.exists():
+        encoded=base64.b64encode(p.read_bytes()).decode()
+        for index in range(0,len(encoded),4096):print(label+'_CHUNK '+str(index//4096).zfill(6)+' '+encoded[index:index+4096])
