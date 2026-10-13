@@ -80,13 +80,19 @@ public final class ResidenceGameTests {
     public static void physical_transport_after_payment(GameTestHelper h){
         floor(h);
         BlockPos homePos=new BlockPos(6,2,6),chestPos=new BlockPos(10,2,6);
+        BlockPos deliveryDoor=new BlockPos(8,2,6);
+        for(int x=7;x<=10;x++)for(int z:new int[]{5,7})for(int y=2;y<=3;y++)
+            h.setBlock(new BlockPos(x,y,z),Blocks.STONE);
+        var gate=ResidenciasDosAldeoes.REINFORCED_DOOR.get().defaultBlockState().setValue(DoorBlock.FACING,Direction.EAST);
+        h.setBlock(deliveryDoor,gate);
+        h.setBlock(deliveryDoor.above(),gate.setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER));
         h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(chestPos,ResidenciasDosAldeoes.EMERALD_CHEST.get());
         ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(homePos);anchor.setSize(11);
         EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(chestPos);
         Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));first.setAge(0);
         ResidenceData data=ResidenceData.get(h.getLevel());
         check(data.link(h.getLevel(),h.absolutePos(homePos),first).equals("ok"),"Link failed");
-        Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(2,2,6));second.setAge(0);
+        Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(2,2,6));second.setAge(0);second.setNoAi(true);
         check(data.link(h.getLevel(),h.absolutePos(homePos),second).equals("ok"),"Second link failed");
         var home=data.home(h.getLevel(),h.absolutePos(homePos));
         long id=data.nextProductionDawnEventId();
@@ -96,11 +102,13 @@ public final class ResidenceGameTests {
         int produced=anchor.getItem(0).getCount();check(produced>0,"No payment");
         double startX=first.getX();
         h.runAtTickTime(1190,()->check(chest.isEmpty()&&!first.getPersistentData().contains(JOB),"Collection started before 1200 ticks"));
+        h.runAtTickTime(1202,()->ResidenciasDosAldeoes.REINFORCED_DOOR.get().setOpen(null,h.getLevel(),h.absolutePos(deliveryDoor),false));
         h.succeedWhen(()->{
             check(!chest.isEmpty(),"Waiting for physical deposit; resident="+first.blockPosition()+" job="+first.getPersistentData().getCompound(JOB));
             check(chest.getItem(0).getCount()==produced,"Lost or duplicated fragments");
             check(Math.abs(first.getX()-startX)>2,"Villager did not walk");
             check(!second.getPersistentData().contains(JOB),"Second resident was assigned conflicting transport");
+            check(h.getLevel().getBlockState(h.absolutePos(deliveryDoor)).getValue(DoorBlock.OPEN),"Courier failed to open the reinforced door");
             check(anchor.isEmpty(),"Anchor not collected");
         });
     }
