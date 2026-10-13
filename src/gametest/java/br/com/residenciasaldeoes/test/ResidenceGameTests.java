@@ -63,6 +63,12 @@ public final class ResidenceGameTests {
                 h.setBlock(p,state);h.setBlock(p.above(),state.setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER));
                 var reference=Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING,facing).setValue(DoorBlock.HINGE,hinge).setValue(DoorBlock.OPEN,open);
                 check(state.getCollisionShape(h.getLevel(),h.absolutePos(p)).bounds().equals(reference.getCollisionShape(h.getLevel(),h.absolutePos(p)).bounds()),"Door collision changed");
+                BlockPos absolute=h.absolutePos(p);
+                var player=net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(h.getLevel());
+                state.getBlock().use(state,h.getLevel(),absolute,player,net.minecraft.world.InteractionHand.MAIN_HAND,
+                        new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(absolute),Direction.UP,absolute,false));
+                check(h.getLevel().getBlockState(absolute).getValue(DoorBlock.OPEN)==!open,"Manual door toggle failed");
+                check(h.getLevel().getBlockState(absolute.above()).getValue(DoorBlock.OPEN)==!open,"Upper half did not toggle");
             }
         }
         h.succeed();
@@ -104,8 +110,10 @@ public final class ResidenceGameTests {
         ResidenceData data=ResidenceData.get(h.getLevel());
         check(data.link(h.getLevel(),h.absolutePos(hp),first).equals("ok"),"Link failed");
         var home=data.home(h.getLevel(),h.absolutePos(hp));
-        long id=data.nextProductionDawnEventId();anchor.recordDailyProduction(id,130);
+        long id=data.nextProductionDawnEventId();anchor.recordDailyProduction(id,65);
         data.queueCollection(home,id,h.getLevel().getServer().overworld().getGameTime());
+        long secondId=data.nextProductionDawnEventId();anchor.recordDailyProduction(secondId,65);
+        data.queueCollection(home,secondId,h.getLevel().getServer().overworld().getGameTime());
         h.runAtTickTime(180,()->{
             int total=(int)anchor.getPendingFragments();for(int i=0;i<5;i++)total+=anchor.getItem(i).getCount();
             var cargo=first.getPersistentData().getCompound(JOB).getList("cargo",10);
@@ -123,6 +131,7 @@ public final class ResidenceGameTests {
             int total=0;for(int i=0;i<27;i++)total+=chest.getItem(i).getCount();
             check(total==130,"Waiting for multiple safe trips");
             check(anchor.isEmpty()&&anchor.getPendingFragments()==0,"Fragments remain at anchor");
+            check(home.pendingCollections.isEmpty(),"Old collection tasks were not drained");
         });
     }
     @GameTest(template="empty",timeoutTicks=400,batch="dawn")
@@ -148,9 +157,17 @@ public final class ResidenceGameTests {
             check(drops.size()==1,"Duplicate drop");int count=drops.iterator().next().getItem().getCount();
             check(count==1||count==2,"Invalid count");if(count==2)twos++;
         }
+        System.out.println("DROP_SAMPLE size=10000 two_fragments="+twos+" one_fragments="+(10000-twos));
         check(twos>850&&twos<1150,"Distribution outside tolerance: "+twos);
         java.util.Collection<net.minecraft.world.entity.item.ItemEntity> drops=new java.util.ArrayList<>();
         events.onVillagerDrops(new net.minecraftforge.event.entity.living.LivingDropsEvent(baby,net.minecraft.world.damagesource.DamageSource.GENERIC,drops,0,false));
-        check(drops.isEmpty(),"Baby received fragments");h.succeed();
+        check(drops.isEmpty(),"Baby received fragments");
+        adult.getPersistentData().remove("residenciasaldeoes_fragment_drop_processed");
+        adult.hurt(net.minecraft.world.damagesource.DamageSource.GENERIC,1000F);
+        var actualDrops=h.getLevel().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                new net.minecraft.world.phys.AABB(adult.blockPosition()).inflate(2),item->item.getItem().is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get()));
+        check(actualDrops.size()==1,"Actual environmental death did not produce one exclusive fragment stack");
+        check(actualDrops.get(0).getItem().getCount()<=2,"Actual death exceeded two fragments");
+        h.succeed();
     }
 }

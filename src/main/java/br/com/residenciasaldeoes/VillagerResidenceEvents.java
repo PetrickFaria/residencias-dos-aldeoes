@@ -152,7 +152,8 @@ public class VillagerResidenceEvents {
             if(pending==null)continue;
             UUID first=home.residents.iterator().next();
             if(!(level.getEntity(first) instanceof Villager villager)||villager.getPersistentData().contains(EMERALD_TRANSFER))continue;
-            if(!level.hasChunkAt(home.pos)||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor)||anchor.isEmpty())continue;
+            if(!level.hasChunkAt(home.pos)||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor))continue;
+            if(anchor.isEmpty()){data.completeCollection(home,pending);continue;}
             BlockPos chest=findEmeraldChest(level,home,villager);
             if(chest==null)continue;
             BlockPos homeApproach=findApproach(level,home.pos,villager);
