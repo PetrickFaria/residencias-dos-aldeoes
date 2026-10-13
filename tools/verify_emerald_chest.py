@@ -30,7 +30,7 @@ assert 'boolean mayPlace(ItemStack stack)' in menu and 'i<27' in menu
 assert body_model['textures']['side']==anchor_model['textures']['side']
 assert body_model['textures']['wood']==anchor_model['textures']['wood']
 assert body_model['textures']['corner']==anchor_model['textures']['corner']
-states=json.loads((resources/'assets/residenciasaldeoes/blockstates/emerald_chest.json').read_text())['variants'];assert len(states)==8
+states=json.loads((resources/'assets/residenciasaldeoes/blockstates/emerald_chest.json').read_text())['variants'];assert len(states)==24
 for name in ('emerald_chest.png','emerald_chest_left.png','emerald_chest_right.png'):
  data=(resources/f'assets/residenciasaldeoes/textures/entity/chest/{name}').read_bytes()
  assert data[:8]==bytes.fromhex('89504e470d0a1a0a') and struct.unpack('>II',data[16:24])==(64,64)

@@ -83,6 +83,8 @@ public final class ResidenceGameTests {
         Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));first.setAge(0);
         ResidenceData data=ResidenceData.get(h.getLevel());
         check(data.link(h.getLevel(),h.absolutePos(homePos),first).equals("ok"),"Link failed");
+        Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(2,2,6));second.setAge(0);
+        check(data.link(h.getLevel(),h.absolutePos(homePos),second).equals("ok"),"Second link failed");
         var home=data.home(h.getLevel(),h.absolutePos(homePos));
         long id=data.nextProductionDawnEventId();
         // Use the real production processor and its existing amount calculation/scheduling.
@@ -95,6 +97,7 @@ public final class ResidenceGameTests {
             check(!chest.isEmpty(),"Waiting for physical deposit");
             check(chest.getItem(0).getCount()==produced,"Lost or duplicated fragments");
             check(Math.abs(first.getX()-startX)>2,"Villager did not walk");
+            check(!second.getPersistentData().contains(JOB),"Second resident was assigned conflicting transport");
             check(anchor.isEmpty(),"Anchor not collected");
         });
     }
@@ -109,21 +112,30 @@ public final class ResidenceGameTests {
         Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));first.setAge(0);
         ResidenceData data=ResidenceData.get(h.getLevel());
         check(data.link(h.getLevel(),h.absolutePos(hp),first).equals("ok"),"Link failed");
+        Villager replacement=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));replacement.setAge(0);
+        check(data.link(h.getLevel(),h.absolutePos(hp),replacement).equals("ok"),"Replacement link failed");
         var home=data.home(h.getLevel(),h.absolutePos(hp));
         long id=data.nextProductionDawnEventId();anchor.recordDailyProduction(id,65);
         data.queueCollection(home,id,h.getLevel().getServer().overworld().getGameTime());
         long secondId=data.nextProductionDawnEventId();anchor.recordDailyProduction(secondId,65);
         data.queueCollection(home,secondId,h.getLevel().getServer().overworld().getGameTime());
+        h.runAtTickTime(5,()->{
+            var cargo=first.getPersistentData().getCompound(JOB).getList("cargo",10);
+            check(cargo.size()==1&&ItemStack.of(cargo.getCompound(0)).getCount()==64,"First resident did not collect one full stack");
+            net.minecraft.nbt.CompoundTag save=new net.minecraft.nbt.CompoundTag();first.saveWithoutId(save);first.load(save);
+            var restored=first.getPersistentData().getCompound(JOB).getList("cargo",10);
+            check(restored.size()==1&&ItemStack.of(restored.getCompound(0)).getCount()==64,"Cargo failed NBT roundtrip");
+            first.hurt(net.minecraft.world.damagesource.DamageSource.GENERIC,1000F);
+            int recovered=(int)anchor.getPendingFragments();for(int i=0;i<5;i++)recovered+=anchor.getItem(i).getCount();
+            check(recovered==130,"Resident death lost or duplicated in-transit fragments");
+        });
         h.runAtTickTime(180,()->{
             int total=(int)anchor.getPendingFragments();for(int i=0;i<5;i++)total+=anchor.getItem(i).getCount();
-            var cargo=first.getPersistentData().getCompound(JOB).getList("cargo",10);
+            var cargo=replacement.getPersistentData().getCompound(JOB).getList("cargo",10);
             check(cargo.size()<=1,"Transport has more than one slot");
             for(int i=0;i<cargo.size();i++){int count=ItemStack.of(cargo.getCompound(i)).getCount();check(count<=64,"Slot exceeded 64");total+=count;}
             check(total==130,"Full chest caused loss/duplication");
             check(chest.getItem(26).getCount()==64,"Full chest was overwritten");
-            net.minecraft.nbt.CompoundTag save=new net.minecraft.nbt.CompoundTag();first.saveWithoutId(save);
-            first.load(save);
-            check(first.getPersistentData().getCompound(JOB).getList("cargo",10).size()==cargo.size(),"Cargo failed NBT roundtrip");
             // Existing full contents are extracted normally, leaving room for queued cargo.
             for(int i=0;i<27;i++)chest.removeItem(i,64);
         });
@@ -147,7 +159,7 @@ public final class ResidenceGameTests {
     @GameTest(template="empty",timeoutTicks=100)
     public static void adult_drops_and_baby_exclusion(GameTestHelper h){
         Villager adult=h.spawn(EntityType.VILLAGER,new BlockPos(2,2,2));adult.setAge(0);
-        Villager baby=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,2));baby.setAge(-24000);
+        Villager baby=h.spawn(EntityType.VILLAGER,new BlockPos(10,2,2));baby.setAge(-24000);
         VillagerResidenceEvents events=new VillagerResidenceEvents();int twos=0;
         for(int i=0;i<10000;i++){
             adult.getPersistentData().remove("residenciasaldeoes_fragment_drop_processed");
@@ -168,6 +180,10 @@ public final class ResidenceGameTests {
                 new net.minecraft.world.phys.AABB(adult.blockPosition()).inflate(2),item->item.getItem().is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get()));
         check(actualDrops.size()==1,"Actual environmental death did not produce one exclusive fragment stack");
         check(actualDrops.get(0).getItem().getCount()<=2,"Actual death exceeded two fragments");
+        baby.hurt(net.minecraft.world.damagesource.DamageSource.GENERIC,1000F);
+        var babyDrops=h.getLevel().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                new net.minecraft.world.phys.AABB(baby.blockPosition()).inflate(2),item->item.getItem().is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get()));
+        check(babyDrops.isEmpty(),"Actual baby death dropped fragments");
         h.succeed();
     }
 }
