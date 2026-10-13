@@ -7,6 +7,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -116,7 +117,7 @@ public class VillagerResidenceEvents {
             BlockPos chestApproach=findApproach(level,chest,villager);
             if(homeApproach==null||chestApproach==null)continue;
             if(!data.acceptCollectionPeriod(home,period))continue;
-            CompoundTag job=new CompoundTag();job.putLong("anchor",home.pos.asLong());job.putLong("chest",chest.asLong());job.putLong("period",period);job.putLong("started",level.getGameTime());job.putLong("home_approach",homeApproach.asLong());job.putLong("chest_approach",chestApproach.asLong());job.putInt("stage",0);
+            CompoundTag job=new CompoundTag();job.putLong("anchor",home.pos.asLong());job.putLong("chest",chest.asLong());job.putLong("period",period);job.putLong("started",level.getGameTime());job.put("previous_hand",villager.getItemBySlot(EquipmentSlot.MAINHAND).save(new CompoundTag()));job.putLong("home_approach",homeApproach.asLong());job.putLong("chest_approach",chestApproach.asLong());job.putInt("stage",0);
             villager.getPersistentData().put(EMERALD_TRANSFER,job);
         }
     }
@@ -151,7 +152,8 @@ public class VillagerResidenceEvents {
             finishEmeraldTransfer(level,villager,job,true);return true;
         }
         BlockPos anchorPos=BlockPos.of(job.getLong("anchor")),chestPos=BlockPos.of(job.getLong("chest"));
-        BlockPos target=BlockPos.of(job.getInt("stage")==0?job.getLong("home_approach"):job.getLong("chest_approach"));
+        int stage=job.getInt("stage");
+        BlockPos target=BlockPos.of(stage==1?job.getLong("chest_approach"):job.getLong("home_approach"));
         if(!level.hasChunkAt(target)){finishEmeraldTransfer(level,villager,job,true);return true;}
         if(villager.blockPosition().distSqr(target)<2.25D){
             if(job.getInt("stage")==0){
@@ -159,11 +161,16 @@ public class VillagerResidenceEvents {
                 List<ItemStack> cargo=anchor.takeAvailableFragments();
                 if(cargo.isEmpty()){finishEmeraldTransfer(level,villager,job,false);return true;}
                 ListTag items=new ListTag();for(ItemStack stack:cargo)items.add(stack.save(new CompoundTag()));job.put("cargo",items);job.putInt("stage",1);villager.getPersistentData().put(EMERALD_TRANSFER,job);
-            }else{
+                villager.setItemSlot(EquipmentSlot.MAINHAND,cargo.get(0).copy());
+            }else if(stage==1){
                 if(!(level.getBlockEntity(chestPos) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity chest)){finishEmeraldTransfer(level,villager,job,true);return true;}
                 List<ItemStack> cargo=readTransferCargo(job);List<ItemStack> remainder=new ArrayList<>();
                 for(ItemStack stack:cargo){chest.insertFragments(stack);if(!stack.isEmpty())remainder.add(stack);}
-                if(!remainder.isEmpty()&&level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor)anchor.restoreFragments(remainder);
+                if(remainder.isEmpty())finishEmeraldTransfer(level,villager,job,false);
+                else{ListTag items=new ListTag();for(ItemStack stack:remainder)items.add(stack.save(new CompoundTag()));job.put("cargo",items);job.putInt("stage",2);villager.getPersistentData().put(EMERALD_TRANSFER,job);}
+            }else{
+                List<ItemStack> remainder=readTransferCargo(job);
+                if(level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor)anchor.restoreFragments(remainder);
                 else for(ItemStack stack:remainder)if(!stack.isEmpty())villager.spawnAtLocation(stack);
                 finishEmeraldTransfer(level,villager,job,false);
             }
@@ -182,6 +189,7 @@ public class VillagerResidenceEvents {
             if(level.hasChunkAt(anchorPos)&&level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor)anchor.restoreFragments(cargo);
             else for(ItemStack stack:cargo)if(!stack.isEmpty())villager.spawnAtLocation(stack);
         }
+        if(job.contains("previous_hand",Tag.TAG_COMPOUND))villager.setItemSlot(EquipmentSlot.MAINHAND,ItemStack.of(job.getCompound("previous_hand")));
         villager.getNavigation().stop();villager.getPersistentData().remove(EMERALD_TRANSFER);
     }
     private int calculateDailyFragments(List<UUID> residents,int[] resources){

@@ -22,7 +22,8 @@ assert 'PRODUCTION_TIME_OF_DAY=200L' in events and 'COLLECTION_TIME_OF_DAY=3_000
 assert 'home.residents.iterator().next()' in events
 assert 'findEmeraldChest(level,home,villager)' in events
 assert 'villager.getNavigation().moveTo' in events
-assert 'insertFragments(stack)' in events and 'restoreFragments(remainder)' in events
+assert 'insertFragments(stack)' in events and 'job.putInt("stage",2)' in events
+assert 'EquipmentSlot.MAINHAND' in events and 'job.putInt("stage",2)' in events
 assert 'last_emerald_collection_period' in (java / 'data/ResidenceData.java').read_text()
 assert 'new ItemStack(Items.EMERALD)' in renderer and 'getOpenNess(partialTick)' in renderer
 client = (java / 'client/ClientSetup.java').read_text()
