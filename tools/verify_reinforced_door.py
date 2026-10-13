@@ -9,7 +9,7 @@ door = (java / "block/ReinforcedDoorBlock.java").read_text()
 assert 'BLOCKS.register("reinforced_door", ReinforcedDoorBlock::new)' in main
 assert 'ITEMS.register("reinforced_door"' in main and "CreativeModeTab.TAB_DECORATIONS" in main
 assert "extends DoorBlock" in door
-assert ".strength(5.0F, 5.0F)" in door and "PushReaction.DESTROY" in door
+assert ".strength(5.0F, 5.0F)" in door and "Material.WOOD" in door
 assert "level.setBlock(lowerPos, changed, 10)" in door and "upper.setValue(OPEN, opening)" in door
 assert "SoundEvents.WOODEN_DOOR_OPEN" in door and "SoundEvents.WOODEN_DOOR_CLOSE" in door
 

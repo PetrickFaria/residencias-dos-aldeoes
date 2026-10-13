@@ -14,7 +14,6 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.Material;
-import net.minecraft.world.level.material.PushReaction;
 
 /** Iron-door durability and redstone behavior with a hand-operated wooden door interaction. */
 public final class ReinforcedDoorBlock extends DoorBlock {
@@ -22,8 +21,7 @@ public final class ReinforcedDoorBlock extends DoorBlock {
         super(BlockBehaviour.Properties.of(Material.WOOD)
                 .strength(5.0F, 5.0F)
                 .sound(SoundType.WOOD)
-                .noOcclusion()
-                .pushReaction(PushReaction.DESTROY));
+                .noOcclusion());
     }
 
     @Override
