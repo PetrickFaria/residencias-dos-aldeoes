@@ -31,7 +31,7 @@ public final class EmeraldChestRenderer implements BlockEntityRenderer<EmeraldCh
         float openness=entity.getOpenNess(partialTick);
         openness=1F-(float)Math.pow(1F-openness,3);
         pose.translate(.5,13D/16D,15D/16D);
-        pose.mulPose(Vector3f.XP.rotation(-openness*((float)Math.PI/2F)));
+        pose.mulPose(Vector3f.XP.rotation(openness*((float)Math.PI/2F)));
         pose.translate(-.5,-13D/16D,-15D/16D);
         BlockState lid=body.setValue(EmeraldChestBodyBlock.LID,true);
         Minecraft.getInstance().getBlockRenderer().renderSingleBlock(lid,pose,buffers,light,OverlayTexture.NO_OVERLAY);
