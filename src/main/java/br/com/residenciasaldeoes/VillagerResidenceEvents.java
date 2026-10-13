@@ -243,7 +243,7 @@ public class VillagerResidenceEvents {
             if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock door
                     &&state.getMaterial()==net.minecraft.world.level.material.Material.WOOD
                     &&!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
-                door.setOpen(villager,level,pos,true);
+                door.setOpen(villager,level,state,pos,true);
                 java.util.Set<net.minecraft.core.GlobalPos> doors=villager.getBrain()
                         .getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.DOORS_TO_CLOSE)
                         .orElseGet(java.util.HashSet::new);

@@ -102,7 +102,7 @@ public final class ResidenceGameTests {
         int produced=anchor.getItem(0).getCount();check(produced>0,"No payment");
         double startX=first.getX();
         h.runAtTickTime(1190,()->check(chest.isEmpty()&&!first.getPersistentData().contains(JOB),"Collection started before 1200 ticks"));
-        h.runAtTickTime(1202,()->ResidenciasDosAldeoes.REINFORCED_DOOR.get().setOpen(null,h.getLevel(),h.absolutePos(deliveryDoor),false));
+        h.runAtTickTime(1202,()->ResidenciasDosAldeoes.REINFORCED_DOOR.get().setOpen(null,h.getLevel(),h.getLevel().getBlockState(h.absolutePos(deliveryDoor)),h.absolutePos(deliveryDoor),false));
         h.succeedWhen(()->{
             check(!chest.isEmpty(),"Waiting for physical deposit; resident="+first.blockPosition()+" job="+first.getPersistentData().getCompound(JOB));
             check(chest.getItem(0).getCount()==produced,"Lost or duplicated fragments");
