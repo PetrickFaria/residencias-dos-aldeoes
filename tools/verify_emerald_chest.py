@@ -8,6 +8,8 @@ assert 'ITEMS.register("emerald_chest"' in main and 'BLOCK_ENTITIES.register("em
 assert 'extends ChestBlock' in block and 'ChestType.SINGLE' in block
 assert 'extends ChestBlockEntity' in be and 'ResidenciasDosAldeoes.EMERALD_FRAGMENT.get()' in be
 assert 'ItemStack.isSameItemSameTags' in be and 'stack.shrink(moved)' in be and 'ForgeCapabilities.ITEM_HANDLER' in be
+assert 'new InvWrapper(this)' in be and 'if (!stack.isEmpty() && !stack.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())) return stack;' in be
+assert 'return LazyOptional.empty()' not in be
 assert 'if (!stack.isEmpty() && !canPlaceItem(slot, stack)) return;' in be
 assert 'takeAvailableFragments()' in anchor and 'restoreFragments(' in anchor
 assert 'pending_emerald_collections' in (java/'data/ResidenceData.java').read_text()
