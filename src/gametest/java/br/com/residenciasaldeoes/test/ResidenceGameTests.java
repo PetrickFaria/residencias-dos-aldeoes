@@ -43,6 +43,11 @@ public final class ResidenceGameTests {
         for(int i=0;i<27;i++)chest.setItem(i,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
         ItemStack remainder=new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),12);
         check(chest.insertFragments(remainder)==0&&remainder.getCount()==12,"Full chest lost fragments");
+        var player=net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(h.getLevel());
+        player.getInventory().setItem(9,new ItemStack(Items.DIRT,17));
+        var menu=new br.com.residenciasaldeoes.menu.EmeraldChestMenu(1,player.getInventory(),chest);
+        check(menu.quickMoveStack(player,27).isEmpty(),"Invalid shift-click accepted");
+        check(player.getInventory().getItem(9).getCount()==17,"Invalid shift-click deleted player's items");
         net.minecraft.nbt.CompoundTag saved=chest.saveWithFullMetadata();
         chest.load(saved);check(chest.getItem(26).getCount()==64,"NBT persistence failed");
         h.succeed();
@@ -86,6 +91,49 @@ public final class ResidenceGameTests {
             check(Math.abs(first.getX()-startX)>2,"Villager did not walk");
             check(anchor.isEmpty(),"Anchor not collected");
         });
+    }
+    @GameTest(template="empty",timeoutTicks=1600)
+    public static void full_chest_multiple_trips_and_recovery(GameTestHelper h){
+        floor(h);
+        BlockPos hp=new BlockPos(6,2,6),cp=new BlockPos(10,2,6);
+        h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(cp,ResidenciasDosAldeoes.EMERALD_CHEST.get());
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(hp);anchor.setSize(11);
+        EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(cp);
+        for(int i=0;i<27;i++)chest.setItem(i,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
+        Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));first.setAge(0);
+        ResidenceData data=ResidenceData.get(h.getLevel());
+        check(data.link(h.getLevel(),h.absolutePos(hp),first).equals("ok"),"Link failed");
+        var home=data.home(h.getLevel(),h.absolutePos(hp));
+        long id=data.nextProductionDawnEventId();anchor.recordDailyProduction(id,130);
+        data.queueCollection(home,id,h.getLevel().getServer().overworld().getGameTime());
+        h.runAtTickTime(180,()->{
+            int total=(int)anchor.getPendingFragments();for(int i=0;i<5;i++)total+=anchor.getItem(i).getCount();
+            var cargo=first.getPersistentData().getCompound(JOB).getList("cargo",10);
+            check(cargo.size()<=1,"Transport has more than one slot");
+            for(int i=0;i<cargo.size();i++){int count=ItemStack.of(cargo.getCompound(i)).getCount();check(count<=64,"Slot exceeded 64");total+=count;}
+            check(total==130,"Full chest caused loss/duplication");
+            check(chest.getItem(26).getCount()==64,"Full chest was overwritten");
+            net.minecraft.nbt.CompoundTag save=new net.minecraft.nbt.CompoundTag();first.saveWithoutId(save);
+            first.load(save);
+            check(first.getPersistentData().getCompound(JOB).getList("cargo",10).size()==cargo.size(),"Cargo failed NBT roundtrip");
+            // Existing full contents are extracted normally, leaving room for queued cargo.
+            for(int i=0;i<27;i++)chest.removeItem(i,64);
+        });
+        h.succeedWhen(()->{
+            int total=0;for(int i=0;i<27;i++)total+=chest.getItem(i).getCount();
+            check(total==130,"Waiting for multiple safe trips");
+            check(anchor.isEmpty()&&anchor.getPendingFragments()==0,"Fragments remain at anchor");
+        });
+    }
+    @GameTest(template="empty",timeoutTicks=400,batch="dawn")
+    public static void command_dawn_payment(GameTestHelper h){
+        floor(h);BlockPos hp=new BlockPos(6,2,6);h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(hp);
+        Villager v=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));v.setAge(0);
+        ResidenceData data=ResidenceData.get(h.getLevel());data.link(h.getLevel(),h.absolutePos(hp),v);
+        h.getLevel().setDayTime(18000);
+        h.runAtTickTime(5,()->h.getLevel().setDayTime(0));
+        h.succeedWhen(()->check(!anchor.isEmpty(),"Waiting for command dawn payment"));
     }
     @GameTest(template="empty",timeoutTicks=100)
     public static void adult_drops_and_baby_exclusion(GameTestHelper h){
