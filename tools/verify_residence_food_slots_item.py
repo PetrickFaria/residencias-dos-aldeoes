@@ -15,6 +15,16 @@ assert "implements Container" in be and "ContainerHelper.saveAllItems(tag,output
 assert "setOutputItem(int slot,ItemStack stack)" in be
 assert "RETURN_TIMEOUT_TICKS=300L" in events and "THREAT_RETURN_TIMEOUT_TICKS=150L" in events
 assert "MemoryModuleType.NEAREST_HOSTILE" in events and "villager.hasLineOfSight(entity)" in events
+assert "if(night||forced||weather)" in events, "Night and rain must use the same home-return path"
+assert "LivingConversionEvent.Post" in events and "unlinkConverted(level,villager,event.getOutcome())" in events
+register_start=events.index("@SubscribeEvent public void onRegister(PlayerInteractEvent.EntityInteract event)")
+register_end=events.index("@SubscribeEvent public void onVillagerConversion",register_start)
+register_handler=events[register_start:register_end]
+assert register_handler.index("event.setCanceled(true)") < register_handler.index("ResidenceData.get(level).link(level,pos,villager)")
+assert "imageWidth=292;imageHeight=232" in screen, "Widened panel must provide room for all four resource indicators"
+assert "drawStatus(p,\"Comida\",e.food()" in screen and "listClipRight()" in screen
+assert "int outputRowLeft=(292-(5*18+4*3))/2;" in menu
+assert "mayPlace(ItemStack stack){return false;}" in menu, "The five preview slots remain output only"
 assert lang["gui.residenciasaldeoes.anchor_title"]=="Bloco Residencial"
 assert lang["item.residenciasaldeoes.emerald_fragment"]=="Fragmento de Esmeralda"
 assert 'EMERALD_FRAGMENT = ITEMS.register("emerald_fragment"' in main

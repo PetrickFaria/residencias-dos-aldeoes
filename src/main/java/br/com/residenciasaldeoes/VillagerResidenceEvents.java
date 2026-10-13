@@ -16,6 +16,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.living.LivingConversionEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.LivingSpawnEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
@@ -117,13 +118,9 @@ public class VillagerResidenceEvents {
             return;
         }
 
-        if(night||forced){
+        if(night||forced||weather){
             returnResidentToHome(level,data,villager,home);
             return;
-        }
-        if(weather){
-            // In daytime rain, preserve the existing in-bounds-only return behavior. No outside wander target is retained.
-            keepResidentInsideDuringRain(level,data,villager,home,false,false);
         }
     }
 
@@ -171,7 +168,14 @@ public class VillagerResidenceEvents {
         long last=tag.getLong(RETURN_LAST_ATTEMPT);Path path=villager.getNavigation().getPath();
         BlockPos navTarget=villager.getNavigation().getTargetPos();
         boolean alreadyHeadingHome=path!=null&&!villager.getNavigation().isDone()&&navTarget!=null&&insideResidence(navTarget,home);
-        if(target!=null&&!alreadyHeadingHome&&now-last>=RETURN_RETRY_TICKS){
+        boolean competingPath=path!=null&&!villager.getNavigation().isDone()&&navTarget!=null&&!insideResidence(navTarget,home);
+        boolean competingWalkTarget=villager.getBrain().getMemory(MemoryModuleType.WALK_TARGET)
+                .filter(walk->!insideResidence(walk.getTarget().currentBlockPosition(),home)).isPresent();
+        if(competingPath||competingWalkTarget){
+            villager.getNavigation().stop();villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+            alreadyHeadingHome=false;
+        }
+        if(target!=null&&!alreadyHeadingHome&&(competingPath||competingWalkTarget||now-last>=RETURN_RETRY_TICKS)){
             tag.putLong(RETURN_LAST_ATTEMPT,now);
             villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
             Path destinationPath=villager.getNavigation().createPath(target,0);
@@ -333,6 +337,11 @@ public class VillagerResidenceEvents {
     @SubscribeEvent public void onRegister(PlayerInteractEvent.EntityInteract event){
         if(!(event.getTarget() instanceof Villager villager)||event.getLevel().isClientSide)return;
         var tag=event.getEntity().getPersistentData();if(!tag.getBoolean(REG) && !tag.getBoolean(UNLINK))return;
+        // A linking/unlinking click is a mod action. Always consume it so a failed
+        // link (already linked/full/wrong anchor) cannot continue into vanilla
+        // villager breeding or another entity interaction.
+        event.setCanceled(true);
+        event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
         if(!(event.getLevel() instanceof ServerLevel level))return;
         if(!tag.getString(DIM).equals(level.dimension().location().toString())){event.getEntity().displayClientMessage(net.minecraft.network.chat.Component.translatable("message.residenciasaldeoes.wrong_dimension"),true);return;}
         BlockPos pos=BlockPos.of(tag.getLong(POS));if(!level.hasChunkAt(pos)||!(level.getBlockEntity(pos) instanceof ResidentialAnchorBlockEntity)){tag.putBoolean(REG,false);return;}
@@ -341,14 +350,19 @@ public class VillagerResidenceEvents {
             if(home!=null && home.dimension.equals(level.dimension()) && home.pos.equals(pos)){
                 data.unlink(level,villager.getUUID());tag.putBoolean(UNLINK,false);
                 event.getEntity().displayClientMessage(net.minecraft.network.chat.Component.translatable("message.residenciasaldeoes.unlinked_one"),true);
-                event.setCanceled(true);event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
             }else event.getEntity().displayClientMessage(net.minecraft.network.chat.Component.translatable("message.residenciasaldeoes.not_resident"),true);
             return;
         }
         String result=ResidenceData.get(level).link(level,pos,villager);
         String key=switch(result){case "ok"->"message.residenciasaldeoes.linked";case "full"->"message.residenciasaldeoes.full";default->"message.residenciasaldeoes.already";};
         event.getEntity().displayClientMessage(net.minecraft.network.chat.Component.translatable(key),true);
-        if(result.equals("ok")){tag.putBoolean(REG,false);event.setCanceled(true);event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);}
+        if(result.equals("ok"))tag.putBoolean(REG,false);
+    }
+    @SubscribeEvent public void onVillagerConversion(LivingConversionEvent.Post event){
+        if(!(event.getEntity() instanceof Villager villager)
+                ||!(event.getOutcome() instanceof net.minecraft.world.entity.monster.ZombieVillager)
+                ||!(villager.level instanceof ServerLevel level))return;
+        ResidenceData.get(level).unlinkConverted(level,villager,event.getOutcome());
     }
     @SubscribeEvent public void onDeath(LivingDeathEvent event){if(event.getEntity() instanceof Villager v&&v.level instanceof ServerLevel sl)ResidenceData.get(sl).unlink(sl,v.getUUID());}
 }
