@@ -128,7 +128,7 @@ public class VillagerResidenceEvents {
                     BlockPos pos=new BlockPos(x,y,z);
                     if(level.hasChunkAt(pos)&&level.getBlockEntity(pos) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity)candidates.add(pos);
                 }
-        candidates.sort(Comparator.comparingLong((BlockPos p)->p.distSqr(home.pos)).thenComparing(BlockPos::compareTo));
+        candidates.sort(Comparator.<BlockPos>comparingDouble(p->p.distSqr(home.pos)).thenComparing(Comparator.naturalOrder()));
         for(BlockPos candidate:candidates)if(findApproach(level,candidate,villager)!=null)return candidate;
         return null;
     }
@@ -137,7 +137,7 @@ public class VillagerResidenceEvents {
         for(Direction direction:Direction.Plane.HORIZONTAL){BlockPos candidate=target.relative(direction);
             if(level.hasChunkAt(candidate)&&level.isEmptyBlock(candidate)&&!level.isEmptyBlock(candidate.below()))approaches.add(candidate);
         }
-        approaches.sort(Comparator.comparingDouble(villager.blockPosition()::distSqr).thenComparing(BlockPos::compareTo));
+        approaches.sort(Comparator.<BlockPos>comparingDouble(p->villager.blockPosition().distSqr(p)).thenComparing(Comparator.naturalOrder()));
         for(BlockPos candidate:approaches){net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().createPath(candidate,0);if(path!=null&&path.canReach())return candidate;}
         return null;
     }
