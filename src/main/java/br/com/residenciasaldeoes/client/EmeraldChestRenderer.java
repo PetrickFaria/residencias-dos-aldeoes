@@ -11,7 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.ItemTransforms;
+import net.minecraft.client.renderer.block.model.ItemTransforms;
 import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.client.resources.model.Material;
 import com.mojang.math.Vector3f;
