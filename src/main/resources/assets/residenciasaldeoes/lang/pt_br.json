@@ -39,5 +39,7 @@
   "gui.residenciasaldeoes.anchor_title": "Bloco Residencial",
   "item.residenciasaldeoes.emerald_fragment": "Fragmento de Esmeralda",
   "gui.residenciasaldeoes.skin_mode_complete": "Skin Completa",
-  "gui.residenciasaldeoes.skin_mode_partial": "Skin Parcial"
+  "gui.residenciasaldeoes.skin_mode_partial": "Skin Parcial",
+  "block.residenciasaldeoes.reinforced_door": "Porta Reforçada",
+  "item.residenciasaldeoes.reinforced_door": "Porta Reforçada"
 }

@@ -30,7 +30,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 
 public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
-    private static final int ROW_TOP=77,ROW_HEIGHT=13,VISIBLE_ROWS=5,LIST_HEIGHT=VISIBLE_ROWS*ROW_HEIGHT;
+    private static final int ROW_TOP=77,ROW_HEIGHT=12,VISIBLE_ROWS=5,LIST_HEIGHT=VISIBLE_ROWS*ROW_HEIGHT;
     // Skin dialog preview viewport, local to the dialog rather than to the screen.
     private static final int SKIN_PREVIEW_LEFT=154,SKIN_PREVIEW_RIGHT=213,SKIN_PREVIEW_TOP=22,SKIN_PREVIEW_BOTTOM=111;
     private static final int SKIN_HINT_LEFT=8,SKIN_HINT_RIGHT=149,SKIN_HINT_TOP=112,SKIN_HINT_BOTTOM=129;
@@ -236,15 +236,16 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
             fill(p,sx+1,sy+1,sx+17,sy+17,0xFFB18A5E);
         }
     }
-    private void setSkinDialogWidgetsVisible(boolean visible){
-        Button[] buttons={registerButton,renameButton,unlinkResidentButton,unlinkAllButton,previewButton,skinConfirm,skinCancel,skinPreviewCenter};
-        for(Button button:buttons)if(button!=null)button.visible=visible;
-        for(Button button:skinButtons)button.visible=visible;
-    }
     @Override public void render(PoseStack p,int x,int y,float q){
         renderBackground(p);
-        if(skinOpen)setSkinDialogWidgetsVisible(false);
-        try{super.render(p,x,y,q);}finally{if(skinOpen)setSkinDialogWidgetsVisible(true);}
+        if(skinOpen){
+            // A skin selection modal is a separate visual layer: don't render the
+            // container slots, labels, widgets, or item tooltips underneath it.
+            fill(p,leftPos+3,topPos+3,leftPos+imageWidth-3,topPos+imageHeight-3,0xFF30251C);
+            renderSkinDialog(p,x,y,q);
+            return;
+        }
+        super.render(p,x,y,q);
         if(!skinOpen){
             font.draw(p,Component.translatable("gui.residenciasaldeoes.current",menu.getSize(minecraft.player),menu.getSize(minecraft.player),menu.getSize(minecraft.player)),leftPos+8,topPos+19,0xFFF2E5C9);
             font.draw(p,Component.translatable("gui.residenciasaldeoes.occupancy",menu.getCount(minecraft.player),capacity(menu.getSize(minecraft.player))),leftPos+8,topPos+54,0xFFE4D7BD);
@@ -252,7 +253,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
             enableResidentClip();
             if(residents.isEmpty())font.draw(p,Component.translatable("gui.residenciasaldeoes.no_residents"),leftPos+12,topPos+82,0xFFD3C8AF);
             for(int i=scroll;i<Math.min(residents.size(),scroll+VISIBLE_ROWS);i++){
-                int yy=topPos+ROW_TOP+(i-scroll)*ROW_HEIGHT+(i==scroll?2:0);var e=residents.get(i);
+                int yy=topPos+ROW_TOP+(i-scroll)*ROW_HEIGHT+2;var e=residents.get(i);
                 if(e.id().equals(selected)){fill(p,leftPos+7,yy-2,listClipRight(),yy+10,0xFF9A8058);fill(p,leftPos+8,yy-1,listClipRight()-1,yy+9,0xFF4A3B2C);}
                 font.draw(p,font.plainSubstrByWidth(e.name(),54),leftPos+10,yy,e.id().equals(selected)?0xFFFFE7BF:0xFFF2EEE4);
                 int sx=leftPos+68;sx=drawStatus(p,"Cama",e.bed(),sx,yy);sx=drawSeparator(p,sx,yy);sx=drawStatus(p,"Trabalho",e.work(),sx,yy);sx=drawSeparator(p,sx,yy);sx=drawStatus(p,"Baú",e.chest(),sx,yy);sx=drawSeparator(p,sx,yy);drawStatus(p,"Comida",e.food(),sx,yy);
@@ -262,7 +263,6 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         }
         if(renameOpen)renderRenameDialog(p,x,y,q);
         if(personalizationOpen)renderCustomizationDialog(p,x,y,q);
-        if(skinOpen)renderSkinDialog(p,x,y,q);
         renderTooltip(p,x,y);
     }
     private int drawStatus(PoseStack p,String label,boolean ready,int x,int y){font.draw(p,Component.literal(label),x,y,0xFFE5DFD2);x+=font.width(label)+1;font.draw(p,Component.literal(ready?"✓":"×"),x,y,ready?0xFF59D982:0xFFE96A5C);return x+font.width(ready?"✓":"×")+2;}

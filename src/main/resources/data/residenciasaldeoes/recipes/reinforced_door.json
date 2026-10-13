@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "INI",
+    "NDN",
+    "INI"
+  ],
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "N": {
+      "item": "minecraft:iron_nugget"
+    },
+    "D": {
+      "tag": "residenciasaldeoes:vanilla_doors"
+    }
+  },
+  "result": {
+    "item": "residenciasaldeoes:reinforced_door",
+    "count": 1
+  }
+}

@@ -49,9 +49,19 @@ assert top+dialog_h/2==image_h/2
 
 # Version 1.0.36: retain the approved preview behavior while checking the resident-return changes.
 assert "skinPreviewPitch=Math.max(-90.0F,Math.min(90.0F,skinPreviewPitch-(float)(y-skinPreviewDragY)*2.0F))" in screen
-assert "int yy=topPos+ROW_TOP+(i-scroll)*ROW_HEIGHT+(i==scroll?2:0);var e=residents.get(i);" in screen
-assert "if(skinOpen)setSkinDialogWidgetsVisible(false);" in screen
-assert "if(!skinOpen){" in screen
+assert "int yy=topPos+ROW_TOP+(i-scroll)*ROW_HEIGHT+2;var e=residents.get(i);" in screen
+skin_render = screen[screen.index("@Override public void render(PoseStack p,int x,int y,float q){"):screen.index("private int drawStatus(")]
+assert "if(skinOpen){" in skin_render
+assert "renderSkinDialog(p,x,y,q);\n            return;" in skin_render
+assert "super.render(p,x,y,q);" in skin_render
+assert skin_render.index("renderSkinDialog(p,x,y,q);\n            return;") < skin_render.index("super.render(p,x,y,q);")
+assert "fill(p,leftPos+3,topPos+3,leftPos+imageWidth-3,topPos+imageHeight-3,0xFF30251C);" in skin_render
+assert "renderTooltip(p,x,y);" not in skin_render.split("if(skinOpen){",1)[1].split("        }",1)[0]
+assert "setSkinDialogWidgetsVisible" not in screen
+assert "ROW_HEIGHT=12" in screen and "LIST_HEIGHT=VISIBLE_ROWS*ROW_HEIGHT" in screen
+assert "ROW_TOP+LIST_HEIGHT+2" in screen
+assert "REGISTER_BUTTON_Y=141" in screen
+assert 77+5*12+2 == 139 and 141-139 == 2
 assert "skinPreviewYaw=(skinPreviewYaw+" in screen
 assets=Path("src/main/resources/assets/residenciasaldeoes/models/block")
 top_crystal=json.loads((assets/"emerald_top_crystal.json").read_text())
