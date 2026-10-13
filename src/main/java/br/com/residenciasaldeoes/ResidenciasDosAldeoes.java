@@ -4,6 +4,7 @@ import br.com.residenciasaldeoes.block.ResidentialAnchorBlock;
 import br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity;
 import br.com.residenciasaldeoes.block.ReinforcedDoorBlock;
 import br.com.residenciasaldeoes.block.EmeraldChestBlock;
+import br.com.residenciasaldeoes.block.EmeraldChestBodyBlock;
 import br.com.residenciasaldeoes.block.EmeraldChestBlockEntity;
 import br.com.residenciasaldeoes.menu.AnchorMenu;
 import br.com.residenciasaldeoes.network.ModNetwork;
@@ -33,6 +34,7 @@ public class ResidenciasDosAldeoes {
     public static final RegistryObject<ResidentialAnchorBlock> ANCHOR = BLOCKS.register("ancora_residencial", ResidentialAnchorBlock::new);
     public static final RegistryObject<ReinforcedDoorBlock> REINFORCED_DOOR = BLOCKS.register("reinforced_door", ReinforcedDoorBlock::new);
     public static final RegistryObject<EmeraldChestBlock> EMERALD_CHEST = BLOCKS.register("emerald_chest", EmeraldChestBlock::new);
+    public static final RegistryObject<EmeraldChestBodyBlock> EMERALD_CHEST_BODY = BLOCKS.register("emerald_chest_body", EmeraldChestBodyBlock::new);
     public static final RegistryObject<Item> ANCHOR_ITEM = ITEMS.register("ancora_residencial", () -> new BlockItem(ANCHOR.get(), new Item.Properties().tab(CreativeModeTab.TAB_DECORATIONS)));
     public static final RegistryObject<Item> REINFORCED_DOOR_ITEM = ITEMS.register("reinforced_door", () -> new BlockItem(REINFORCED_DOOR.get(), new Item.Properties().tab(CreativeModeTab.TAB_DECORATIONS)));
     public static final RegistryObject<Item> EMERALD_CHEST_ITEM = ITEMS.register("emerald_chest", () -> new BlockItem(EMERALD_CHEST.get(), new Item.Properties().tab(CreativeModeTab.TAB_DECORATIONS)));

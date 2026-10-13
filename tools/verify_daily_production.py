@@ -7,25 +7,34 @@ events = (root / 'src/main/java/br/com/residenciasaldeoes/VillagerResidenceEvent
 menu = (root / 'src/main/java/br/com/residenciasaldeoes/menu/AnchorMenu.java').read_text()
 screen = (root / 'src/main/java/br/com/residenciasaldeoes/client/AnchorScreen.java').read_text()
 
-# Persistent event-relative deadlines and one-payout-per-day safeguards.
-for token in ('linked_at_game_time', 'last_accepted_production_period', 'pending_production_tasks', 'pending_emerald_collections'):
+# Persistent, unique dawn events with no calendar-day or interval gate.
+for token in ('linked_at_game_time', 'pending_production_tasks', 'pending_emerald_collections', 'next_production_dawn_event_id'):
     assert token in data
 assert 'MIN_DAWN_INTERVAL_TICKS' not in data
 assert 'SleepFinishedTimeEvent' in events and 'event.getNewTime()' in events
-assert 'crossedNaturalDawn(previous,new DawnSample(levelGameTime,dayTime))' in events
+assert 'CommandEvent' in events and 'onTimeCommand(CommandEvent event)' in events
+assert 'processProductionDawn(level,productionGameTime)' in events
+assert 'nextProductionDawnEventId()' in data and 'period<=previous' not in data
+assert 'recordDailyProduction(eventId,fragments)' in events
+assert 'adoptLegacyProductionDawn(home,task,eventId)' in events
+assert 'public void adoptLegacyProductionDawn(Home home,PendingProduction legacy,long eventId)' in data
+assert 'task=new ResidenceData.PendingProduction(task.dueGameTime(),eventId)' in events
+assert 'last_production_event_id' in be
+assert 'firstLoadedDawn=previous==null&&Math.floorMod(dayTime,DAY_LENGTH)<=DAWN_COMMAND_WINDOW_TICKS' in events
+assert 'crossedNaturalDawn(previous,current)' in events
 assert 'after.gameTime()-before.gameTime()==1L' in events
 assert 'after.dayTime()-before.dayTime()==1L' in events
 assert 'DAWN_COMMAND_WINDOW_TICKS=1_200L' in events
 assert 'boolean adjustedClock=' in events
-assert 'oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS' in events
+assert 'oldTime!=newTime&&newTime<=DAWN_COMMAND_WINDOW_TICKS' in events
 assert 'TICKS_AFTER_DAWN_FOR_PAYMENT=200L' in events
 assert 'TICKS_AFTER_PAYMENT_FOR_COLLECTION=1_200L' in events
 assert 'gameTime+TICKS_AFTER_DAWN_FOR_PAYMENT' in events
 assert 'currentGameTime+TICKS_AFTER_PAYMENT_FOR_COLLECTION' in events
-assert 'currentGameTime<task.dueGameTime()' in events
+assert 'currentGameTime<pendingTask.dueGameTime()' in events
 assert 'RESIDENT_MATURITY_TICKS' not in events
-assert 'period<=previous' in data and 'lastAcceptedDawnGameTime' in data
-assert 'queueCollection(Home home,long period,long dueGameTime)' in data
+assert 'next_production_dawn_event_id' in data and 'lastAcceptedDawnGameTime' in data
+assert 'queueCollection(Home home,long eventId,long dueGameTime)' in data
 assert 'dueCollection(Home home,long currentGameTime)' in data
 assert 'AnchorMenu.countResources(level,home.pos,anchor.getSize())' in events
 for token in ('if(index<resources[0])total++', 'if(index<resources[1])total++', 'if(index<resources[2])total++', 'if(index<resources[3]*2)total++'):
@@ -33,6 +42,7 @@ for token in ('if(index<resources[0])total++', 'if(index<resources[1])total++', 
 assert 'level.hasChunkAt(home.pos)' in events and 'pendingProduction' in events
 assert 'recorded&&fragments>0' in events
 assert 'SoundEvents.VILLAGER_NO' in events and 'SoundEvents.BELL_BLOCK' not in events
+assert 'playProductionBell(level,residents)' in events and 'return;' not in events[events.index('private void playProductionBell'):events.index('@SubscribeEvent public void onVillagerJoin')]
 assert 'finishEmeraldTransfer(sl,v,v.getPersistentData().getCompound(EMERALD_TRANSFER),true)' in events
 assert 'pending_fragments' in be and 'last_production_game_time' in be
 assert 'ContainerHelper.saveAllItems(tag,outputItems)' in be
@@ -66,9 +76,9 @@ assert not commanded_dawn(500,500,10000,13000) and not commanded_dawn(500,501,13
 payment=10000+200
 assert payment+1200==11400
 
-def accept(last_period,period):
-    return last_period is None or period>last_period
-assert accept(None,10) and not accept(10,10) and not accept(10,9) and accept(10,11)
+event_ids=[1,2,3,4,5,6,7,8,9,10]
+assert len(set(event_ids))==10 and all(a<b for a,b in zip(event_ids,event_ids[1:]))
+assert 10*200==2000 and 10*1200==12000
 
 def deposit(slots,pending):
     slots=list(slots)

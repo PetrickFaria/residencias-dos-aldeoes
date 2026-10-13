@@ -1,0 +1,33 @@
+{
+  "parent": "minecraft:block/block",
+  "ambientocclusion": false,
+  "textures": {
+    "particle": "residenciasaldeoes:block/emerald_top",
+    "top": "residenciasaldeoes:block/emerald_top"
+  },
+  "elements": [
+    {
+      "from": [
+        2,
+        14.72,
+        2
+      ],
+      "to": [
+        14,
+        15.52,
+        14
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#top"
+        }
+      }
+    }
+  ]
+}

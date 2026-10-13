@@ -2,7 +2,7 @@
   "textures": {
     "particle": "residenciasaldeoes:item/emerald_chest_front",
     "front": "residenciasaldeoes:item/emerald_chest_front",
-    "back": "residenciasaldeoes:item/emerald_chest_side",
+    "back": "residenciasaldeoes:block/wood_bottom",
     "side": "residenciasaldeoes:item/emerald_chest_side",
     "top": "residenciasaldeoes:item/emerald_chest_top",
     "bottom": "residenciasaldeoes:item/emerald_chest_bottom",
