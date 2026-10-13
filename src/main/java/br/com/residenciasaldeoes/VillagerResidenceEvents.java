@@ -55,7 +55,7 @@ public class VillagerResidenceEvents {
         long levelGameTime=level.getGameTime(),dayTime=level.getDayTime();
         DawnSample previous=PRODUCTION_CLOCKS.put(level,new DawnSample(levelGameTime,dayTime));
         if(previous!=null){
-            long gameDelta=gameTime-previous.gameTime(),dayDelta=dayTime-previous.dayTime();
+            long gameDelta=levelGameTime-previous.gameTime(),dayDelta=dayTime-previous.dayTime();
             long previousPeriod=Math.floorDiv(previous.dayTime(),DAY_LENGTH),currentPeriod=Math.floorDiv(dayTime,DAY_LENGTH);
             // Accept sampled natural time progression even when several ticks elapsed between samples.
             // A /time command or other jump does not match the level's elapsed game ticks.
