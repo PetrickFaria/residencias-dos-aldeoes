@@ -172,6 +172,14 @@ public class ResidenceData extends SavedData {
         return eventId;
     }
     public void queueProductionDawn(Home home,long dueGameTime,long eventId){PendingProduction task=new PendingProduction(dueGameTime,eventId);if(!home.pendingProduction.contains(task)){home.pendingProduction.add(task);home.pendingProduction.sort(Comparator.comparingLong(PendingProduction::dueGameTime));setDirty();}}
+    /** Replaces a pre-event-ID task before processing so crash retries retain the same idempotency key. */
+    public void adoptLegacyProductionDawn(Home home,PendingProduction legacy,long eventId){
+        if(!home.pendingProduction.remove(legacy))return;
+        PendingProduction upgraded=new PendingProduction(legacy.dueGameTime(),eventId);
+        if(!home.pendingProduction.contains(upgraded))home.pendingProduction.add(upgraded);
+        home.pendingProduction.sort(Comparator.comparingLong(PendingProduction::dueGameTime));
+        setDirty();
+    }
     public void completeProductionDawn(Home home,PendingProduction task){if(home.pendingProduction.remove(task))setDirty();}
     public boolean queueCollection(Home home,long eventId,long dueGameTime){if(eventId<=home.lastQueuedCollectionPeriod)return false;home.pendingCollections.add(new PendingCollection(dueGameTime,eventId));home.pendingCollections.sort(Comparator.comparingLong(PendingCollection::dueGameTime));home.lastQueuedCollectionPeriod=eventId;setDirty();return true;}
     public PendingCollection dueCollection(Home home,long currentGameTime){return home.pendingCollections.stream().filter(task->task.dueGameTime()<=currentGameTime&&task.period()>home.lastCollectionPeriod).min(Comparator.comparingLong(PendingCollection::dueGameTime)).orElse(null);}

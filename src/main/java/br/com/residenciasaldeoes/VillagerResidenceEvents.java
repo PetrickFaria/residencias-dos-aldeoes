@@ -91,8 +91,10 @@ public class VillagerResidenceEvents {
         if(event.phase!=TickEvent.Phase.END||!(event.level instanceof ServerLevel level))return;
         long productionGameTime=level.getServer().overworld().getGameTime();
         long levelGameTime=level.getGameTime(),dayTime=level.getDayTime();
-        DawnSample previous=PRODUCTION_CLOCKS.put(level,new DawnSample(levelGameTime,dayTime));
-        if(previous!=null&&crossedNaturalDawn(previous,new DawnSample(levelGameTime,dayTime)))
+        DawnSample current=new DawnSample(levelGameTime,dayTime);
+        DawnSample previous=PRODUCTION_CLOCKS.put(level,current);
+        boolean firstLoadedDawn=previous==null&&Math.floorMod(dayTime,DAY_LENGTH)<=DAWN_COMMAND_WINDOW_TICKS;
+        if(firstLoadedDawn||(previous!=null&&crossedNaturalDawn(previous,current)))
             processProductionDawn(level,productionGameTime);
         processLoadedProduction(level,productionGameTime);
         beginScheduledCollections(level,productionGameTime);
@@ -107,7 +109,7 @@ public class VillagerResidenceEvents {
         boolean adjustedClock=after.gameTime()>=before.gameTime()
                 &&after.gameTime()-before.gameTime()<=1L
                 &&after.dayTime()-before.dayTime()!=1L;
-        return adjustedClock&&oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
+        return adjustedClock&&oldTime!=newTime&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
     }
     @SubscribeEvent public void onProductionSleepFinished(SleepFinishedTimeEvent event){
         if(event.getLevel() instanceof ServerLevel level){
@@ -129,12 +131,18 @@ public class VillagerResidenceEvents {
             if(!home.dimension.equals(level.dimension())||!level.hasChunkAt(home.pos))continue;
             if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor))continue;
             anchor.flushPendingFragments();
-            for(ResidenceData.PendingProduction task:new ArrayList<>(home.pendingProduction)){
-                if(currentGameTime<task.dueGameTime())continue;
+            for(ResidenceData.PendingProduction pendingTask:new ArrayList<>(home.pendingProduction)){
+                if(currentGameTime<pendingTask.dueGameTime())continue;
+                ResidenceData.PendingProduction task=pendingTask;
+                long eventId=task.period();
+                if(eventId==Long.MIN_VALUE){
+                    eventId=data.nextProductionDawnEventId();
+                    data.adoptLegacyProductionDawn(home,task,eventId);
+                    task=new ResidenceData.PendingProduction(task.dueGameTime(),eventId);
+                }
                 int[] resources=AnchorMenu.countResources(level,home.pos,anchor.getSize());
                 List<UUID> residents=new ArrayList<>(home.residents);
                 int fragments=calculateDailyFragments(residents,resources);
-                long eventId=task.period()==Long.MIN_VALUE?data.nextProductionDawnEventId():task.period();
                 boolean recorded=anchor.recordDailyProduction(eventId,fragments);
                 if(recorded&&fragments>0){
                     playProductionBell(level,residents);
@@ -573,7 +581,7 @@ public class VillagerResidenceEvents {
         ResidenceData.get(level).unlinkConverted(level,villager,event.getOutcome());
     }
     @SubscribeEvent public void onVillagerDrops(LivingDropsEvent event){
-        if(!(event.getEntity() instanceof Villager villager)||!(villager.level instanceof ServerLevel))return;
+        if(!(event.getEntity() instanceof Villager villager)||villager.isBaby()||!(villager.level instanceof ServerLevel))return;
         CompoundTag persistent=villager.getPersistentData();
         String marker="residenciasaldeoes_fragment_drop_processed";
         if(persistent.getBoolean(marker))return;

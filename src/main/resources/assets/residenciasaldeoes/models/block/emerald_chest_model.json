@@ -3,14 +3,11 @@
   "loader": "forge:composite",
   "textures": {
     "particle": "residenciasaldeoes:block/emerald_panel",
-    "front": "residenciasaldeoes:item/emerald_chest_front"
+    "panel": "residenciasaldeoes:block/emerald_panel"
   },
   "children": {
     "body": {
       "parent": "residenciasaldeoes:block/emerald_chest_body"
-    },
-    "top_crystal": {
-      "parent": "residenciasaldeoes:block/emerald_top_crystal"
     },
     "side_crystals": {
       "parent": "residenciasaldeoes:block/emerald_side_crystals"
@@ -18,8 +15,8 @@
     "side_trim": {
       "parent": "residenciasaldeoes:block/emerald_side_trim"
     },
-    "top_trim": {
-      "parent": "residenciasaldeoes:block/emerald_top_trim"
+    "front_panel": {
+      "parent": "residenciasaldeoes:block/emerald_chest_front_panel"
     }
   }
 }

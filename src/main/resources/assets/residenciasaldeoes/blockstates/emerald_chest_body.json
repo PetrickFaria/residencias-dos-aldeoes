@@ -1,19 +1,34 @@
 {
   "variants": {
-    "facing=north": {
+    "facing=north,lid=false": {
       "model": "residenciasaldeoes:block/emerald_chest_model"
     },
-    "facing=south": {
+    "facing=north,lid=true": {
+      "model": "residenciasaldeoes:block/emerald_chest_lid_model"
+    },
+    "facing=east,lid=false": {
+      "model": "residenciasaldeoes:block/emerald_chest_model",
+      "y": 90
+    },
+    "facing=east,lid=true": {
+      "model": "residenciasaldeoes:block/emerald_chest_lid_model",
+      "y": 90
+    },
+    "facing=south,lid=false": {
       "model": "residenciasaldeoes:block/emerald_chest_model",
       "y": 180
     },
-    "facing=west": {
+    "facing=south,lid=true": {
+      "model": "residenciasaldeoes:block/emerald_chest_lid_model",
+      "y": 180
+    },
+    "facing=west,lid=false": {
       "model": "residenciasaldeoes:block/emerald_chest_model",
       "y": 270
     },
-    "facing=east": {
-      "model": "residenciasaldeoes:block/emerald_chest_model",
-      "y": 90
+    "facing=west,lid=true": {
+      "model": "residenciasaldeoes:block/emerald_chest_lid_model",
+      "y": 270
     }
   }
 }

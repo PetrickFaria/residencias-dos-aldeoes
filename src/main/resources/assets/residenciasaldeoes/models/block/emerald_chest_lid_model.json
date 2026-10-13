@@ -1,0 +1,21 @@
+{
+  "parent": "minecraft:block/block",
+  "loader": "forge:composite",
+  "textures": {
+    "particle": "residenciasaldeoes:block/emerald_top"
+  },
+  "children": {
+    "top_panel": {
+      "parent": "residenciasaldeoes:block/emerald_chest_lid_panel"
+    },
+    "front_panel": {
+      "parent": "residenciasaldeoes:block/emerald_chest_lid_front_panel"
+    },
+    "top_crystal": {
+      "parent": "residenciasaldeoes:block/emerald_top_crystal"
+    },
+    "top_trim": {
+      "parent": "residenciasaldeoes:block/emerald_top_trim"
+    }
+  }
+}
