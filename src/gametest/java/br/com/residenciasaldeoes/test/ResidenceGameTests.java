@@ -97,7 +97,7 @@ public final class ResidenceGameTests {
         double startX=first.getX();
         h.runAtTickTime(1190,()->check(chest.isEmpty()&&!first.getPersistentData().contains(JOB),"Collection started before 1200 ticks"));
         h.succeedWhen(()->{
-            check(!chest.isEmpty(),"Waiting for physical deposit");
+            check(!chest.isEmpty(),"Waiting for physical deposit; resident="+first.blockPosition()+" job="+first.getPersistentData().getCompound(JOB));
             check(chest.getItem(0).getCount()==produced,"Lost or duplicated fragments");
             check(Math.abs(first.getX()-startX)>2,"Villager did not walk");
             check(!second.getPersistentData().contains(JOB),"Second resident was assigned conflicting transport");

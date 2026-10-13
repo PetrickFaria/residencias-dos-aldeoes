@@ -183,6 +183,9 @@ public class VillagerResidenceEvents {
         }
         approaches.sort(Comparator.<BlockPos>comparingDouble(p->villager.blockPosition().distSqr(p)).thenComparing(Comparator.naturalOrder()));
         for(BlockPos candidate:approaches){net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().createPath(candidate,0);if(path!=null&&path.canReach())return candidate;}
+        // Follow partial paths when the target is initially beyond the navigation search range.
+        // Inventory operations still require physical arrival at the chosen approach.
+        for(BlockPos candidate:approaches){net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().createPath(candidate,0);if(path!=null&&path.getNodeCount()>1)return candidate;}
         return null;
     }
     private boolean tickEmeraldTransfer(ServerLevel level,Villager villager){
@@ -227,7 +230,27 @@ public class VillagerResidenceEvents {
         }else if(villager.getNavigation().isDone()||villager.tickCount%10==0){
             villager.getNavigation().moveTo(target.getX()+.5D,target.getY(),target.getZ()+.5D,.8D);
         }
+        openTransferDoors(level,villager);
         return true;
+    }
+    private static void openTransferDoors(ServerLevel level,Villager villager){
+        net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().getPath();
+        if(path==null)return;
+        for(int index=Math.max(0,path.getNextNodeIndex()-1);index<Math.min(path.getNodeCount(),path.getNextNodeIndex()+2);index++){
+            BlockPos pos=path.getNode(index).asBlockPos();
+            if(villager.blockPosition().distSqr(pos)>4D)continue;
+            var state=level.getBlockState(pos);
+            if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock door
+                    &&state.getMaterial()==net.minecraft.world.level.material.Material.WOOD
+                    &&!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
+                door.setOpen(villager,level,pos,true);
+                java.util.Set<net.minecraft.core.GlobalPos> doors=villager.getBrain()
+                        .getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.DOORS_TO_CLOSE)
+                        .orElseGet(java.util.HashSet::new);
+                doors.add(net.minecraft.core.GlobalPos.of(level.dimension(),pos));
+                villager.getBrain().setMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.DOORS_TO_CLOSE,doors);
+            }
+        }
     }
     private static List<ItemStack> readTransferCargo(CompoundTag job){
         List<ItemStack> items=new ArrayList<>();ListTag list=job.getList("cargo",Tag.TAG_COMPOUND);
