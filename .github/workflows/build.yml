@@ -41,7 +41,7 @@ jobs:
           from email.parser import BytesParser
           from zipfile import ZipFile
 
-          jar_path = "build/libs/residencias-dos-aldeoes-1.0.42.jar"
+          jar_path = "build/libs/residencias-dos-aldeoes-1.0.43.jar"
           with ZipFile(jar_path) as jar:
               entries = set(jar.namelist())
               manifest = BytesParser(policy=policy.default).parsebytes(
@@ -101,27 +101,27 @@ jobs:
                       f"MixinConfigs manifest entry is {manifest.get('MixinConfigs')!r}"
                   )
               mods = jar.read("META-INF/mods.toml").decode("utf-8")
-              if 'version="1.0.42"' not in mods:
-                  raise SystemExit("JAR does not identify itself as mod version 1.0.42")
+              if 'version="1.0.43"' not in mods:
+                  raise SystemExit("JAR does not identify itself as mod version 1.0.43")
               blockstates = __import__("json").loads(jar.read("assets/residenciasaldeoes/blockstates/reinforced_door.json"))
               if len(blockstates.get("variants", {})) != 64:
                   raise SystemExit("Reinforced door does not define all 64 vanilla block states")
               for path in ("assets/residenciasaldeoes/textures/block/reinforced_door_lower.png", "assets/residenciasaldeoes/textures/block/reinforced_door_upper.png", "assets/residenciasaldeoes/textures/item/reinforced_door.png"):
                   if jar.read(path)[:8] != bytes.fromhex("89504e470d0a1a0a"):
                       raise SystemExit(f"{path} is not a PNG")
-          print("JAR packaging check passed: version 1.0.42, Mixin, emerald production, reinforced door, and UI resources")
+          print("JAR packaging check passed: version 1.0.43, Mixin, emerald production, reinforced door, and UI resources")
           PY
       - name: Package complete source archive
-        run: git archive --format=zip --output=build/residencias-dos-aldeoes-1.0.42-source.zip HEAD
+        run: git archive --format=zip --output=build/residencias-dos-aldeoes-1.0.43-source.zip HEAD
       - name: Upload mod JAR
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.42
-          path: build/libs/residencias-dos-aldeoes-1.0.42.jar
+          name: residencias-dos-aldeoes-1.0.43
+          path: build/libs/residencias-dos-aldeoes-1.0.43.jar
           if-no-files-found: error
       - name: Upload complete source ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.42-source
-          path: build/residencias-dos-aldeoes-1.0.42-source.zip
+          name: residencias-dos-aldeoes-1.0.43-source
+          path: build/residencias-dos-aldeoes-1.0.43-source.zip
           if-no-files-found: error

@@ -13,11 +13,12 @@ for token in ('linked_at_game_time', 'last_accepted_production_period', 'pending
 assert 'MIN_DAWN_INTERVAL_TICKS' not in data
 assert 'SleepFinishedTimeEvent' in events and 'event.getNewTime()' in events
 assert 'crossedNaturalDawn(previous,new DawnSample(levelGameTime,dayTime))' in events
+assert 'previous==null ? Math.floorMod(dayTime,DAY_LENGTH)<=DAWN_COMMAND_WINDOW_TICKS' in events
 assert 'after.gameTime()-before.gameTime()==1L' in events
 assert 'after.dayTime()-before.dayTime()==1L' in events
 assert 'DAWN_COMMAND_WINDOW_TICKS=1_200L' in events
 assert 'boolean adjustedClock=' in events
-assert 'oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS' in events
+assert 'oldTime!=newTime&&newTime<=DAWN_COMMAND_WINDOW_TICKS' in events
 assert 'TICKS_AFTER_DAWN_FOR_PAYMENT=200L' in events
 assert 'TICKS_AFTER_PAYMENT_FOR_COLLECTION=1_200L' in events
 assert 'gameTime+TICKS_AFTER_DAWN_FOR_PAYMENT' in events
@@ -34,6 +35,8 @@ assert 'level.hasChunkAt(home.pos)' in events and 'pendingProduction' in events
 assert 'recorded&&fragments>0' in events
 assert 'SoundEvents.VILLAGER_NO' in events and 'SoundEvents.BELL_BLOCK' not in events
 assert 'finishEmeraldTransfer(sl,v,v.getPersistentData().getCompound(EMERALD_TRANSFER),true)' in events
+assert 'v.getRandom().nextInt(4)==0?2:1' in events
+assert 'v.spawnAtLocation(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),count)' in events
 assert 'pending_fragments' in be and 'last_production_game_time' in be
 assert 'ContainerHelper.saveAllItems(tag,outputItems)' in be
 assert 'ContainerHelper.loadAllItems(tag,outputItems)' in be
@@ -60,8 +63,10 @@ assert not crosses_natural_dawn(500,501,23999,0)
 def commanded_dawn(before_game,after_game,before_day,after_day):
     old,before=before_day%24000,after_day%24000
     return (after_game>=before_game and after_game-before_game<=1 and after_day-before_day!=1
-            and old>1200 and before<=1200)
+            and old!=before and before<=1200)
 assert commanded_dawn(500,500,23000,0) and commanded_dawn(500,501,13000,1000)
+assert commanded_dawn(500,500,500,0)
+assert 0<=1200 # first sample at dawn is also accepted, unless persisted period was already paid
 assert not commanded_dawn(500,500,10000,13000) and not commanded_dawn(500,501,13000,23000)
 payment=10000+200
 assert payment+1200==11400

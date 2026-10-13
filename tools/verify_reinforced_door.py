@@ -21,6 +21,8 @@ assert recipe['key']['N']['item']=='minecraft:iron_nugget'
 assert recipe['key']['D']['tag']=='residenciasaldeoes:vanilla_doors'
 states=json.loads((resources/'assets/residenciasaldeoes/blockstates/reinforced_door.json').read_text())['variants']
 assert len(states)==64
+assert states['facing=north,half=lower,hinge=left,open=false,powered=false']['y']==90
+assert states['facing=east,half=lower,hinge=left,open=false,powered=false']['y']==180
 assert all(states[k]['model'].split('/')[-1].startswith('reinforced_door_') for k in states)
 def png_rgba(path):
  data=path.read_bytes(); assert data[:8]==bytes.fromhex('89504e470d0a1a0a')

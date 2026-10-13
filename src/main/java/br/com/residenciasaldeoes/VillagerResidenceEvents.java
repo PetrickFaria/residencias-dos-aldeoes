@@ -63,7 +63,8 @@ public class VillagerResidenceEvents {
         long productionGameTime=level.getServer().overworld().getGameTime();
         long levelGameTime=level.getGameTime(),dayTime=level.getDayTime();
         DawnSample previous=PRODUCTION_CLOCKS.put(level,new DawnSample(levelGameTime,dayTime));
-        if(previous!=null&&crossedNaturalDawn(previous,new DawnSample(levelGameTime,dayTime)))
+        if(previous==null ? Math.floorMod(dayTime,DAY_LENGTH)<=DAWN_COMMAND_WINDOW_TICKS
+                : crossedNaturalDawn(previous,new DawnSample(levelGameTime,dayTime)))
             processProductionDawn(level,productionGameTime,Math.floorDiv(levelGameTime,DAY_LENGTH));
         processLoadedProduction(level,productionGameTime);
         beginScheduledCollections(level,productionGameTime);
@@ -79,7 +80,7 @@ public class VillagerResidenceEvents {
         boolean adjustedClock=after.gameTime()>=before.gameTime()
                 &&after.gameTime()-before.gameTime()<=1L
                 &&after.dayTime()-before.dayTime()!=1L;
-        return adjustedClock&&oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
+        return adjustedClock&&oldTime!=newTime&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
     }
     @SubscribeEvent public void onProductionSleepFinished(SleepFinishedTimeEvent event){
         if(event.getLevel() instanceof ServerLevel level){
@@ -546,5 +547,5 @@ public class VillagerResidenceEvents {
                 ||!(villager.level instanceof ServerLevel level))return;
         ResidenceData.get(level).unlinkConverted(level,villager,event.getOutcome());
     }
-    @SubscribeEvent public void onDeath(LivingDeathEvent event){if(event.getEntity() instanceof Villager v&&v.level instanceof ServerLevel sl){if(v.getPersistentData().contains(EMERALD_TRANSFER))finishEmeraldTransfer(sl,v,v.getPersistentData().getCompound(EMERALD_TRANSFER),true);ResidenceData.get(sl).unlink(sl,v.getUUID());}}
+    @SubscribeEvent public void onDeath(LivingDeathEvent event){if(event.getEntity() instanceof Villager v&&v.level instanceof ServerLevel sl){int count=v.getRandom().nextInt(4)==0?2:1;v.spawnAtLocation(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),count);if(v.getPersistentData().contains(EMERALD_TRANSFER))finishEmeraldTransfer(sl,v,v.getPersistentData().getCompound(EMERALD_TRANSFER),true);ResidenceData.get(sl).unlink(sl,v.getUUID());}}
 }
