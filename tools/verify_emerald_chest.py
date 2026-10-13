@@ -32,5 +32,5 @@ for name in ('emerald_chest.png','emerald_chest_left.png','emerald_chest_right.p
 for name in ('emerald_chest_front.png','emerald_chest_side.png','emerald_chest_top.png','emerald_chest_bottom.png','emerald_gem_front.png','emerald_gem_side.png','emerald_gem_top.png'):
  assert (resources/f'assets/residenciasaldeoes/textures/item/{name}').exists()
 assert 'pending' in be.lower() or 'canPlaceItem' in be
-assert 'emerald_chest_body' in main and 'emerald_chest_body' in (resources/'assets/residenciasaldeoes/blockstates/emerald_chest_body.json').read_text()
+assert 'emerald_chest_body' in main and 'emerald_chest_model' in (resources/'assets/residenciasaldeoes/blockstates/emerald_chest_body.json').read_text()
 print('Emerald chest fragment filter and anchor-matched block/item model checks passed; runtime rendering still requires Minecraft.')
