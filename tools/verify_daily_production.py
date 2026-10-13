@@ -66,7 +66,9 @@ def commanded_dawn(before_game,after_game,before_day,after_day):
             and old!=before and before<=1200)
 assert commanded_dawn(500,500,23000,0) and commanded_dawn(500,501,13000,1000)
 assert commanded_dawn(500,500,500,0)
-assert 0<=1200 # first sample at dawn is also accepted, unless persisted period was already paid
+def initial_sample_dawn(day_time):
+    return day_time%24000<=1200
+assert initial_sample_dawn(0) and initial_sample_dawn(1200) and not initial_sample_dawn(1201)
 assert not commanded_dawn(500,500,10000,13000) and not commanded_dawn(500,501,13000,23000)
 payment=10000+200
 assert payment+1200==11400
