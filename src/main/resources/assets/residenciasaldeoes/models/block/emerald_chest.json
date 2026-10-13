@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "residenciasaldeoes:block/emerald_chest_particle",
+    "particle": "residenciasaldeoes:block/emerald_chest_particle"
+  }
+}

@@ -59,6 +59,23 @@ public class ResidentialAnchorBlockEntity extends BlockEntity implements Contain
         }
         if(changed){setChanged();level.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);}
     }
+    public java.util.List<ItemStack> takeAvailableFragments(){
+        java.util.List<ItemStack> cargo=new java.util.ArrayList<>();
+        if(level==null||level.isClientSide)return cargo;
+        for(int slot=0;slot<OUTPUT_SLOTS;slot++){
+            ItemStack current=outputItems.get(slot);
+            if(!current.isEmpty()&&current.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())){
+                cargo.add(current.copy());outputItems.set(slot,ItemStack.EMPTY);
+            }
+        }
+        if(!cargo.isEmpty()){setChanged();level.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);}
+        return cargo;
+    }
+    public void restoreFragments(java.util.List<ItemStack> cargo){
+        if(level==null||level.isClientSide)return;
+        for(ItemStack stack:cargo)if(!stack.isEmpty()&&stack.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get()))pendingFragments=Math.min(Long.MAX_VALUE-stack.getCount(),pendingFragments)+stack.getCount();
+        flushPendingFragments();setChanged();level.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);
+    }
     public long getPendingFragments(){return pendingFragments;}
     @Override public int getContainerSize(){return OUTPUT_SLOTS;}
     @Override public boolean isEmpty(){return outputItems.stream().allMatch(ItemStack::isEmpty);}

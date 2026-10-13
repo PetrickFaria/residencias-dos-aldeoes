@@ -9,9 +9,15 @@ door = (java / "block/ReinforcedDoorBlock.java").read_text()
 assert 'BLOCKS.register("reinforced_door", ReinforcedDoorBlock::new)' in main
 assert 'ITEMS.register("reinforced_door"' in main and "CreativeModeTab.TAB_DECORATIONS" in main
 assert "extends DoorBlock" in door
+assert "NORTH_SOUTH = Block.box(0, 0, 7, 16, 16, 9)" in door
+assert "EAST_WEST = Block.box(7, 0, 0, 9, 16, 16)" in door
+assert "panelShape(state)" in door
 assert ".strength(5.0F, 5.0F)" in door and "Material.WOOD" in door
 assert "level.setBlock(lowerPos, changed, 10)" in door and "upper.setValue(OPEN, opening)" in door
 assert "SoundEvents.WOODEN_DOOR_OPEN" in door and "SoundEvents.WOODEN_DOOR_CLOSE" in door
+item_model = json.loads((resources / "assets/residenciasaldeoes/models/item/reinforced_door.json").read_text())
+assert item_model["display"]["firstperson_righthand"]["scale"] == [0.45, 0.45, 0.45]
+assert item_model["display"]["gui"]["scale"] == [0.8, 0.8, 0.8]
 
 recipe = json.loads((resources / "data/residenciasaldeoes/recipes/reinforced_door.json").read_text())
 assert recipe["pattern"] == ["INI", "NDN", "INI"]

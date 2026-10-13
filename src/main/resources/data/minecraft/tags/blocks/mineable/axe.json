@@ -1,1 +1,6 @@
-{"replace":false,"values":["residenciasaldeoes:ancora_residencial"]}
+{
+  "replace": false,
+  "values": [
+    "residenciasaldeoes:emerald_chest"
+  ]
+}
