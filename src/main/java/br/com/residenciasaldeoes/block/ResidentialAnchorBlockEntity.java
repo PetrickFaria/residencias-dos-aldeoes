@@ -31,7 +31,7 @@ public class ResidentialAnchorBlockEntity extends BlockEntity implements Contain
     public boolean setOutputItem(int slot,ItemStack stack){
         if(slot<0||slot>=OUTPUT_SLOTS||stack==null||level==null||level.isClientSide)return false;
         ItemStack copy=stack.copy();if(!copy.isEmpty()&&copy.getCount()>copy.getMaxStackSize())copy.setCount(copy.getMaxStackSize());
-        outputItems.set(slot,copy);setChanged();level.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);return true;
+        outputItems.set(slot,copy);flushPendingFragments();setChanged();level.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);return true;
     }
     /** Records one production period exactly once and retains overflow across saves. */
     public boolean recordDailyProduction(long gameTime,int amount){
