@@ -43,11 +43,14 @@ public final class ResidenceGameTests {
         for(int i=0;i<27;i++)chest.setItem(i,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
         ItemStack remainder=new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),12);
         check(chest.insertFragments(remainder)==0&&remainder.getCount()==12,"Full chest lost fragments");
+        chest.removeItem(0,64); // An empty destination exposes invalid-item deletion regressions.
         var player=net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(h.getLevel());
         player.getInventory().setItem(9,new ItemStack(Items.DIRT,17));
         var menu=new br.com.residenciasaldeoes.menu.EmeraldChestMenu(1,player.getInventory(),chest);
         check(menu.quickMoveStack(player,27).isEmpty(),"Invalid shift-click accepted");
         check(player.getInventory().getItem(9).getCount()==17,"Invalid shift-click deleted player's items");
+        check(chest.getItem(0).isEmpty(),"Invalid item entered an empty chest slot");
+        chest.setItem(0,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
         net.minecraft.nbt.CompoundTag saved=chest.saveWithFullMetadata();
         chest.load(saved);check(chest.getItem(26).getCount()==64,"NBT persistence failed");
         h.succeed();

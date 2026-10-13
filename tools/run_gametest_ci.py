@@ -4,6 +4,8 @@ import subprocess
 import re
 import sys
 
+run=Path('run-gametest');run.mkdir(exist_ok=True)
+(run/'server.properties').write_text('level-type=minecraft:flat\ngenerator-settings={}\ngenerate-structures=false\nview-distance=5\nsimulation-distance=5\n')
 log_path=Path('gametest-console.log')
 with log_path.open('w') as out:
     result=subprocess.run(['bash','gradlew','--no-daemon','runGameTestServer'],stdout=out,stderr=subprocess.STDOUT)
