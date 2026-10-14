@@ -284,13 +284,13 @@ public final class ResidenceGameTests {
         BlockPos deliveryDoor=new BlockPos(8,2,6);
         for(int x=7;x<=10;x++)for(int z:new int[]{5,7})for(int y=2;y<=3;y++)
             h.setBlock(new BlockPos(x,y,z),Blocks.STONE);
-        var gate=ResidenciasDosAldeoes.REINFORCED_DOOR.get().defaultBlockState().setValue(DoorBlock.FACING,Direction.EAST).setValue(DoorBlock.OPEN,true);
+        var gate=ResidenciasDosAldeoes.REINFORCED_DOOR.get().defaultBlockState().setValue(DoorBlock.FACING,Direction.EAST);
         h.setBlock(deliveryDoor,gate);
         h.setBlock(deliveryDoor.above(),gate.setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER));
         h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(chestPos,ResidenciasDosAldeoes.EMERALD_CHEST.get());
         ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(homePos);anchor.setSize(11);
         EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(chestPos);
-        Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));first.setAge(0);first.setNoAi(true); // Stable idle starting point during the real payment wait.
+        Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));first.setAge(0);
         ResidenceData data=ResidenceData.get(h.getLevel());
         check(data.link(h.getLevel(),h.absolutePos(homePos),first).equals("ok"),"Link failed");
         Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(2,2,6));second.setAge(0);second.setNoAi(true);
@@ -307,7 +307,7 @@ public final class ResidenceGameTests {
         double originalSpeed=first.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).getBaseValue();
         boolean[] walked={false,false};
         h.runAtTickTime(1190,()->check(chest.isEmpty()&&!first.getPersistentData().contains(JOB),"Collection started before 1200 ticks"));
-        h.runAtTickTime(1195,()->first.setNoAi(false));
+        h.runAtTickTime(1202,()->ResidenciasDosAldeoes.REINFORCED_DOOR.get().setOpen(null,h.getLevel(),h.getLevel().getBlockState(h.absolutePos(deliveryDoor)),h.absolutePos(deliveryDoor),false));
         h.succeedWhen(()->{
             if(first.getPersistentData().contains(JOB)&&first.getNavigation().getPath()!=null){
                 int stage=first.getPersistentData().getCompound(JOB).getInt("stage");
@@ -317,7 +317,7 @@ public final class ResidenceGameTests {
             check(chest.getItem(0).getCount()==produced,"Lost or duplicated fragments");
             check(Math.abs(first.getX()-startX)>2,"Villager did not walk");
             check(!second.getPersistentData().contains(JOB),"Second resident was assigned conflicting transport");
-            check(h.getLevel().getBlockState(h.absolutePos(deliveryDoor)).getValue(DoorBlock.OPEN),"Accessible fixture door unexpectedly closed");
+            check(h.getLevel().getBlockState(h.absolutePos(deliveryDoor)).getValue(DoorBlock.OPEN),"Courier failed to open the reinforced door");
             check(anchor.isEmpty(),"Anchor not collected");
             check(walked[0]&&walked[1],"Walking speed not observed on both legs");
             check(first.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).getBaseValue()==originalSpeed,"Normal movement attribute changed");
