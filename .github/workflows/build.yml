@@ -33,7 +33,7 @@ jobs:
         timeout-minutes: 12
         run: python3 tools/run_gametest_ci.py
       - name: Prepare compiled JAR, complete source and report
-        if: always()
+        if: success()
         run: python3 tools/prepare_delivery.py
       - name: Upload mod and GameTest evidence
         if: always()

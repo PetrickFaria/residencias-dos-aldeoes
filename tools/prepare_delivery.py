@@ -13,13 +13,12 @@ if Path('build/screenshots').exists():shutil.copytree('build/screenshots',out/'s
 sha=os.environ['GITHUB_SHA']
 (out/f'relatorio-{version}.md').write_text(f"""# Residências dos Aldeões {version}
 
-Base: 1.0.47, f538ce8e2c066cb98cebb8578e9d9641814e23a8. Minecraft 1.19.2 / Forge 43.5.0 / Java 17.
+Minecraft Java 1.19.2 / Forge 43.5.0 / Java 17.
 
-- A coleta começa 300 ticks (15 segundos) depois da disponibilização do pagamento; pagamento e quantidade diária permanecem inalterados.
-- Cada viagem leva até 15 Fragmentos de Esmeralda; a tarefa continua em viagens sequenciais até concluir a coleta. Recuperação via baú cheio e morte do transportador segue preservada.
-- Porta Reforçada: pequeno afastamento dos reforços metálicos em relação às faces externas para eliminar superfícies coplanares; ícone GUI usa escala 1.0. Orientação, texturas e proporção da porta no mundo preservadas.
-- Preview residencial usa buffer de renderização compartilhado e transformação local isolada por residência, sem construir preenchimentos no Tesselator global.
-- Aldeões residentes dormindo têm navegação, alvo de caminhada e velocidade residual limpos após o passo de IA, sem forçar despertar.
+- Preview de residência: removido envio de faces por BufferUploader privado; preenchimentos usam RenderType dedicado e buffer compartilhado. Contornos e dimensões preservados.
+- Porta Reforçada: comportamento de abertura herdado de DoorBlock, pequeno afastamento dos reforços metálicos das faces externas e ícone GUI afinado; modelos do mundo preservados.
+- Geração de golens e gatos: aldeões residentes excluídos apenas dos critérios de população pertinentes.
+- Camas: reivindicações exclusivas verificadas no início do sono e tratadas em conflitos/ocupação temporária.
 
 Commit: {sha}.
 SHA-256 JAR: {hashlib.sha256(jar.read_bytes()).hexdigest()}.
