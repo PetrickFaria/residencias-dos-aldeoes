@@ -21,7 +21,11 @@ assert model['loader']=='forge:composite' and set(model['children'])=={'body','l
 assert model['display']['gui']['scale']==[0.7,0.7,0.7]
 body_model=json.loads((resources/'assets/residenciasaldeoes/models/block/emerald_chest_body.json').read_text())
 anchor_model=json.loads((resources/'assets/residenciasaldeoes/models/block/ancora_residencial_body.json').read_text())
-assert all(body_model['textures'][k].replace('chest_finish_','')==v for k,v in anchor_model['textures'].items())
+assert all(body_model['textures'][k].replace('chest_finish_','')==v for k,v in anchor_model['textures'].items() if k not in ('particle','side'))
+assert body_model['textures']['particle']=='residenciasaldeoes:block/chest_finish_emerald_panel'
+assert body_model['textures']['side']=='residenciasaldeoes:block/chest_finish_emerald_panel'
+assert anchor_model['textures']['particle']=='residenciasaldeoes:block/residential_emerald_panel'
+assert anchor_model['textures']['side']=='residenciasaldeoes:block/residential_emerald_panel'
 assert not any(e['from'][0]<8<e['to'][0] and e['from'][2]<8<e['to'][2] and e['from'][1]<8<e['to'][1] for e in body_model['elements']), 'The chest cavity must be geometrically empty'
 assert any(e['faces'].get('north',{}).get('texture')=='#frontwood' for e in body_model['elements'])
 assert body_model['elements'][0]['to'][1]==3.5
@@ -30,7 +34,7 @@ assert 'entity.getOpenNess(partialTick)' in renderer
 assert 'renderSingleBlock(lid,pose,buffers,light,OverlayTexture.NO_OVERLAY)' in renderer
 menu=(java/'menu/EmeraldChestMenu.java').read_text()
 assert 'boolean mayPlace(ItemStack stack)' in menu and 'i<27' in menu
-assert body_model['textures']['side'].replace('chest_finish_','')==anchor_model['textures']['side']
+assert body_model['textures']['side'].endswith('chest_finish_emerald_panel') and anchor_model['textures']['side'].endswith('residential_emerald_panel')
 assert body_model['textures']['wood'].replace('chest_finish_','')==anchor_model['textures']['wood']
 assert body_model['textures']['corner'].replace('chest_finish_','')==anchor_model['textures']['corner']
 states=json.loads((resources/'assets/residenciasaldeoes/blockstates/emerald_chest.json').read_text())['variants'];assert len(states)==24
