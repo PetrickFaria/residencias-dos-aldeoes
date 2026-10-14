@@ -2,7 +2,7 @@
   "parent": "minecraft:block/block",
   "loader": "forge:composite",
   "textures": {
-    "particle": "residenciasaldeoes:block/emerald_panel"
+    "particle": "residenciasaldeoes:block/residential_emerald_panel"
   },
   "children": {
     "body": {
