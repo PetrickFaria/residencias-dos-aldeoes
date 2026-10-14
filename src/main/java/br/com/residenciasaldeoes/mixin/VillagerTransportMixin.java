@@ -16,4 +16,13 @@ public abstract class VillagerTransportMixin {
                 &&villager.getPersistentData().contains("residenciasaldeoes_emerald_transfer"))
             callback.cancel();
     }
+
+    @Inject(method="customServerAiStep",at=@At("TAIL"))
+    private void residenciasaldeoes$holdSleepingResidentStill(CallbackInfo callback) {
+        Villager villager=(Villager)(Object)this;
+        if(villager.level instanceof net.minecraft.server.level.ServerLevel level
+                &&villager.isSleeping()
+                &&br.com.residenciasaldeoes.data.ResidenceData.get(level).owner(villager.getUUID())!=null)
+            br.com.residenciasaldeoes.VillagerResidenceEvents.stabilizeSleepingResident(villager);
+    }
 }

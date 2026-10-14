@@ -13,10 +13,10 @@ text=log_path.read_text(errors='replace')
 print('\n'.join(text.splitlines()[-110:]))
 server_log=Path('run-gametest/logs/latest.log')
 evidence=server_log.read_text(errors='replace') if server_log.exists() else ''
-completed=re.search(r'\b12 GAME TESTS COMPLETE\b',evidence)
-passed=re.search(r'All 12 required tests passed',evidence)
+completed=re.search(r'\b14 GAME TESTS COMPLETE\b',evidence)
+passed=re.search(r'All 14 required tests passed',evidence)
 if not completed or not passed:
-    sys.exit('Forge server did not confirm all twelve required GameTests passed.')
+    sys.exit('Forge server did not confirm all fourteen required GameTests passed.')
 if result.returncode and 'Gradle build daemon disappeared unexpectedly' not in text:
     sys.exit(result.returncode)
 if result.returncode:

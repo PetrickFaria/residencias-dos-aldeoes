@@ -66,16 +66,17 @@ public class ResidentialAnchorBlockEntity extends BlockEntity implements Contain
         }
         if(changed){setChanged();level.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);}
     }
-    public java.util.List<ItemStack> takeAvailableFragments(){
+    public java.util.List<ItemStack> takeAvailableFragments(int maxFragments){
         java.util.List<ItemStack> cargo=new java.util.ArrayList<>();
-        if(level==null||level.isClientSide)return cargo;
-        for(int slot=0;slot<OUTPUT_SLOTS;slot++){
+        if(level==null||level.isClientSide||maxFragments<=0)return cargo;
+        int remaining=maxFragments;
+        for(int slot=0;slot<OUTPUT_SLOTS&&remaining>0;slot++){
             ItemStack current=outputItems.get(slot);
             if(!current.isEmpty()&&current.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())){
-                int moved=Math.min(64,current.getCount());
+                int moved=Math.min(remaining,current.getCount());
                 ItemStack carried=current.copy();carried.setCount(moved);cargo.add(carried);current.shrink(moved);
                 if(current.isEmpty())outputItems.set(slot,ItemStack.EMPTY);
-                break;
+                remaining-=moved;
             }
         }
         if(!cargo.isEmpty()){setChanged();level.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);}

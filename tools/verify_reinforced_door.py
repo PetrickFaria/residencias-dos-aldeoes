@@ -13,7 +13,7 @@ assert '.strength(5.0F, 5.0F)' in door and 'Material.WOOD' in door
 assert 'level.setBlock(lowerPos, changed, 10)' in door and 'upper.setValue(OPEN, opening)' in door
 assert 'SoundEvents.WOODEN_DOOR_OPEN' in door and 'SoundEvents.WOODEN_DOOR_CLOSE' in door
 item=json.loads((resources/'assets/residenciasaldeoes/models/item/reinforced_door.json').read_text())
-assert item['display']['gui']['scale']==[0.8,0.8,0.8]
+assert item['display']['gui']['scale']==[1.0,1.0,1.0]
 recipe=json.loads((resources/'data/residenciasaldeoes/recipes/reinforced_door.json').read_text())
 assert recipe['pattern']==['INI','NDN','INI']
 assert recipe['key']['I']['item']=='minecraft:iron_ingot'
@@ -69,4 +69,6 @@ for path in resources.glob('assets/residenciasaldeoes/models/block/reinforced_do
  assert len(model['elements'])>10
  assert model['elements'][0]['from']==[0,0,0] and model['elements'][0]['to']==[3,16,16]
  assert any(e['from'][0]<0 or e['to'][0]>3 for e in model['elements'][1:])
-print('Vanilla door parents, 64 state mappings, cutout window alpha, recipe and 16x32 icon checks passed.')
+ assert any(e['faces'].get('north',{}).get('texture')=='#iron' and e['from'][2]<0 for e in model['elements'])
+ assert any(e['faces'].get('south',{}).get('texture')=='#iron' and e['to'][2]>16 for e in model['elements'])
+print('Vanilla door parents, 64 state mappings, cutout window alpha, noncoplanar metal edges, vanilla-sized GUI icon and recipe checks passed.')

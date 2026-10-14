@@ -9,7 +9,7 @@ for rel,entry in expected.items():
             if 'parent' in child:child['parent']=child['parent'].replace('emerald_chest_finished_emerald_top_','emerald_top_')
         assert data==entry['json'],rel
     else:assert hashlib.sha256(p.read_bytes()).hexdigest()==entry['sha256'],rel
-print('Approved element geometry, OBJ/MTL meshes, state rotations and other models remain identical to 1.0.46.')
+print('Approved geometry remains unchanged except for the reinforced door anti-z-fighting epsilon and GUI icon transform requested in 1.0.48.')
 
 for name in ['emerald_top_crystal','emerald_top_trim']:
     a=json.loads((root/'assets/residenciasaldeoes/models/block'/('emerald_chest_finished_'+name+'.json')).read_text());a.pop('textures',None)

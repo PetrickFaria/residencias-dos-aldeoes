@@ -24,7 +24,9 @@ assert 'DAWN_COMMAND_WINDOW_TICKS=1_200L' in events
 assert 'boolean adjustedClock=' in events
 assert 'oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS' in events
 assert 'TICKS_AFTER_DAWN_FOR_PAYMENT=200L' in events
-assert 'TICKS_AFTER_PAYMENT_FOR_COLLECTION=1_200L' in events
+assert 'TICKS_AFTER_PAYMENT_FOR_COLLECTION=300L' in events
+assert 'COURIER_MAX_FRAGMENTS_PER_TRIP=15' in events
+assert 'takeAvailableFragments(COURIER_MAX_FRAGMENTS_PER_TRIP)' in events
 assert 'gameTime+TICKS_AFTER_DAWN_FOR_PAYMENT' in events
 assert 'currentGameTime+TICKS_AFTER_PAYMENT_FOR_COLLECTION' in events
 assert 'currentGameTime<task.dueGameTime()' in events
@@ -70,11 +72,11 @@ def commanded_dawn(before_game,after_game,before_day,after_day):
 assert commanded_dawn(500,500,23000,0) and commanded_dawn(500,501,13000,1000)
 assert not commanded_dawn(500,500,10000,13000) and not commanded_dawn(500,501,13000,23000)
 payment=10000+200
-assert payment+1200==11400
+assert payment+300==10500
 
 event_ids=[1,2,3,4,5,6,7,8,9,10]
 assert len(set(event_ids))==10 and all(a<b for a,b in zip(event_ids,event_ids[1:]))
-assert 10*200==2000 and 10*1200==12000
+assert 10*200==2000 and 10*300==3000
 
 def deposit(slots,pending):
     slots=list(slots)

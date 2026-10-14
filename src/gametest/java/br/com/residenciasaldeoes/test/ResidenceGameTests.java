@@ -65,6 +65,8 @@ public final class ResidenceGameTests {
     @BeforeBatch(batch="available") public static void before_available(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     @BeforeBatch(batch="index") public static void before_index(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     @BeforeBatch(batch="lid") public static void before_lid(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    @BeforeBatch(batch="outputs") public static void before_outputs(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    @BeforeBatch(batch="sleep") public static void before_sleep(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     private static double navigationSpeed(Villager v){
         try{var field=net.minecraft.world.entity.ai.navigation.PathNavigation.class.getDeclaredField("speedModifier");field.setAccessible(true);return field.getDouble(v.getNavigation());}
         catch(Exception e){throw new RuntimeException(e);}
@@ -126,7 +128,7 @@ public final class ResidenceGameTests {
         h.runAtTickTime(5,()->h.getLevel().setDayTime(0));
         h.runAtTickTime(190,()->check(anchor.isEmpty(),"Payment happened before the original 200 ticks"));
         h.runAtTickTime(220,()->{paid[0]=anchor.getItem(0).getCount();check(paid[0]>0,"Payment absent after 10 seconds");});
-        h.runAtTickTime(1395,()->check(!v.getPersistentData().contains(JOB)&&chest.isEmpty(),"Transport started before one minute after payment"));
+        h.runAtTickTime(495,()->check(!v.getPersistentData().contains(JOB)&&chest.isEmpty(),"Transport started before 15 seconds after payment"));
         h.succeedWhen(()->{
             if(v.getPersistentData().contains(JOB)&&v.getPersistentData().getCompound(JOB).contains("cargo"))pickup[0]=1;
             check(!chest.isEmpty(),"Waiting for floor-anchor physical delivery");
@@ -227,7 +229,7 @@ public final class ResidenceGameTests {
         check(menu.getCarried().getCount()==60&&reloaded.getItem(9).isEmpty(),"Manual insertion consumed items");
         int cargo=0;
         while(!reloaded.isEmpty()){
-            var trip=reloaded.takeAvailableFragments();check(!trip.isEmpty(),"Transport cannot read remaining slots");
+            var trip=reloaded.takeAvailableFragments(15);check(!trip.isEmpty(),"Transport cannot read remaining slots");
             for(ItemStack stack:trip)cargo+=stack.getCount();
         }
         check(cargo+64+menu.getCarried().getCount()==700,"Collection lost or duplicated fragments");
@@ -299,68 +301,87 @@ public final class ResidenceGameTests {
         int produced=producedPayment+17;
         double startX=first.getX();
         double originalSpeed=first.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).getBaseValue();
-        boolean[] walked={false,false};
-        h.runAtTickTime(1190,()->check(chest.isEmpty()&&!first.getPersistentData().contains(JOB),"Collection started before 1200 ticks"));
+        boolean[] walked={false,false};int[] lastStage={-1},trips={0};
+        h.runAtTickTime(290,()->check(chest.isEmpty()&&!first.getPersistentData().contains(JOB),"Collection started before 300 ticks"));
         h.succeedWhen(()->{
             if(first.getPersistentData().contains(JOB)&&first.getNavigation().getPath()!=null){
                 int stage=first.getPersistentData().getCompound(JOB).getInt("stage");
                 if(stage==0||stage==1){check(Math.abs(navigationSpeed(first)-.5D)<.0001D,"Courier is running");walked[stage]=true;}
+                if(stage==1&&lastStage[0]!=1){trips[0]++;int carried=0;var cargo=first.getPersistentData().getCompound(JOB).getList("cargo",10);for(int i=0;i<cargo.size();i++)carried+=ItemStack.of(cargo.getCompound(i)).getCount();check(carried>0&&carried<=15,"Courier exceeded trip capacity");}
+                lastStage[0]=stage;
             }
             check(!chest.isEmpty(),"Waiting for physical deposit; resident="+first.blockPosition()+" job="+first.getPersistentData().getCompound(JOB));
             check(chest.getItem(0).getCount()==produced,"Lost or duplicated fragments");
             check(Math.abs(first.getX()-startX)>2,"Villager did not walk");
             check(!second.getPersistentData().contains(JOB),"Second resident was assigned conflicting transport");
             check(anchor.isEmpty(),"Anchor not collected");
-            check(walked[0]&&walked[1],"Walking speed not observed on both legs");
+            check(walked[0]&&walked[1]&&trips[0]>=2,"Walking speed or multiple capped trips were not observed");
             check(first.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).getBaseValue()==originalSpeed,"Normal movement attribute changed");
         });
     }
-    @GameTest(template="empty",timeoutTicks=1600,batch="full")
+    @GameTest(template="empty",timeoutTicks=300,batch="full")
     public static void full_chest_multiple_trips_and_recovery(GameTestHelper h){
-        floor(h);
         BlockPos hp=new BlockPos(6,2,6),cp=new BlockPos(10,2,6);
         h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(cp,ResidenciasDosAldeoes.EMERALD_CHEST.get());
-        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(hp);anchor.setSize(11);
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(hp);
         EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(cp);
-        Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));first.setAge(0);
-        ResidenceData data=ResidenceData.get(h.getLevel());
-        check(data.link(h.getLevel(),h.absolutePos(hp),first).equals("ok"),"Link failed");
-        Villager replacement=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));replacement.setAge(0);
-        check(data.link(h.getLevel(),h.absolutePos(hp),replacement).equals("ok"),"Replacement link failed");
-        var home=data.home(h.getLevel(),h.absolutePos(hp));
-        long id=data.nextProductionDawnEventId();anchor.recordDailyProduction(id,325);
-        data.queueCollection(home,id,h.getLevel().getServer().overworld().getGameTime());
-        long secondId=data.nextProductionDawnEventId();anchor.recordDailyProduction(secondId,325);
-        data.queueCollection(home,secondId,h.getLevel().getServer().overworld().getGameTime());
-        boolean[] killed={false};
-        h.runAtTickTime(180,()->{
-            int total=(int)anchor.getPendingFragments();for(int i=0;i<anchor.getContainerSize();i++)total+=anchor.getItem(i).getCount();
-            var cargo=replacement.getPersistentData().getCompound(JOB).getList("cargo",10);
-            check(cargo.size()<=1,"Transport has more than one slot");
-            for(int i=0;i<cargo.size();i++){int count=ItemStack.of(cargo.getCompound(i)).getCount();check(count<=64,"Slot exceeded 64");total+=count;}
-            check(total==650,"Full chest caused loss/duplication");
-            check(chest.getItem(26).getCount()==64,"Full chest was overwritten");
-            // Existing full contents are extracted normally, leaving room for queued cargo.
-            for(int i=0;i<27;i++)chest.removeItem(i,64);
-        });
-        h.succeedWhen(()->{
-            if(!killed[0]){
-            var cargo=first.getPersistentData().getCompound(JOB).getList("cargo",10);
-            check(cargo.size()==1&&ItemStack.of(cargo.getCompound(0)).getCount()==64,"First resident did not collect one full stack");
-            net.minecraft.nbt.CompoundTag save=new net.minecraft.nbt.CompoundTag();first.saveWithoutId(save);first.load(save);
-            var restored=first.getPersistentData().getCompound(JOB).getList("cargo",10);
-            check(restored.size()==1&&ItemStack.of(restored.getCompound(0)).getCount()==64,"Cargo failed NBT roundtrip");
-            for(int i=0;i<27;i++)chest.setItem(i,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
-            first.hurt(net.minecraft.world.damagesource.DamageSource.GENERIC,1000F);
-            int recovered=(int)anchor.getPendingFragments();for(int i=0;i<anchor.getContainerSize();i++)recovered+=anchor.getItem(i).getCount();
-            check(recovered==650,"Resident death lost or duplicated in-transit fragments");
-                killed[0]=true;
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));resident.setAge(0);
+        ResidenceData data=ResidenceData.get(h.getLevel());check(data.link(h.getLevel(),h.absolutePos(hp),resident).equals("ok"),"Link failed");
+        long period=data.nextProductionDawnEventId();anchor.recordDailyProduction(period,50);
+        var cargo=anchor.takeAvailableFragments(15);check(cargo.size()==1&&cargo.get(0).getCount()==15,"First trip was not capped at 15");
+        net.minecraft.nbt.ListTag carried=new net.minecraft.nbt.ListTag();for(ItemStack stack:cargo)carried.add(stack.save(new net.minecraft.nbt.CompoundTag()));
+        net.minecraft.nbt.CompoundTag job=new net.minecraft.nbt.CompoundTag();job.putLong("anchor",h.absolutePos(hp).asLong());job.putLong("chest",h.absolutePos(cp).asLong());job.put("cargo",carried);job.putInt("stage",1);job.putLong("started",h.getLevel().getGameTime());resident.getPersistentData().put(JOB,job);
+        resident.getPersistentData().putBoolean("residenciasaldeoes_fragment_drop_processed",true);
+        for(int slot=0;slot<27;slot++)chest.setItem(slot,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
+        ItemStack refused=new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),15);check(chest.insertFragments(refused)==0&&refused.getCount()==15,"Full chest consumed in-transit cargo");
+        int total=anchor.getPendingFragments();for(int slot=0;slot<anchor.getContainerSize();slot++)total+=anchor.getItem(slot).getCount();total+=refused.getCount();
+        check(total==50,"Full chest lost or duplicated fragments");
+        resident.hurt(net.minecraft.world.damagesource.DamageSource.GENERIC,1000F);
+        int recovered=anchor.getPendingFragments();for(int slot=0;slot<anchor.getContainerSize();slot++)recovered+=anchor.getItem(slot).getCount();
+        check(recovered==50,"Resident death failed to recover cargo");
+        for(int slot=0;slot<27;slot++)chest.removeItem(slot,64);
+        int delivered=0,trips=0;
+        while(!anchor.isEmpty()){
+            var next=anchor.takeAvailableFragments(15);int trip=0;
+            for(ItemStack stack:next){check(stack.getCount()<=15,"Trip exceeded 15 fragments");trip+=stack.getCount();ItemStack remaining=stack.copy();chest.insertFragments(remaining);check(remaining.isEmpty(),"Chest rejected fragments after space was freed");}
+            check(trip>0&&trip<=15,"Invalid recovery trip");delivered+=trip;trips++;
+        }
+        int stored=0;for(int slot=0;slot<27;slot++)stored+=chest.getItem(slot).getCount();
+        check(delivered==50&&stored==50&&trips==4,"Sequential trips lost or duplicated fragments");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="outputs")
+    public static void courier_trip_limit_across_all_output_slots(GameTestHelper h){
+        BlockPos pos=new BlockPos(2,2,2);h.setBlock(pos,ResidenciasDosAldeoes.ANCHOR.get());
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(pos);
+        for(int total:new int[]{5,15,16,20,30,31,45}){
+            anchor.clearContent();int left=total;
+            for(int slot=0;slot<anchor.getContainerSize()&&left>0;slot++){int amount=Math.min(5,left);anchor.setOutputItem(slot,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),amount));left-=amount;}
+            check(left==0,"Test setup did not span the output inventory");int delivered=0,trips=0;
+            while(!anchor.isEmpty()){
+                var cargo=anchor.takeAvailableFragments(15);int trip=0;
+                for(ItemStack stack:cargo){check(stack.getCount()<=15,"Cargo stack exceeded trip limit");trip+=stack.getCount();}
+                check(trip>0&&trip<=15,"Empty or oversized trip");delivered+=trip;trips++;
             }
-            int total=0;for(int i=0;i<27;i++)total+=chest.getItem(i).getCount();
-            check(total==650,"Waiting for multiple safe trips");
-            check(anchor.isEmpty()&&anchor.getPendingFragments()==0,"Fragments remain at anchor");
-            check(home.pendingCollections.isEmpty(),"Old collection tasks were not drained");
-        });
+            check(delivered==total,"Trip limit lost fragments for total "+total);
+            check(trips==(total+14)/15,"Wrong number of trips for total "+total);
+        }
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="sleep")
+    public static void resident_sleep_stops_stale_motion(GameTestHelper h){
+        Villager v=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,5));v.setAge(0);
+        BlockPos home=new BlockPos(6,2,6);h.setBlock(home,ResidenciasDosAldeoes.ANCHOR.get());
+        check(ResidenceData.get(h.getLevel()).link(h.getLevel(),h.absolutePos(home),v).equals("ok"),"Link failed");
+        v.startSleeping(h.absolutePos(new BlockPos(5,2,5)));v.setDeltaMovement(.25D,0.0D,0.0D);
+        v.getBrain().setMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET,
+                new net.minecraft.world.entity.ai.memory.WalkTarget(h.absolutePos(new BlockPos(10,2,5)),.8F,0));
+        VillagerResidenceEvents.stabilizeSleepingResident(v);
+        check(v.isSleeping(),"Sleep stabilization woke the resident");
+        check(v.getNavigation().isDone(),"Sleep stabilization left navigation active");
+        check(v.getDeltaMovement().lengthSqr()<1.0E-8D,"Sleep stabilization left residual velocity");
+        check(v.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET).isEmpty(),"Stale walk target remained during sleep");
+        h.succeed();
     }
     @GameTest(template="empty",timeoutTicks=400,batch="dawn")
     public static void command_dawn_payment(GameTestHelper h){

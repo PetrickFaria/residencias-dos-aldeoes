@@ -11,7 +11,7 @@ assert 'ItemStack.isSameItemSameTags' in be and 'stack.shrink(moved)' in be and 
 assert 'new InvWrapper(this)' in be and 'if (!stack.isEmpty() && !stack.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())) return stack;' in be
 assert 'return LazyOptional.empty()' not in be
 assert 'if (!stack.isEmpty() && !canPlaceItem(slot, stack)) return;' in be
-assert 'takeAvailableFragments()' in anchor and 'restoreFragments(' in anchor
+assert 'takeAvailableFragments(int maxFragments)' in anchor and 'remaining>0' in anchor and 'restoreFragments(' in anchor
 assert 'pending_emerald_collections' in (java/'data/ResidenceData.java').read_text()
 assert 'villager.getNavigation().moveTo' in events and 'insertFragments(stack)' in events
 assert 'super.render(' not in renderer and 'implements BlockEntityRenderer' in renderer

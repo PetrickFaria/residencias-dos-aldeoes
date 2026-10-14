@@ -59,7 +59,7 @@ public class VillagerResidenceEvents {
     private static final long THREAT_RETURN_TIMEOUT_TICKS=150L;
     private static final long RETURN_RETRY_TICKS=20L;
     private static final long TICKS_AFTER_DAWN_FOR_PAYMENT=200L;
-    private static final long TICKS_AFTER_PAYMENT_FOR_COLLECTION=1_200L;
+    private static final long TICKS_AFTER_PAYMENT_FOR_COLLECTION=300L;
     private static final String EMERALD_TRANSFER="residenciasaldeoes_emerald_transfer";
     /**
      * Captures /time changes before a same-tick set/add can be overwritten by the level sampler.
@@ -145,6 +145,7 @@ public class VillagerResidenceEvents {
         }
     }
     public static final double COURIER_WALK_SPEED=.5D;
+    public static final int COURIER_MAX_FRAGMENTS_PER_TRIP=15;
     private static final java.util.Map<ServerLevel,java.util.Map<BlockPos,Long>> COLLECTION_SEARCH_AFTER=new java.util.WeakHashMap<>();
     private void beginScheduledCollections(ServerLevel level,long currentGameTime){
         ResidenceData data=ResidenceData.get(level);
@@ -233,7 +234,7 @@ public class VillagerResidenceEvents {
         if(villager.blockPosition().distSqr(target)<2.25D){
             if(job.getInt("stage")==0){
                 if(!(level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor)){finishEmeraldTransfer(level,villager,job,true);return true;}
-                List<ItemStack> cargo=anchor.takeAvailableFragments();
+                List<ItemStack> cargo=anchor.takeAvailableFragments(COURIER_MAX_FRAGMENTS_PER_TRIP);
                 if(cargo.isEmpty()){
                     ResidenceData data=ResidenceData.get(level);
                     ResidenceData.PendingCollection pending=data.dueCollection(owner,level.getServer().overworld().getGameTime());
@@ -289,6 +290,13 @@ public class VillagerResidenceEvents {
         List<ItemStack> items=new ArrayList<>();ListTag list=job.getList("cargo",Tag.TAG_COMPOUND);
         for(int i=0;i<list.size();i++){ItemStack stack=ItemStack.of(list.getCompound(i));if(!stack.isEmpty())items.add(stack);}
         return items;
+    }
+    /** Stop stale brain/navigation movement after vanilla has processed a sleeping resident. */
+    public static void stabilizeSleepingResident(Villager villager){
+        villager.getNavigation().stop();
+        villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+        villager.getBrain().eraseMemory(MemoryModuleType.PATH);
+        villager.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
     }
     private static void finishEmeraldTransfer(ServerLevel level,Villager villager,CompoundTag job,boolean returnCargo){
         BlockPos depositChest=BlockPos.of(job.getLong("chest"));
