@@ -71,7 +71,7 @@ public final class ResidencePreview {
             double playerX=mc.player.getX()-pos.getX(),playerY=mc.player.getY()-pos.getY(),playerZ=mc.player.getZ()-pos.getZ();
             boolean playerInside=playerX>=box.minX&&playerX<box.maxX&&playerY>=box.minY&&playerY<box.maxY&&playerZ>=box.minZ&&playerZ<box.maxZ;
             if(shouldRender(e.permanent(),playerInside)){
-                if(fill==null)fill=buffers.getBuffer(FILL);
+                if(fill==null)fill=fillBuffers.getBuffer(FILL);
                 var matrix=pose.last().pose();float alpha=0.035F;
                 planeXZ(fill,matrix,box.minY,box.minX,box.maxX,box.minZ,box.maxZ,alpha);planeXZ(fill,matrix,box.maxY,box.minX,box.maxX,box.minZ,box.maxZ,alpha);
                 planeYZ(fill,matrix,box.minX,box.minY,box.maxY,box.minZ,box.maxZ,alpha);planeYZ(fill,matrix,box.maxX,box.minY,box.maxY,box.minZ,box.maxZ,alpha);
