@@ -25,16 +25,22 @@ import net.minecraft.client.renderer.RenderStateShard;
 public final class ResidencePreview {
     private static final RenderType FILL = RenderType.create("residenciasaldeoes:residence_preview_fill",
             DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 256, false, true,
-            RenderType.CompositeState.builder()
-                    .setShaderState(RenderStateShard.POSITION_COLOR_SHADER)
-                    .setTextureState(RenderStateShard.NO_TEXTURE)
-                    .setTransparencyState(RenderStateShard.TRANSLUCENT_TRANSPARENCY)
-                    .setDepthTestState(RenderStateShard.LEQUAL_DEPTH_TEST)
-                    .setCullState(RenderStateShard.NO_CULL)
-                    .setLightmapState(RenderStateShard.NO_LIGHTMAP)
-                    .setOverlayState(RenderStateShard.NO_OVERLAY)
-                    .setWriteMaskState(RenderStateShard.COLOR_WRITE)
-                    .createCompositeState(false));
+            PreviewRenderStates.fill());
+    private static final class PreviewRenderStates extends RenderStateShard {
+        private PreviewRenderStates() { super("residence_preview", () -> {}, () -> {}); }
+        private static RenderType.CompositeState fill() {
+            return RenderType.CompositeState.builder()
+                    .setShaderState(POSITION_COLOR_SHADER)
+                    .setTextureState(NO_TEXTURE)
+                    .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                    .setDepthTestState(LEQUAL_DEPTH_TEST)
+                    .setCullState(NO_CULL)
+                    .setLightmapState(NO_LIGHTMAP)
+                    .setOverlayState(NO_OVERLAY)
+                    .setWriteMaskState(COLOR_WRITE)
+                    .createCompositeState(false);
+        }
+    }
     private static List<ModNetwork.PreviewEntry> entries=List.of();
     private ResidencePreview(){}
     public static void setEntries(List<ModNetwork.PreviewEntry> next){entries=List.copyOf(next);}
