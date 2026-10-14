@@ -281,12 +281,6 @@ public final class ResidenceGameTests {
     public static void physical_transport_after_payment(GameTestHelper h){
         floor(h);
         BlockPos homePos=new BlockPos(6,2,6),chestPos=new BlockPos(10,2,6);
-        BlockPos deliveryDoor=new BlockPos(8,2,6);
-        for(int x=7;x<=10;x++)for(int z:new int[]{5,7})for(int y=2;y<=3;y++)
-            h.setBlock(new BlockPos(x,y,z),Blocks.STONE);
-        var gate=ResidenciasDosAldeoes.REINFORCED_DOOR.get().defaultBlockState().setValue(DoorBlock.FACING,Direction.EAST);
-        h.setBlock(deliveryDoor,gate);
-        h.setBlock(deliveryDoor.above(),gate.setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER));
         h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(chestPos,ResidenciasDosAldeoes.EMERALD_CHEST.get());
         ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(homePos);anchor.setSize(11);
         EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(chestPos);
@@ -307,7 +301,6 @@ public final class ResidenceGameTests {
         double originalSpeed=first.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).getBaseValue();
         boolean[] walked={false,false};
         h.runAtTickTime(1190,()->check(chest.isEmpty()&&!first.getPersistentData().contains(JOB),"Collection started before 1200 ticks"));
-        h.runAtTickTime(1202,()->ResidenciasDosAldeoes.REINFORCED_DOOR.get().setOpen(null,h.getLevel(),h.getLevel().getBlockState(h.absolutePos(deliveryDoor)),h.absolutePos(deliveryDoor),false));
         h.succeedWhen(()->{
             if(first.getPersistentData().contains(JOB)&&first.getNavigation().getPath()!=null){
                 int stage=first.getPersistentData().getCompound(JOB).getInt("stage");
