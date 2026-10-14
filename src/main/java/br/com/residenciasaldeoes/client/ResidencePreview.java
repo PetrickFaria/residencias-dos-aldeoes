@@ -49,12 +49,12 @@ public final class ResidencePreview {
     @SubscribeEvent public static void render(RenderLevelStageEvent event){
         if(event.getStage()!=RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS||entries.isEmpty()||isOculusShadowPass())return;
         Minecraft mc=Minecraft.getInstance();if(mc.level==null||mc.player==null)return;
-        // A private per-frame source prevents this overlay's geometry from sharing
-        // pending vertices with the world renderer or another RenderLevelStage listener.
-        // This overlay submits its own vertices in two coordinate passes. Keep them
-        // out of Minecraft's shared world buffer so a pending world/other-mod batch
-        // cannot be flushed or appended as if it were part of a residence box.
-        MultiBufferSource.BufferSource buffers=MultiBufferSource.immediate(new BufferBuilder(4096));
+        // Separate private per-frame sources keep position/color fill vertices isolated
+        // from line vertices. A shared BufferSource reuses one BufferBuilder across
+        // RenderTypes, invalidating a retained consumer when the type switches.
+        // Private buffers also remain isolated from the world renderer and listeners.
+        MultiBufferSource.BufferSource fillBuffers=MultiBufferSource.immediate(new BufferBuilder(4096));
+        MultiBufferSource.BufferSource lineBuffers=MultiBufferSource.immediate(new BufferBuilder(4096));
         var pose=event.getPoseStack();var cam=event.getCamera().getPosition();
         RenderSystem.depthMask(false);
         VertexConsumer fill=null;
@@ -76,13 +76,13 @@ public final class ResidencePreview {
                 planeXZ(fill,matrix,box.minY,box.minX,box.maxX,box.minZ,box.maxZ,alpha);planeXZ(fill,matrix,box.maxY,box.minX,box.maxX,box.minZ,box.maxZ,alpha);
                 planeYZ(fill,matrix,box.minX,box.minY,box.maxY,box.minZ,box.maxZ,alpha);planeYZ(fill,matrix,box.maxX,box.minY,box.maxY,box.minZ,box.maxZ,alpha);
                 planeXY(fill,matrix,box.minZ,box.minX,box.maxX,box.minY,box.maxY,alpha);planeXY(fill,matrix,box.maxZ,box.minX,box.maxX,box.minY,box.maxY,alpha);
-                LevelRenderer.renderLineBox(pose,buffers.getBuffer(RenderType.lines()),box,0.08F,0.88F,0.42F,0.95F);
+                LevelRenderer.renderLineBox(pose,lineBuffers.getBuffer(RenderType.lines()),box,0.08F,0.88F,0.42F,0.95F);
             }
             pose.popPose();
         }
-        if(fill!=null)buffers.endBatch(FILL);
+        if(fill!=null)fillBuffers.endBatch(FILL);
         RenderSystem.depthMask(false);RenderSystem.lineWidth(3.0F);
-        buffers.endBatch(RenderType.lines());
+        lineBuffers.endBatch(RenderType.lines());
         RenderSystem.depthMask(true);RenderSystem.lineWidth(1.0F);
     }
     private static boolean isOculusShadowPass(){
