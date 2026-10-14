@@ -8,6 +8,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.ModList;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -46,7 +47,7 @@ public final class ResidencePreview {
     public static void setEntries(List<ModNetwork.PreviewEntry> next){entries=List.copyOf(next);}
     static boolean shouldRender(boolean permanentEnabled,boolean playerInside){return permanentEnabled||playerInside;}
     @SubscribeEvent public static void render(RenderLevelStageEvent event){
-        if(event.getStage()!=RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS||entries.isEmpty())return;
+        if(event.getStage()!=RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS||entries.isEmpty()||isOculusShadowPass())return;
         Minecraft mc=Minecraft.getInstance();if(mc.level==null||mc.player==null)return;
         // A private per-frame source prevents this overlay's geometry from sharing
         // pending vertices with the world renderer or another RenderLevelStage listener.
@@ -83,6 +84,17 @@ public final class ResidencePreview {
         RenderSystem.depthMask(false);RenderSystem.lineWidth(3.0F);
         buffers.endBatch(RenderType.lines());
         RenderSystem.depthMask(true);RenderSystem.lineWidth(1.0F);
+    }
+    private static boolean isOculusShadowPass(){
+        if(!ModList.get().isLoaded("oculus"))return false;
+        try{
+            Class<?> state=Class.forName("net.coderbot.iris.shadows.ShadowRenderingState",false,ResidencePreview.class.getClassLoader());
+            return (Boolean)state.getMethod("areShadowsCurrentlyBeingRendered").invoke(null);
+        }catch(ReflectiveOperationException|LinkageError unavailable){
+            // If Oculus is present but its shadow state cannot be queried, fail closed:
+            // do not submit preview vertices into an unknown shader vertex format.
+            return true;
+        }
     }
     private static void planeXZ(com.mojang.blaze3d.vertex.VertexConsumer o,Matrix4f m,double y,double x0,double x1,double z0,double z1,float a){vertex(o,m,x0,y,z0,a);vertex(o,m,x1,y,z0,a);vertex(o,m,x1,y,z1,a);vertex(o,m,x0,y,z1,a);}
     private static void planeYZ(com.mojang.blaze3d.vertex.VertexConsumer o,Matrix4f m,double x,double y0,double y1,double z0,double z1,float a){vertex(o,m,x,y0,z0,a);vertex(o,m,x,y1,z0,a);vertex(o,m,x,y1,z1,a);vertex(o,m,x,y0,z1,a);}
