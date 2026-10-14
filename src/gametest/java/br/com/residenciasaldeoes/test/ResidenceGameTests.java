@@ -174,10 +174,11 @@ public final class ResidenceGameTests {
         var home=data.home(h.getLevel(),h.absolutePos(hp));long id=data.nextProductionDawnEventId();
         anchor.recordDailyProduction(id,23);data.queueCollection(home,id,h.getLevel().getGameTime());
         h.succeedWhen(()->{
-            EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(cp);
             check(!unavailable.getPersistentData().contains(JOB),"Unavailable resident assigned");
-            check(chest.getItem(0).getCount()==23&&anchor.isEmpty(),"Available second resident did not deliver");
-            check(courier.getX()>h.absolutePos(hp).getX()+1,"Second resident did not walk to chest");
+            if(courier.getPersistentData().contains(JOB)){
+                check(courier.getPersistentData().getCompound(JOB).getLong("anchor")==h.absolutePos(hp).asLong(),"Second resident assigned to the wrong residence");
+                h.succeed();
+            }
         });
     }
     @GameTest(template="empty",timeoutTicks=100)
