@@ -167,7 +167,8 @@ public final class ResidenceGameTests {
         h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(cp,ResidenciasDosAldeoes.EMERALD_CHEST.get());
         ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(hp);
         anchor.setSize(11);
-        Villager unavailable=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));unavailable.setAge(0);unavailable.setNoAi(true);
+        // Keep the unavailable resident away from the courier's one-block path.
+        Villager unavailable=h.spawn(EntityType.VILLAGER,new BlockPos(2,2,3));unavailable.setAge(0);unavailable.setNoAi(true);
         Villager courier=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));courier.setAge(0);
         ResidenceData data=ResidenceData.get(h.getLevel());check(data.link(h.getLevel(),h.absolutePos(hp),unavailable).equals("ok"),"First link failed");check(data.link(h.getLevel(),h.absolutePos(hp),courier).equals("ok"),"Second link failed");
         var home=data.home(h.getLevel(),h.absolutePos(hp));long id=data.nextProductionDawnEventId();
