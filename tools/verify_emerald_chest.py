@@ -21,7 +21,10 @@ assert model['loader']=='forge:composite' and set(model['children'])=={'body','l
 assert model['display']['gui']['scale']==[0.7,0.7,0.7]
 body_model=json.loads((resources/'assets/residenciasaldeoes/models/block/emerald_chest_body.json').read_text())
 anchor_model=json.loads((resources/'assets/residenciasaldeoes/models/block/ancora_residencial_body.json').read_text())
-assert body_model['textures']==anchor_model['textures']
+assert all(body_model['textures'][k]==v for k,v in anchor_model['textures'].items())
+assert not any(e['from'][0]<8<e['to'][0] and e['from'][2]<8<e['to'][2] and e['from'][1]<8<e['to'][1] for e in body_model['elements']), 'The chest cavity must be geometrically empty'
+assert any(e['faces'].get('north',{}).get('texture')=='#frontwood' for e in body_model['elements'])
+assert body_model['elements'][0]['to'][1]==3.5
 assert max(e['to'][1] for e in body_model['elements'])<=13
 assert 'entity.getOpenNess(partialTick)' in renderer
 assert 'renderSingleBlock(lid,pose,buffers,light,OverlayTexture.NO_OVERLAY)' in renderer

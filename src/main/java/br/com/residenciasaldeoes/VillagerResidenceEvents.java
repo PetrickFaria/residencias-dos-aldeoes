@@ -150,23 +150,32 @@ public class VillagerResidenceEvents {
             if(!home.dimension.equals(level.dimension())||home.residents.isEmpty())continue;
             ResidenceData.PendingCollection pending=data.dueCollection(home,currentGameTime);
             if(pending==null)continue;
-            UUID first=home.residents.iterator().next();
-            if(!(level.getEntity(first) instanceof Villager villager)||villager.getPersistentData().contains(EMERALD_TRANSFER))continue;
+            // One courier per residence; an unloaded/busy first UUID must not block other residents.
+            boolean alreadyDelivering=false;
+            for(UUID id:home.residents)if(level.getEntity(id) instanceof Villager resident
+                    &&resident.getPersistentData().contains(EMERALD_TRANSFER)){alreadyDelivering=true;break;}
+            if(alreadyDelivering)continue;
             if(!level.hasChunkAt(home.pos)||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor))continue;
             if(anchor.isEmpty()){data.completeCollection(home,pending);continue;}
-            BlockPos chest=findEmeraldChest(level,home,villager);
-            if(chest==null)continue;
-            BlockPos homeApproach=findApproach(level,home.pos,villager);
-            BlockPos chestApproach=findApproach(level,chest,villager);
-            if(homeApproach==null||chestApproach==null)continue;
-            CompoundTag job=new CompoundTag();job.putLong("anchor",home.pos.asLong());job.putLong("chest",chest.asLong());job.putLong("period",pending.period());job.putLong("started",currentGameTime);job.put("previous_hand",villager.getItemBySlot(EquipmentSlot.MAINHAND).save(new CompoundTag()));job.putLong("home_approach",homeApproach.asLong());job.putLong("chest_approach",chestApproach.asLong());job.putInt("stage",0);
-            villager.getPersistentData().put(EMERALD_TRANSFER,job);
+            for(UUID id:home.residents){
+                if(!(level.getEntity(id) instanceof Villager villager)||!villager.isAlive()||villager.isBaby()
+                        ||villager.isNoAi()||villager.isSleeping()||villager.isTrading())continue;
+                BlockPos homeApproach=findApproach(level,home.pos,villager);
+                if(homeApproach==null)continue;
+                BlockPos chest=findEmeraldChest(level,home,villager);
+                if(chest==null)continue;
+                BlockPos chestApproach=findApproach(level,chest,villager);
+                if(chestApproach==null)continue;
+                CompoundTag job=new CompoundTag();job.putLong("anchor",home.pos.asLong());job.putLong("chest",chest.asLong());job.putLong("period",pending.period());job.putLong("started",currentGameTime);job.put("previous_hand",villager.getItemBySlot(EquipmentSlot.MAINHAND).save(new CompoundTag()));job.putLong("home_approach",homeApproach.asLong());job.putLong("chest_approach",chestApproach.asLong());job.putInt("stage",0);
+                villager.getPersistentData().put(EMERALD_TRANSFER,job);
+                break;
+            }
 
         }
     }
     private static BlockPos findEmeraldChest(ServerLevel level,ResidenceData.Home home,Villager villager){
-        int radius=home.size/2;List<BlockPos> candidates=new ArrayList<>();
-        for(int y=home.pos.getY()-1;y<=home.pos.getY()+home.size;y++)
+        int radius=Math.max(8,home.size/2);List<BlockPos> candidates=new ArrayList<>();
+        for(int y=home.pos.getY()-2;y<=home.pos.getY()+Math.max(6,home.size);y++)
             for(int x=home.pos.getX()-radius;x<=home.pos.getX()+radius;x++)
                 for(int z=home.pos.getZ()-radius;z<=home.pos.getZ()+radius;z++){
                     BlockPos pos=new BlockPos(x,y,z);
@@ -178,14 +187,18 @@ public class VillagerResidenceEvents {
     }
     private static BlockPos findApproach(ServerLevel level,BlockPos target,Villager villager){
         List<BlockPos> approaches=new ArrayList<>();
-        for(Direction direction:Direction.Plane.HORIZONTAL){BlockPos candidate=target.relative(direction);
-            if(level.hasChunkAt(candidate)&&level.isEmptyBlock(candidate)&&!level.isEmptyBlock(candidate.below()))approaches.add(candidate);
+        // A floor-embedded anchor is approached one block ABOVE its own Y.
+        // Allow passable non-air blocks, while checking the villager's full body clearance.
+        for(Direction direction:Direction.Plane.HORIZONTAL)for(int dy=-1;dy<=1;dy++){
+            BlockPos candidate=target.relative(direction).offset(0,dy,0);
+            if(!level.hasChunkAt(candidate)||!level.hasChunkAt(candidate.below()))continue;
+            if(level.getBlockState(candidate.below()).getCollisionShape(level,candidate.below()).isEmpty())continue;
+            var offset=net.minecraft.world.phys.Vec3.atBottomCenterOf(candidate).subtract(villager.position());
+            if(level.noCollision(villager,villager.getBoundingBox().move(offset)))approaches.add(candidate);
         }
         approaches.sort(Comparator.<BlockPos>comparingDouble(p->villager.blockPosition().distSqr(p)).thenComparing(Comparator.naturalOrder()));
         for(BlockPos candidate:approaches){net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().createPath(candidate,0);if(path!=null&&path.canReach())return candidate;}
-        // Follow partial paths when the target is initially beyond the navigation search range.
-        // Inventory operations still require physical arrival at the chosen approach.
-        for(BlockPos candidate:approaches){net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().createPath(candidate,0);if(path!=null&&path.getNodeCount()>1)return candidate;}
+        // A partial path does not prove access to storage; leave the queued task/items intact.
         return null;
     }
     private boolean tickEmeraldTransfer(ServerLevel level,Villager villager){

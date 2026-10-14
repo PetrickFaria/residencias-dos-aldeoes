@@ -32,6 +32,73 @@ public final class ResidenceGameTests {
         catch(Exception e){throw new RuntimeException(e);}
     }
     private static void floor(GameTestHelper h){for(int x=0;x<16;x++)for(int z=0;z<16;z++)h.setBlock(new BlockPos(x,1,z),Blocks.STONE);}
+    @GameTest(template="empty",timeoutTicks=2400,batch="regression_dawn")
+    public static void floor_anchor_real_dawn_and_nearby_chest(GameTestHelper h){
+        floor(h);BlockPos hp=new BlockPos(6,1,6),cp=new BlockPos(12,2,6);
+        h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(cp,ResidenciasDosAldeoes.EMERALD_CHEST.get());
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(hp);
+        EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(cp);
+        Villager v=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));v.setAge(0);
+        ResidenceData data=ResidenceData.get(h.getLevel());check(data.link(h.getLevel(),h.absolutePos(hp),v).equals("ok"),"Floor home link failed");
+        check(anchor.getSize()==3,"Use the default small residence");
+        check(h.absolutePos(cp).distSqr(h.absolutePos(hp))>1,"Chest must lie outside the old one-block radius");
+        check(!h.getLevel().isEmptyBlock(h.absolutePos(hp).relative(Direction.NORTH)),"Reproduce solid neighbors at anchor Y");
+        check(invoke("findApproach",new Class[]{net.minecraft.server.level.ServerLevel.class,BlockPos.class,Villager.class},h.getLevel(),h.absolutePos(hp),v)!=null,"Floor anchor has no walkable approach");
+        h.getLevel().setDayTime(18000);int[] paid={0};double[] pickup={0};
+        h.runAtTickTime(5,()->h.getLevel().setDayTime(0));
+        h.runAtTickTime(190,()->check(anchor.isEmpty(),"Payment happened before the original 200 ticks"));
+        h.runAtTickTime(220,()->{paid[0]=anchor.getItem(0).getCount();check(paid[0]>0,"Payment absent after 10 seconds");});
+        h.runAtTickTime(1395,()->check(!v.getPersistentData().contains(JOB)&&chest.isEmpty(),"Transport started before one minute after payment"));
+        h.succeedWhen(()->{
+            if(v.getPersistentData().contains(JOB)&&v.getPersistentData().getCompound(JOB).contains("cargo"))pickup[0]=1;
+            check(!chest.isEmpty(),"Waiting for floor-anchor physical delivery");
+            check(paid[0]>0&&chest.getItem(0).getCount()==paid[0]&&anchor.isEmpty(),"Payment/transport lost or duplicated items");
+            check(v.getX()>h.absolutePos(hp).getX()+2,"Courier did not physically approach the chest");
+        });
+    }
+    @GameTest(template="empty",timeoutTicks=900)
+    public static void missing_chest_and_temporary_obstruction(GameTestHelper h){
+        floor(h);BlockPos hp=new BlockPos(6,1,6),cp=new BlockPos(10,2,6);
+        h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(hp);
+        Villager v=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));v.setAge(0);
+        ResidenceData data=ResidenceData.get(h.getLevel());data.link(h.getLevel(),h.absolutePos(hp),v);
+        var home=data.home(h.getLevel(),h.absolutePos(hp));long id=data.nextProductionDawnEventId();
+        anchor.recordDailyProduction(id,19);data.queueCollection(home,id,h.getLevel().getGameTime());
+        h.runAtTickTime(40,()->{
+            check(anchor.getItem(0).getCount()==19&&!v.getPersistentData().contains(JOB),"No chest consumed fragments");
+            h.setBlock(cp,ResidenciasDosAldeoes.EMERALD_CHEST.get());
+            for(Direction direction:Direction.Plane.HORIZONTAL)for(int y=0;y<3;y++)h.setBlock(cp.relative(direction).above(y),Blocks.STONE);
+        });
+        h.runAtTickTime(150,()->{
+            check(anchor.getItem(0).getCount()==19&&!v.getPersistentData().contains(JOB),"Blocked path consumed fragments or assigned an unreachable courier");
+            check(!home.pendingCollections.isEmpty(),"Unavailable route deleted queued work");
+            for(Direction direction:Direction.Plane.HORIZONTAL)for(int y=0;y<3;y++)h.setBlock(cp.relative(direction).above(y),Blocks.AIR);
+        });
+        h.succeedWhen(()->{
+            var chest=(EmeraldChestBlockEntity)h.getBlockEntity(cp);
+            check(chest!=null&&!chest.isEmpty(),"Waiting for retry after obstruction removed");
+            check(chest.getItem(0).getCount()==19&&anchor.isEmpty(),"Retry lost/duplicated fragments");
+        });
+    }
+    @GameTest(template="empty",timeoutTicks=700)
+    public static void first_available_registered_courier(GameTestHelper h){
+        floor(h);BlockPos hp=new BlockPos(6,2,6),cp=new BlockPos(10,2,6);
+        h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(cp,ResidenciasDosAldeoes.EMERALD_CHEST.get());
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(hp);
+        anchor.setSize(11);
+        Villager unavailable=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));unavailable.setAge(0);unavailable.setNoAi(true);
+        Villager courier=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));courier.setAge(0);
+        ResidenceData data=ResidenceData.get(h.getLevel());check(data.link(h.getLevel(),h.absolutePos(hp),unavailable).equals("ok"),"First link failed");check(data.link(h.getLevel(),h.absolutePos(hp),courier).equals("ok"),"Second link failed");
+        var home=data.home(h.getLevel(),h.absolutePos(hp));long id=data.nextProductionDawnEventId();
+        anchor.recordDailyProduction(id,23);data.queueCollection(home,id,h.getLevel().getGameTime());
+        h.succeedWhen(()->{
+            EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(cp);
+            check(!unavailable.getPersistentData().contains(JOB),"Unavailable resident assigned");
+            check(chest.getItem(0).getCount()==23&&anchor.isEmpty(),"Available second resident did not deliver");
+            check(courier.getX()>h.absolutePos(hp).getX()+1,"Second resident did not walk to chest");
+        });
+    }
     @GameTest(template="empty",timeoutTicks=100)
     public static void ten_output_slots_and_legacy_nbt(GameTestHelper h){
         BlockPos pos=new BlockPos(2,2,2);

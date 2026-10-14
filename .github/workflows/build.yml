@@ -1,4 +1,4 @@
-name: Build and Forge GameTest 1.0.45
+name: Build and Forge GameTest 1.0.46
 on:
   push:
   pull_request:
@@ -24,6 +24,7 @@ jobs:
           python3 tools/verify_emerald_chest.py
           python3 tools/verify_fragment_drops.py
       - name: Build installable mod
+        timeout-minutes: 15
         run: bash gradlew --no-daemon clean build
       - name: Run actual Forge GameTest server
         timeout-minutes: 8
@@ -38,7 +39,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.45
+          name: residencias-dos-aldeoes-1.0.46
           path: |
             build/libs/*.jar
             gametest-console.log

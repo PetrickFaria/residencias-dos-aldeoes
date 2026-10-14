@@ -95,7 +95,24 @@ public final class VisualClientCheck {
             server.execute(()->server.getPlayerList().getPlayer(uuid).teleportTo(server.overworld(),14,-56,18.5,180F,22F));
         }
         if(ticks==340)Screenshot.grab(new File("../build"),"visual-doors.png",mc.getMainRenderTarget(),message->{});
-        if(ticks==360){
+        if(ticks==345){
+            mc.options.hideGui=true;
+            var server=mc.getSingleplayerServer();var uuid=mc.player.getUUID();
+            server.execute(()->{
+                var level=server.overworld();BlockPos pos=new BlockPos(10,-58,8);
+                var state=ResidenciasDosAldeoes.REINFORCED_DOOR.get().defaultBlockState().setValue(DoorBlock.FACING,Direction.SOUTH);
+                level.setBlock(pos,state,3);level.setBlock(pos.above(),state.setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER),3);
+                server.getPlayerList().getPlayer(uuid).teleportTo(level,10.5,-58,12,180F,9F);
+            });
+        }
+        if(ticks==395)Screenshot.grab(new File("../build"),"visual-reference-door.png",mc.getMainRenderTarget(),message->{});
+        if(ticks==400){
+            var server=mc.getSingleplayerServer();var uuid=mc.player.getUUID();
+            server.execute(()->server.getPlayerList().getPlayer(uuid).teleportTo(server.overworld(),6.8,-56.3,11.2,194F,46F));
+        }
+        if(ticks==450)Screenshot.grab(new File("../build"),"visual-chest-cavity.png",mc.getMainRenderTarget(),message->{});
+        if(ticks==460){
+            mc.options.hideGui=false;
             var server=mc.getSingleplayerServer();var uuid=mc.player.getUUID();
             server.execute(()->{
                 var level=server.overworld();var player=server.getPlayerList().getPlayer(uuid);
@@ -112,11 +129,11 @@ public final class VisualClientCheck {
                     new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(pos),Direction.UP,pos,false));
             });
         }
-        if(ticks==420){
+        if(ticks==520){
             if(!(mc.screen instanceof br.com.residenciasaldeoes.client.AnchorScreen)||mc.player.containerMenu.slots.size()!=10)
                 throw new IllegalStateException("Anchor screen with ten slots did not open");
             Screenshot.grab(new File("../build"),"visual-anchor-slots.png",mc.getMainRenderTarget(),message->{});
         }
-        if(ticks==450)mc.stop();
+        if(ticks==550)mc.stop();
     }
 }

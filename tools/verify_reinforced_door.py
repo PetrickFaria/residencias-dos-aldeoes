@@ -59,11 +59,14 @@ def png_rgba(path):
  return width,height,alphas
 for half in ('lower','upper'):
  width,height,alphas=png_rgba(resources/f'assets/residenciasaldeoes/textures/block/reinforced_door_{half}.png')
- assert (width,height)==(16,16) and 0 in alphas
+ assert (width,height)==(64,64) and 0 in alphas
 width,height,alphas=png_rgba(resources/'assets/residenciasaldeoes/textures/item/reinforced_door.png')
-assert (width,height)==(16,32) and 0 in alphas
+assert (width,height)==(64,128) and 0 in alphas
 for path in resources.glob('assets/residenciasaldeoes/models/block/reinforced_door*.json'):
  model=json.loads(path.read_text())
  assert model['render_type']=='minecraft:cutout'
  assert model['parent'].startswith('minecraft:block/door_')
+ assert len(model['elements'])>10
+ assert model['elements'][0]['from']==[0,0,0] and model['elements'][0]['to']==[3,16,16]
+ assert any(e['from'][0]<0 or e['to'][0]>3 for e in model['elements'][1:])
 print('Vanilla door parents, 64 state mappings, cutout window alpha, recipe and 16x32 icon checks passed.')

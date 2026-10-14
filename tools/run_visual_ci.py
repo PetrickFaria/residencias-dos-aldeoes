@@ -11,12 +11,15 @@ source=Path('run-gametest/world')
 if not source.exists():
     sys.exit('GameTest world unavailable for graphical inspection.')
 shutil.copytree(source,Path('run/saves/visual-check'),dirs_exist_ok=True)
+# Inspect the unchanged Portuguese UI labels instead of untranslated English keys.
+Path('run').mkdir(exist_ok=True)
+Path('run/options.txt').write_text('lang:pt_br\nguiScale:3\n')
 log=Path('client-console.log')
 with log.open('w') as out:
     result=subprocess.run(['xvfb-run','-a','-s','-screen 0 1920x1080x24','bash','gradlew','--no-daemon','-Pvisual_check=true','runClient'],stdout=out,stderr=subprocess.STDOUT)
 text=log.read_text(errors='replace')
 print('\n'.join(text.splitlines()[-35:]))
-for name in ['visual-chests.png','visual-doors.png','visual-anchor-slots.png']:
+for name in ['visual-chests.png','visual-doors.png','visual-anchor-slots.png','visual-reference-door.png','visual-chest-cavity.png']:
     path=Path('build/screenshots')/name
     if not path.exists():sys.exit('Minecraft did not capture '+name)
     data=path.read_bytes()

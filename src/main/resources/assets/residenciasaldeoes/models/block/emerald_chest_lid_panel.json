@@ -10,7 +10,9 @@
     "top": "residenciasaldeoes:block/emerald_top",
     "bottom": "residenciasaldeoes:block/wood_bottom",
     "gem": "residenciasaldeoes:block/emerald_facet",
-    "gemshade": "residenciasaldeoes:block/emerald_shade"
+    "gemshade": "residenciasaldeoes:block/emerald_shade",
+    "inside": "residenciasaldeoes:block/emerald_chest_interior",
+    "frontwood": "residenciasaldeoes:block/wood_bottom"
   },
   "elements": [
     {
@@ -32,7 +34,7 @@
             16,
             16
           ],
-          "texture": "#side"
+          "texture": "#frontwood"
         },
         "south": {
           "uv": [
@@ -77,7 +79,7 @@
             16,
             16
           ],
-          "texture": "#bottom"
+          "texture": "#inside"
         }
       }
     },
