@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /** Prevents registered residents' claimed home POIs from satisfying village cat population checks. */
 @Mixin(CatSpawner.class)
 public abstract class CatSpawnerMixin {
-    @Inject(method="spawnInHouse",at=@At("HEAD"),cancellable=true)
+    @Inject(method="spawnInVillage",at=@At("HEAD"),cancellable=true)
     private void residenciasaldeoes$excludeResidentBedsFromVillageCatCount(ServerLevel level,BlockPos center,
                                                                            CallbackInfoReturnable<Integer> callback) {
         var homes=(java.util.function.Predicate<net.minecraft.core.Holder<net.minecraft.world.entity.ai.village.poi.PoiType>>)

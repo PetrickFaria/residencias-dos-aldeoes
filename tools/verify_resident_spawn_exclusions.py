@@ -9,7 +9,7 @@ assert '@Mixin(Villager.class)' in villager_mixin
 assert 'method="golemSpawnConditionsMet"' in villager_mixin
 assert 'ResidenceData.get(level).owner(villager.getUUID())!=null' in villager_mixin
 assert '@Mixin(CatSpawner.class)' in cat_mixin
-assert 'method="spawnInHouse"' in cat_mixin
+assert 'method="spawnInVillage"' in cat_mixin
 assert 'PoiManager.Occupancy.IS_OCCUPIED' in cat_mixin
 assert 'data.bedOwner(level.dimension(),poi.getPos())!=null' in cat_mixin
 assert 'occupiedHomes-residentHomes<=5' in cat_mixin
