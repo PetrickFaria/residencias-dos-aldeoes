@@ -334,10 +334,10 @@ public final class ResidenceGameTests {
         resident.getPersistentData().putBoolean("residenciasaldeoes_fragment_drop_processed",true);
         for(int slot=0;slot<27;slot++)chest.setItem(slot,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
         ItemStack refused=new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),15);check(chest.insertFragments(refused)==0&&refused.getCount()==15,"Full chest consumed in-transit cargo");
-        int total=anchor.getPendingFragments();for(int slot=0;slot<anchor.getContainerSize();slot++)total+=anchor.getItem(slot).getCount();total+=refused.getCount();
+        long total=anchor.getPendingFragments();for(int slot=0;slot<anchor.getContainerSize();slot++)total+=anchor.getItem(slot).getCount();total+=refused.getCount();
         check(total==50,"Full chest lost or duplicated fragments");
         resident.hurt(net.minecraft.world.damagesource.DamageSource.GENERIC,1000F);
-        int recovered=anchor.getPendingFragments();for(int slot=0;slot<anchor.getContainerSize();slot++)recovered+=anchor.getItem(slot).getCount();
+        long recovered=anchor.getPendingFragments();for(int slot=0;slot<anchor.getContainerSize();slot++)recovered+=anchor.getItem(slot).getCount();
         check(recovered==50,"Resident death failed to recover cargo");
         for(int slot=0;slot<27;slot++)chest.removeItem(slot,64);
         int delivered=0,trips=0;
