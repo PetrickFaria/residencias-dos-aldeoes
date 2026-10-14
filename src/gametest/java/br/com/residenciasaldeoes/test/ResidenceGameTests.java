@@ -129,6 +129,13 @@ public final class ResidenceGameTests {
         h.runAtTickTime(190,()->check(anchor.isEmpty(),"Payment happened before the original 200 ticks"));
         h.runAtTickTime(220,()->{paid[0]=anchor.getItem(0).getCount();check(paid[0]>0,"Payment absent after 10 seconds");});
         h.runAtTickTime(495,()->check(!v.getPersistentData().contains(JOB)&&chest.isEmpty(),"Transport started before 15 seconds after payment"));
+        h.runAtTickTime(2300,()->{
+            int anchorCount=0,chestCount=0,cargoCount=0;
+            for(int slot=0;slot<anchor.getContainerSize();slot++)anchorCount+=anchor.getItem(slot).getCount();
+            for(int slot=0;slot<chest.getContainerSize();slot++)chestCount+=chest.getItem(slot).getCount();
+            if(v.getPersistentData().contains(JOB)){var cargo=v.getPersistentData().getCompound(JOB).getList("cargo",10);for(int i=0;i<cargo.size();i++)cargoCount+=ItemStack.of(cargo.getCompound(i)).getCount();}
+            System.out.println("PHYSICAL_TRANSPORT_DIAGNOSTIC paid="+paid[0]+" anchor="+anchorCount+" pending="+anchor.getPendingFragments()+" chest="+chestCount+" cargo="+cargoCount+" stage="+(v.getPersistentData().contains(JOB)?v.getPersistentData().getCompound(JOB).getInt("stage"):-1)+" position="+v.blockPosition()+" openers="+chest.getCombinedOpeners());
+        });
         h.succeedWhen(()->{
             if(v.getPersistentData().contains(JOB)&&v.getPersistentData().getCompound(JOB).contains("cargo"))pickup[0]=1;
             check(!chest.isEmpty(),"Waiting for floor-anchor physical delivery");
