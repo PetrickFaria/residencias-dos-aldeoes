@@ -2,12 +2,12 @@
   "parent": "minecraft:block/block",
   "ambientocclusion": false,
   "textures": {
-    "particle": "residenciasaldeoes:block/wood_trim",
-    "gold": "residenciasaldeoes:block/wood_trim",
-    "shade": "residenciasaldeoes:block/corner_trim",
-    "green": "residenciasaldeoes:block/emerald_crystal_mid",
-    "light": "residenciasaldeoes:block/emerald_crystal_light",
-    "dark": "residenciasaldeoes:block/emerald_crystal_dark"
+    "particle": "residenciasaldeoes:block/chest_finish_wood_trim",
+    "gold": "residenciasaldeoes:block/chest_finish_wood_trim",
+    "shade": "residenciasaldeoes:block/chest_finish_corner_trim",
+    "green": "residenciasaldeoes:block/chest_finish_emerald_crystal_mid",
+    "light": "residenciasaldeoes:block/chest_finish_emerald_crystal_light",
+    "dark": "residenciasaldeoes:block/chest_finish_emerald_crystal_dark"
   },
   "elements": [
     {

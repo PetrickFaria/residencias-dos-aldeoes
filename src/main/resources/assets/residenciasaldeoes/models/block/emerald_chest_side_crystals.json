@@ -6,12 +6,12 @@
   "shade_quads": false,
   "emissive_ambient": true,
   "textures": {
-    "particle": "residenciasaldeoes:block/emerald_crystal_mid",
-    "crystal_light": "residenciasaldeoes:block/emerald_crystal_light",
-    "crystal_mid": "residenciasaldeoes:block/emerald_crystal_mid",
-    "crystal_dark": "residenciasaldeoes:block/emerald_crystal_dark",
-    "gold_light": "residenciasaldeoes:block/wood_trim",
-    "gold_shade": "residenciasaldeoes:block/corner_trim"
+    "particle": "residenciasaldeoes:block/chest_finish_emerald_crystal_mid",
+    "crystal_light": "residenciasaldeoes:block/chest_finish_emerald_crystal_light",
+    "crystal_mid": "residenciasaldeoes:block/chest_finish_emerald_crystal_mid",
+    "crystal_dark": "residenciasaldeoes:block/chest_finish_emerald_crystal_dark",
+    "gold_light": "residenciasaldeoes:block/chest_finish_wood_trim",
+    "gold_shade": "residenciasaldeoes:block/chest_finish_corner_trim"
   },
   "ambientocclusion": false
 }

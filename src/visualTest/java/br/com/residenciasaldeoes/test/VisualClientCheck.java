@@ -19,7 +19,7 @@ import java.io.File;
 /** Development-only scene; excluded from the installable main JAR. */
 @Mod.EventBusSubscriber(modid="residenciasaldeoes",value=Dist.CLIENT)
 public final class VisualClientCheck {
-    private static boolean requested,scene;
+    private static boolean requested,scene,depositCaptured,overlapVerified,closedCaptured;
     private static int ticks;
     @SubscribeEvent public static void tick(TickEvent.ClientTickEvent event){
         if(event.phase!=TickEvent.Phase.END||!Boolean.getBoolean("residencias.visualCheck"))return;
@@ -67,6 +67,12 @@ public final class VisualClientCheck {
                 }
                 level.setBlock(new BlockPos(1,-58,8),ResidenciasDosAldeoes.ANCHOR.get().defaultBlockState(),3);
                 level.setBlock(new BlockPos(4,-58,8),ResidenciasDosAldeoes.EMERALD_CHEST.get().defaultBlockState().setValue(ChestBlock.FACING,Direction.SOUTH),3);
+                var anchor=(br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity)level.getBlockEntity(new BlockPos(1,-58,8));anchor.setSize(11);
+                var courier=net.minecraft.world.entity.EntityType.VILLAGER.create(level);
+                courier.moveTo(1.5,-58,10.5,0F,0F);courier.setAge(0);level.addFreshEntity(courier);
+                var data=br.com.residenciasaldeoes.data.ResidenceData.get(level);data.link(level,new BlockPos(1,-58,8),courier);
+                long payment=data.nextProductionDawnEventId();anchor.recordDailyProduction(payment,17);
+                data.queueCollection(data.home(level,new BlockPos(1,-58,8)),payment,level.getGameTime());
                 BlockPos opened=new BlockPos(7,-58,8);
                 level.setBlock(opened,ResidenciasDosAldeoes.EMERALD_CHEST.get().defaultBlockState().setValue(ChestBlock.FACING,Direction.SOUTH),3);
                 level.blockEvent(opened,ResidenciasDosAldeoes.EMERALD_CHEST.get(),1,1);
@@ -89,6 +95,33 @@ public final class VisualClientCheck {
             });
         }
         ticks++;
+        if(mc.level.getBlockEntity(new BlockPos(4,-58,8)) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity delivery){
+            if(!depositCaptured&&delivery.getCourierOpeners()>0&&delivery.getOpenNess(0)>.8F){
+                depositCaptured=true;
+                Screenshot.grab(new File("../build"),"visual-courier-deposit.png",mc.getMainRenderTarget(),message->{});
+                var server=mc.getSingleplayerServer();var uuid=mc.player.getUUID();
+                server.execute(()->{
+                    var level=server.overworld();BlockPos pos=new BlockPos(4,-58,8);var player=server.getPlayerList().getPlayer(uuid);
+                    ResidenciasDosAldeoes.EMERALD_CHEST.get().use(level.getBlockState(pos),level,pos,player,net.minecraft.world.InteractionHand.MAIN_HAND,
+                        new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(pos),Direction.UP,pos,false));
+                });
+            }
+            if(depositCaptured&&!overlapVerified&&delivery.getCourierOpeners()==0&&delivery.getCombinedOpeners()>0&&delivery.getOpenNess(0)>.8F){
+                overlapVerified=true;System.out.println("COURIER_PLAYER_OVERLAP_PASSED");
+                var server=mc.getSingleplayerServer();var uuid=mc.player.getUUID();
+                server.execute(()->{
+                    var chest=(br.com.residenciasaldeoes.block.EmeraldChestBlockEntity)server.overworld().getBlockEntity(new BlockPos(4,-58,8));
+                    int deposited=0;for(int i=0;i<27;i++)deposited+=chest.getItem(i).getCount();
+                    if(deposited!=17)throw new IllegalStateException("Graphical courier delivery lost/duplicated fragments");
+                    System.out.println("COURIER_GRAPHICAL_DEPOSIT_PASSED fragments="+deposited);
+                    server.getPlayerList().getPlayer(uuid).closeContainer();
+                });
+            }
+            if(overlapVerified&&!closedCaptured&&delivery.getCombinedOpeners()==0&&delivery.getOpenNess(0)<.05F){
+                closedCaptured=true;System.out.println("COURIER_CLIENT_OPEN_CLOSE_PASSED");
+                Screenshot.grab(new File("../build"),"visual-courier-closed.png",mc.getMainRenderTarget(),message->{});
+            }
+        }
         if(ticks==250)Screenshot.grab(new File("../build"),"visual-chests.png",mc.getMainRenderTarget(),message->{});
         if(ticks==270){
             var server=mc.getSingleplayerServer();var uuid=mc.player.getUUID();
@@ -134,6 +167,6 @@ public final class VisualClientCheck {
                 throw new IllegalStateException("Anchor screen with ten slots did not open");
             Screenshot.grab(new File("../build"),"visual-anchor-slots.png",mc.getMainRenderTarget(),message->{});
         }
-        if(ticks==550)mc.stop();
+        if(ticks==550){if(!depositCaptured||!overlapVerified||!closedCaptured)throw new IllegalStateException("Courier/client opening checks incomplete");mc.stop();}
     }
 }

@@ -19,7 +19,7 @@ with log.open('w') as out:
     result=subprocess.run(['xvfb-run','-a','-s','-screen 0 1920x1080x24','bash','gradlew','--no-daemon','-Pvisual_check=true','runClient'],stdout=out,stderr=subprocess.STDOUT)
 text=log.read_text(errors='replace')
 print('\n'.join(text.splitlines()[-35:]))
-for name in ['visual-chests.png','visual-doors.png','visual-anchor-slots.png','visual-reference-door.png','visual-chest-cavity.png']:
+for name in ['visual-chests.png','visual-doors.png','visual-anchor-slots.png','visual-reference-door.png','visual-chest-cavity.png','visual-courier-deposit.png','visual-courier-closed.png']:
     path=Path('build/screenshots')/name
     if not path.exists():sys.exit('Minecraft did not capture '+name)
     data=path.read_bytes()
@@ -27,6 +27,8 @@ for name in ['visual-chests.png','visual-doors.png','visual-anchor-slots.png','v
         sys.exit('Invalid Minecraft screenshot: '+name)
 if result.returncode and 'Gradle build daemon disappeared unexpectedly' not in text:
     sys.exit(result.returncode)
+for marker in ['COURIER_PLAYER_OVERLAP_PASSED','COURIER_CLIENT_OPEN_CLOSE_PASSED','COURIER_GRAPHICAL_DEPOSIT_PASSED']:
+    if marker not in text:sys.exit('Minecraft client check missing '+marker)
 print('Real Minecraft client captured all three scenes; image inspection is still required.')
 
 # Reopen the same saved world in a fresh Minecraft JVM, without copying/resetting it.

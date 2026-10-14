@@ -9,10 +9,10 @@
       "parent": "residenciasaldeoes:block/emerald_chest_lid_panel"
     },
     "top_crystal": {
-      "parent": "residenciasaldeoes:block/emerald_top_crystal"
+      "parent": "residenciasaldeoes:block/emerald_chest_finished_emerald_top_crystal"
     },
     "top_trim": {
-      "parent": "residenciasaldeoes:block/emerald_top_trim"
+      "parent": "residenciasaldeoes:block/emerald_chest_finished_emerald_top_trim"
     },
     "clasp": {
       "parent": "residenciasaldeoes:block/emerald_chest_clasp"

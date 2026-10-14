@@ -1,4 +1,4 @@
-name: Build and Forge GameTest 1.0.46
+name: Build and Forge GameTest 1.0.47
 on:
   push:
   pull_request:
@@ -23,11 +23,13 @@ jobs:
           python3 tools/verify_reinforced_door.py
           python3 tools/verify_emerald_chest.py
           python3 tools/verify_fragment_drops.py
+          python3 tools/verify_approved_geometry.py
+          python3 tools/verify_texture_finish.py
       - name: Build installable mod
         timeout-minutes: 15
         run: bash gradlew --no-daemon clean build
       - name: Run actual Forge GameTest server
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: python3 tools/run_gametest_ci.py
       - name: Attempt graphical development client
         timeout-minutes: 8
@@ -39,7 +41,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.46
+          name: residencias-dos-aldeoes-1.0.47
           path: |
             build/libs/*.jar
             gametest-console.log

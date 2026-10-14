@@ -3,16 +3,16 @@
   "ambientocclusion": true,
   "gui_light": "side",
   "textures": {
-    "particle": "residenciasaldeoes:block/emerald_panel",
-    "wood": "residenciasaldeoes:block/wood_trim",
-    "corner": "residenciasaldeoes:block/corner_trim",
-    "side": "residenciasaldeoes:block/emerald_panel",
-    "top": "residenciasaldeoes:block/emerald_top",
-    "bottom": "residenciasaldeoes:block/wood_bottom",
-    "gem": "residenciasaldeoes:block/emerald_facet",
-    "gemshade": "residenciasaldeoes:block/emerald_shade",
-    "inside": "residenciasaldeoes:block/emerald_chest_interior",
-    "frontwood": "residenciasaldeoes:block/wood_bottom"
+    "particle": "residenciasaldeoes:block/chest_finish_emerald_panel",
+    "wood": "residenciasaldeoes:block/chest_finish_wood_trim",
+    "corner": "residenciasaldeoes:block/chest_finish_corner_trim",
+    "side": "residenciasaldeoes:block/chest_finish_emerald_panel",
+    "top": "residenciasaldeoes:block/chest_finish_emerald_top",
+    "bottom": "residenciasaldeoes:block/chest_finish_wood_bottom",
+    "gem": "residenciasaldeoes:block/chest_finish_emerald_facet",
+    "gemshade": "residenciasaldeoes:block/chest_finish_emerald_shade",
+    "inside": "residenciasaldeoes:block/chest_finish_emerald_chest_interior",
+    "frontwood": "residenciasaldeoes:block/chest_finish_wood_bottom"
   },
   "elements": [
     {

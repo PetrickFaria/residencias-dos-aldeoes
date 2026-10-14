@@ -7,6 +7,7 @@ import br.com.residenciasaldeoes.data.ResidenceData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.BeforeBatch;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.npc.Villager;
@@ -32,7 +33,72 @@ public final class ResidenceGameTests {
         catch(Exception e){throw new RuntimeException(e);}
     }
     private static void floor(GameTestHelper h){for(int x=0;x<16;x++)for(int z=0;z<16;z++)h.setBlock(new BlockPos(x,1,z),Blocks.STONE);}
-    @GameTest(template="empty",timeoutTicks=2400,batch="regression_dawn")
+    private static void clearFixtureWorld(net.minecraft.server.level.ServerLevel level){
+        var data=ResidenceData.get(level);
+        for(var home:new java.util.ArrayList<>(data.homes())){
+            if(!home.dimension.equals(level.dimension()))continue;
+            for(var id:new java.util.ArrayList<>(home.residents))if(level.getEntity(id) instanceof Villager resident)resident.discard();
+            data.unlinkAll(level,home.dimension,home.pos);
+        }
+        for(BlockPos pos:br.com.residenciasaldeoes.data.EmeraldChestIndex.registeredPositions(level)){
+            if(level.hasChunkAt(pos)&&level.getBlockEntity(pos) instanceof EmeraldChestBlockEntity chest){chest.clearContent();level.removeBlock(pos,false);}
+            br.com.residenciasaldeoes.data.EmeraldChestIndex.unregister(level,pos);
+        }
+    }
+    @BeforeBatch(batch="physical") public static void before_physical(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    @BeforeBatch(batch="full") public static void before_full(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    @BeforeBatch(batch="dawn") public static void before_dawn(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    @BeforeBatch(batch="floor") public static void before_floor(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    @BeforeBatch(batch="missing") public static void before_missing(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    @BeforeBatch(batch="available") public static void before_available(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    @BeforeBatch(batch="index") public static void before_index(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    @BeforeBatch(batch="lid") public static void before_lid(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    private static double navigationSpeed(Villager v){
+        try{var field=net.minecraft.world.entity.ai.navigation.PathNavigation.class.getDeclaredField("speedModifier");field.setAccessible(true);return field.getDouble(v.getNavigation());}
+        catch(Exception e){throw new RuntimeException(e);}
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="index")
+    public static void indexed_chest_range_and_invalidation(GameTestHelper h){
+        var level=h.getLevel();BlockPos center=h.absolutePos(new BlockPos(6,2,6));
+        var index=br.com.residenciasaldeoes.data.EmeraldChestIndex.class;
+        java.util.List<BlockPos> fixtures=new java.util.ArrayList<>();
+        for(int distance:new int[]{5,20,100,500,1000,1001}){
+            BlockPos pos=center.offset(distance,0,0);level.getChunkAt(pos); // Fixture setup ONLY: load test chunks explicitly.
+            level.setBlock(pos,ResidenciasDosAldeoes.EMERALD_CHEST.get().defaultBlockState(),3);
+            br.com.residenciasaldeoes.data.EmeraldChestIndex.register(level,pos);fixtures.add(pos);
+        }
+        var found=br.com.residenciasaldeoes.data.EmeraldChestIndex.nearby(level,center);
+        for(int i=0;i<5;i++)check(found.contains(fixtures.get(i)),"Indexed location missing at "+new int[]{5,20,100,500,1000}[i]+" blocks");
+        check(!found.contains(fixtures.get(5)),"Chest beyond 1000 blocks accepted");
+        BlockPos unloaded=center.offset(700,0,400);check(!level.hasChunkAt(unloaded),"Unloaded fixture chunk must start unloaded");
+        br.com.residenciasaldeoes.data.EmeraldChestIndex.register(level,unloaded);
+        check(!br.com.residenciasaldeoes.data.EmeraldChestIndex.nearby(level,center).contains(unloaded),"Unloaded entry accepted");
+        check(!level.hasChunkAt(unloaded),"Lookup forced a distant chunk load");
+        BlockPos ordinary=center.offset(4,0,0);level.setBlock(ordinary,Blocks.CHEST.defaultBlockState(),3);
+        br.com.residenciasaldeoes.data.EmeraldChestIndex.register(level,ordinary);
+        check(!br.com.residenciasaldeoes.data.EmeraldChestIndex.nearby(level,center).contains(ordinary),"Ordinary chest accepted");
+        level.removeBlock(fixtures.get(0),false);
+        check(!br.com.residenciasaldeoes.data.EmeraldChestIndex.nearby(level,center).contains(fixtures.get(0)),"Removed chest retained");
+        EmeraldChestBlockEntity full=(EmeraldChestBlockEntity)level.getBlockEntity(fixtures.get(1));
+        for(int slot=0;slot<27;slot++)full.setItem(slot,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
+        check(!full.hasFragmentSpace(),"Full chest reports available space");full.removeItem(26,1);check(full.hasFragmentSpace(),"Partially free stack ignored");
+        System.out.println("CHEST_LOCATION_RANGE_PASSED distances=5,20,100,500,1000; navigation not asserted for distant fixtures");
+        for(BlockPos pos:fixtures){if(level.getBlockEntity(pos) instanceof EmeraldChestBlockEntity chest)chest.clearContent();level.removeBlock(pos,false);}
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="lid")
+    public static void courier_lid_leases_and_player_overlap(GameTestHelper h){
+        BlockPos pos=new BlockPos(2,2,2);h.setBlock(pos,ResidenciasDosAldeoes.EMERALD_CHEST.get());
+        var chest=(EmeraldChestBlockEntity)h.getBlockEntity(pos);var first=java.util.UUID.randomUUID();var second=java.util.UUID.randomUUID();
+        chest.beginCourierDeposit(first);chest.beginCourierDeposit(second);
+        var player=net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(h.getLevel());
+        chest.startOpen(player);check(chest.getCombinedOpeners()==3,"Player and two couriers did not share opening");
+        chest.stopOpen(player);check(chest.getCombinedOpeners()==2,"Player close cancelled courier opening");
+        chest.finishCourierDeposit(first);
+        h.runAtTickTime(30,()->{check(chest.getCourierOpeners()==1,"Closing one courier cancelled the other");chest.finishCourierDeposit(second);});
+        h.runAtTickTime(70,()->{check(chest.getCombinedOpeners()==0,"Courier left lid permanently open");check(chest.getContainerSize()==27&&chest.isEmpty(),"Opening altered inventory");h.succeed();});
+    }
+    @GameTest(template="empty",timeoutTicks=2400,batch="floor")
     public static void floor_anchor_real_dawn_and_nearby_chest(GameTestHelper h){
         floor(h);BlockPos hp=new BlockPos(6,1,6),cp=new BlockPos(12,2,6);
         h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(cp,ResidenciasDosAldeoes.EMERALD_CHEST.get());
@@ -56,7 +122,7 @@ public final class ResidenceGameTests {
             check(v.getX()>h.absolutePos(hp).getX()+2,"Courier did not physically approach the chest");
         });
     }
-    @GameTest(template="empty",timeoutTicks=900)
+    @GameTest(template="empty",timeoutTicks=900,batch="missing")
     public static void missing_chest_and_temporary_obstruction(GameTestHelper h){
         floor(h);BlockPos hp=new BlockPos(6,1,6),cp=new BlockPos(10,2,6);
         h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());
@@ -81,7 +147,7 @@ public final class ResidenceGameTests {
             check(chest.getItem(0).getCount()==19&&anchor.isEmpty(),"Retry lost/duplicated fragments");
         });
     }
-    @GameTest(template="empty",timeoutTicks=700)
+    @GameTest(template="empty",timeoutTicks=700,batch="available")
     public static void first_available_registered_courier(GameTestHelper h){
         floor(h);BlockPos hp=new BlockPos(6,2,6),cp=new BlockPos(10,2,6);
         h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(cp,ResidenciasDosAldeoes.EMERALD_CHEST.get());
@@ -199,7 +265,7 @@ public final class ResidenceGameTests {
         }
         h.succeed();
     }
-    @GameTest(template="empty",timeoutTicks=2600)
+    @GameTest(template="empty",timeoutTicks=2600,batch="physical")
     public static void physical_transport_after_payment(GameTestHelper h){
         floor(h);
         BlockPos homePos=new BlockPos(6,2,6),chestPos=new BlockPos(10,2,6);
@@ -226,25 +292,32 @@ public final class ResidenceGameTests {
         anchor.setOutputItem(9,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),17));
         int produced=producedPayment+17;
         double startX=first.getX();
+        double originalSpeed=first.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).getBaseValue();
+        boolean[] walked={false,false};
         h.runAtTickTime(1190,()->check(chest.isEmpty()&&!first.getPersistentData().contains(JOB),"Collection started before 1200 ticks"));
         h.runAtTickTime(1202,()->ResidenciasDosAldeoes.REINFORCED_DOOR.get().setOpen(null,h.getLevel(),h.getLevel().getBlockState(h.absolutePos(deliveryDoor)),h.absolutePos(deliveryDoor),false));
         h.succeedWhen(()->{
+            if(first.getPersistentData().contains(JOB)&&first.getNavigation().getPath()!=null){
+                int stage=first.getPersistentData().getCompound(JOB).getInt("stage");
+                if(stage==0||stage==1){check(Math.abs(navigationSpeed(first)-.5D)<.0001D,"Courier is running");walked[stage]=true;}
+            }
             check(!chest.isEmpty(),"Waiting for physical deposit; resident="+first.blockPosition()+" job="+first.getPersistentData().getCompound(JOB));
             check(chest.getItem(0).getCount()==produced,"Lost or duplicated fragments");
             check(Math.abs(first.getX()-startX)>2,"Villager did not walk");
             check(!second.getPersistentData().contains(JOB),"Second resident was assigned conflicting transport");
             check(h.getLevel().getBlockState(h.absolutePos(deliveryDoor)).getValue(DoorBlock.OPEN),"Courier failed to open the reinforced door");
             check(anchor.isEmpty(),"Anchor not collected");
+            check(walked[0]&&walked[1],"Walking speed not observed on both legs");
+            check(first.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).getBaseValue()==originalSpeed,"Normal movement attribute changed");
         });
     }
-    @GameTest(template="empty",timeoutTicks=1600)
+    @GameTest(template="empty",timeoutTicks=1600,batch="full")
     public static void full_chest_multiple_trips_and_recovery(GameTestHelper h){
         floor(h);
         BlockPos hp=new BlockPos(6,2,6),cp=new BlockPos(10,2,6);
         h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(cp,ResidenciasDosAldeoes.EMERALD_CHEST.get());
         ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(hp);anchor.setSize(11);
         EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(cp);
-        for(int i=0;i<27;i++)chest.setItem(i,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
         Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));first.setAge(0);
         ResidenceData data=ResidenceData.get(h.getLevel());
         check(data.link(h.getLevel(),h.absolutePos(hp),first).equals("ok"),"Link failed");
@@ -255,16 +328,7 @@ public final class ResidenceGameTests {
         data.queueCollection(home,id,h.getLevel().getServer().overworld().getGameTime());
         long secondId=data.nextProductionDawnEventId();anchor.recordDailyProduction(secondId,325);
         data.queueCollection(home,secondId,h.getLevel().getServer().overworld().getGameTime());
-        h.runAtTickTime(5,()->{
-            var cargo=first.getPersistentData().getCompound(JOB).getList("cargo",10);
-            check(cargo.size()==1&&ItemStack.of(cargo.getCompound(0)).getCount()==64,"First resident did not collect one full stack");
-            net.minecraft.nbt.CompoundTag save=new net.minecraft.nbt.CompoundTag();first.saveWithoutId(save);first.load(save);
-            var restored=first.getPersistentData().getCompound(JOB).getList("cargo",10);
-            check(restored.size()==1&&ItemStack.of(restored.getCompound(0)).getCount()==64,"Cargo failed NBT roundtrip");
-            first.hurt(net.minecraft.world.damagesource.DamageSource.GENERIC,1000F);
-            int recovered=(int)anchor.getPendingFragments();for(int i=0;i<anchor.getContainerSize();i++)recovered+=anchor.getItem(i).getCount();
-            check(recovered==650,"Resident death lost or duplicated in-transit fragments");
-        });
+        boolean[] killed={false};
         h.runAtTickTime(180,()->{
             int total=(int)anchor.getPendingFragments();for(int i=0;i<anchor.getContainerSize();i++)total+=anchor.getItem(i).getCount();
             var cargo=replacement.getPersistentData().getCompound(JOB).getList("cargo",10);
@@ -276,6 +340,18 @@ public final class ResidenceGameTests {
             for(int i=0;i<27;i++)chest.removeItem(i,64);
         });
         h.succeedWhen(()->{
+            if(!killed[0]){
+            var cargo=first.getPersistentData().getCompound(JOB).getList("cargo",10);
+            check(cargo.size()==1&&ItemStack.of(cargo.getCompound(0)).getCount()==64,"First resident did not collect one full stack");
+            net.minecraft.nbt.CompoundTag save=new net.minecraft.nbt.CompoundTag();first.saveWithoutId(save);first.load(save);
+            var restored=first.getPersistentData().getCompound(JOB).getList("cargo",10);
+            check(restored.size()==1&&ItemStack.of(restored.getCompound(0)).getCount()==64,"Cargo failed NBT roundtrip");
+            for(int i=0;i<27;i++)chest.setItem(i,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
+            first.hurt(net.minecraft.world.damagesource.DamageSource.GENERIC,1000F);
+            int recovered=(int)anchor.getPendingFragments();for(int i=0;i<anchor.getContainerSize();i++)recovered+=anchor.getItem(i).getCount();
+            check(recovered==650,"Resident death lost or duplicated in-transit fragments");
+                killed[0]=true;
+            }
             int total=0;for(int i=0;i<27;i++)total+=chest.getItem(i).getCount();
             check(total==650,"Waiting for multiple safe trips");
             check(anchor.isEmpty()&&anchor.getPendingFragments()==0,"Fragments remain at anchor");

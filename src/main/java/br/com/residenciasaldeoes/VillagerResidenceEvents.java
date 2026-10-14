@@ -144,6 +144,8 @@ public class VillagerResidenceEvents {
             }
         }
     }
+    public static final double COURIER_WALK_SPEED=.5D;
+    private static final java.util.Map<ServerLevel,java.util.Map<BlockPos,Long>> COLLECTION_SEARCH_AFTER=new java.util.WeakHashMap<>();
     private void beginScheduledCollections(ServerLevel level,long currentGameTime){
         ResidenceData data=ResidenceData.get(level);
         for(ResidenceData.Home home:new ArrayList<>(data.homes())){
@@ -157,6 +159,9 @@ public class VillagerResidenceEvents {
             if(alreadyDelivering)continue;
             if(!level.hasChunkAt(home.pos)||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor))continue;
             if(anchor.isEmpty()){data.completeCollection(home,pending);continue;}
+            var attempts=COLLECTION_SEARCH_AFTER.computeIfAbsent(level,l->new java.util.HashMap<>());
+            if(currentGameTime<attempts.getOrDefault(home.pos,Long.MIN_VALUE))continue;
+            attempts.put(home.pos,currentGameTime+40L);
             for(UUID id:home.residents){
                 if(!(level.getEntity(id) instanceof Villager villager)||!villager.isAlive()||villager.isBaby()
                         ||villager.isNoAi()||villager.isSleeping()||villager.isTrading()
@@ -175,15 +180,11 @@ public class VillagerResidenceEvents {
         }
     }
     private static BlockPos findEmeraldChest(ServerLevel level,ResidenceData.Home home,Villager villager){
-        int radius=Math.max(8,home.size/2);List<BlockPos> candidates=new ArrayList<>();
-        for(int y=home.pos.getY()-2;y<=home.pos.getY()+Math.max(6,home.size);y++)
-            for(int x=home.pos.getX()-radius;x<=home.pos.getX()+radius;x++)
-                for(int z=home.pos.getZ()-radius;z<=home.pos.getZ()+radius;z++){
-                    BlockPos pos=new BlockPos(x,y,z);
-                    if(level.hasChunkAt(pos)&&level.getBlockEntity(pos) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity)candidates.add(pos);
-                }
-        candidates.sort(Comparator.<BlockPos>comparingDouble(p->p.distSqr(home.pos)).thenComparing(Comparator.naturalOrder()));
-        for(BlockPos candidate:candidates)if(findApproach(level,candidate,villager)!=null)return candidate;
+        // Query only indexed, loaded chests; the origin remains the resident's home block.
+        for(BlockPos candidate:br.com.residenciasaldeoes.data.EmeraldChestIndex.nearby(level,home.pos)){
+            if(level.getBlockEntity(candidate) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity chest
+                    &&chest.hasFragmentSpace()&&findApproach(level,candidate,villager)!=null)return candidate;
+        }
         return null;
     }
     private static BlockPos findApproach(ServerLevel level,BlockPos target,Villager villager){
@@ -242,8 +243,15 @@ public class VillagerResidenceEvents {
 
             }else if(stage==1){
                 if(!(level.getBlockEntity(chestPos) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity chest)){finishEmeraldTransfer(level,villager,job,true);return true;}
+                if(!job.contains("deposit_started")||!chest.isCourierDepositing(villager.getUUID())){
+                    chest.beginCourierDeposit(villager.getUUID());job.putLong("deposit_started",now);
+                    villager.getNavigation().stop();return true;
+                }
+                chest.refreshCourierDeposit(villager.getUUID());
+                if(now-job.getLong("deposit_started")<10L)return true;
                 List<ItemStack> cargo=readTransferCargo(job);List<ItemStack> remainder=new ArrayList<>();
                 for(ItemStack stack:cargo){chest.insertFragments(stack);if(!stack.isEmpty())remainder.add(stack);}
+                chest.finishCourierDeposit(villager.getUUID());job.remove("deposit_started");
                 if(remainder.isEmpty()){job.remove("cargo");job.putInt("stage",0);villager.getPersistentData().put(EMERALD_TRANSFER,job);}
                 else{ListTag items=new ListTag();for(ItemStack stack:remainder)items.add(stack.save(new CompoundTag()));job.put("cargo",items);job.putInt("stage",2);villager.getPersistentData().put(EMERALD_TRANSFER,job);}
             }else{
@@ -253,7 +261,7 @@ public class VillagerResidenceEvents {
                 finishEmeraldTransfer(level,villager,job,false);
             }
         }else if(villager.getNavigation().isDone()||villager.tickCount%10==0){
-            villager.getNavigation().moveTo(target.getX()+.5D,target.getY(),target.getZ()+.5D,.8D);
+            villager.getNavigation().moveTo(target.getX()+.5D,target.getY(),target.getZ()+.5D,COURIER_WALK_SPEED);
         }
         openTransferDoors(level,villager);
         return true;
@@ -283,6 +291,8 @@ public class VillagerResidenceEvents {
         return items;
     }
     private static void finishEmeraldTransfer(ServerLevel level,Villager villager,CompoundTag job,boolean returnCargo){
+        BlockPos depositChest=BlockPos.of(job.getLong("chest"));
+        if(level.hasChunkAt(depositChest)&&level.getBlockEntity(depositChest) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity chest)chest.finishCourierDeposit(villager.getUUID());
         if(returnCargo){List<ItemStack> cargo=readTransferCargo(job);BlockPos anchorPos=BlockPos.of(job.getLong("anchor"));
             if(level.hasChunkAt(anchorPos)&&level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor)anchor.restoreFragments(cargo);
             else for(ItemStack stack:cargo)if(!stack.isEmpty())villager.spawnAtLocation(stack);
