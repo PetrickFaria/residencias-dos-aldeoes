@@ -58,8 +58,6 @@ public class VillagerResidenceEvents {
     private static final long RETURN_TIMEOUT_TICKS=300L;
     private static final long THREAT_RETURN_TIMEOUT_TICKS=150L;
     private static final long RETURN_RETRY_TICKS=20L;
-    private static final long TICKS_AFTER_DAWN_FOR_PAYMENT=200L;
-    private static final long TICKS_AFTER_PAYMENT_FOR_COLLECTION=300L;
     private static final String EMERALD_TRANSFER="residenciasaldeoes_emerald_transfer";
     /**
      * Captures /time changes before a same-tick set/add can be overwritten by the level sampler.
@@ -121,7 +119,7 @@ public class VillagerResidenceEvents {
         long eventId=data.nextProductionDawnEventId();
         for(ResidenceData.Home home:new ArrayList<>(data.homes()))
             if(home.dimension.equals(level.dimension())&&!home.residents.isEmpty())
-                data.queueProductionDawn(home,gameTime+TICKS_AFTER_DAWN_FOR_PAYMENT,eventId);
+                data.queueProductionDawn(home,gameTime+ResidenceConfig.PAYMENT_DELAY_TICKS.get(),eventId);
     }
     private void processLoadedProduction(ServerLevel level,long currentGameTime){
         ResidenceData data=ResidenceData.get(level);
@@ -138,14 +136,13 @@ public class VillagerResidenceEvents {
                 boolean recorded=anchor.recordDailyProduction(eventId,fragments);
                 if(recorded&&fragments>0){
                     playProductionBell(level,residents);
-                    data.queueCollection(home,eventId,currentGameTime+TICKS_AFTER_PAYMENT_FOR_COLLECTION);
+                    data.queueCollection(home,eventId,currentGameTime+ResidenceConfig.COLLECTION_DELAY_TICKS.get());
                 }
                 data.completeProductionDawn(home,task);
             }
         }
     }
     public static final double COURIER_WALK_SPEED=.5D;
-    public static final int COURIER_MAX_FRAGMENTS_PER_TRIP=15;
     private static final java.util.Map<ServerLevel,java.util.Map<BlockPos,Long>> COLLECTION_SEARCH_AFTER=new java.util.WeakHashMap<>();
     private void beginScheduledCollections(ServerLevel level,long currentGameTime){
         ResidenceData data=ResidenceData.get(level);
@@ -234,7 +231,7 @@ public class VillagerResidenceEvents {
         if(villager.blockPosition().distSqr(target)<2.25D){
             if(job.getInt("stage")==0){
                 if(!(level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor)){finishEmeraldTransfer(level,villager,job,true);return true;}
-                List<ItemStack> cargo=anchor.takeAvailableFragments(COURIER_MAX_FRAGMENTS_PER_TRIP);
+                List<ItemStack> cargo=anchor.takeAvailableFragments(ResidenceConfig.MAX_FRAGMENTS_PER_TRIP.get());
                 if(cargo.isEmpty()){
                     ResidenceData data=ResidenceData.get(level);
                     ResidenceData.PendingCollection pending=data.dueCollection(owner,level.getServer().overworld().getGameTime());
@@ -311,7 +308,7 @@ public class VillagerResidenceEvents {
     private int calculateDailyFragments(List<UUID> residents,int[] resources){
         int total=0;
         for(int index=0;index<residents.size();index++){
-            total+=3;
+            total+=ResidenceConfig.BASE_FRAGMENTS_PER_RESIDENT.get();
             if(index<resources[0])total++;
             if(index<resources[1])total++;
             if(index<resources[2])total++;
@@ -323,7 +320,7 @@ public class VillagerResidenceEvents {
         for(UUID resident:residents)if(level.getEntity(resident) instanceof Villager villager)
             level.playSound(null,villager.blockPosition(),SoundEvents.VILLAGER_NO,SoundSource.NEUTRAL,0.75F,1.0F);
     }
-    @SubscribeEvent public void onVillagerJoin(EntityJoinLevelEvent event){if(event.getEntity() instanceof Villager v&&event.getLevel() instanceof ServerLevel sl){ResidenceData data=ResidenceData.get(sl);data.applyPendingNameRestoration(v);if(data.owner(v.getUUID())!=null)data.applyResidentName(v);}}
+    @SubscribeEvent public void onVillagerJoin(EntityJoinLevelEvent event){if(event.getEntity() instanceof Villager v&&event.getLevel() instanceof ServerLevel sl){ResidenceData data=ResidenceData.get(sl);data.applyPendingNameRestoration(v);if(data.reconcileCapturedResident(sl,v))data.applyResidentName(v);}}
     @SubscribeEvent public void onStartTracking(PlayerEvent.StartTracking event){if(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player&&event.getTarget() instanceof Villager villager&&player.level instanceof ServerLevel level&&level.dimension().equals(villager.level.dimension())){ResidenceData.ResidentSkin skin=ResidenceData.get(level).residentSkin(villager.getUUID());if(skin!=null)br.com.residenciasaldeoes.network.ModNetwork.sendSkin(player,villager.getUUID(),skin);}}
     @SubscribeEvent public void onVillageCatSpawn(LivingSpawnEvent.CheckSpawn event) {
         if (!(event.getEntity() instanceof net.minecraft.world.entity.animal.Cat cat) || event.getSpawner()!=null || !(cat.level instanceof ServerLevel level)) return;

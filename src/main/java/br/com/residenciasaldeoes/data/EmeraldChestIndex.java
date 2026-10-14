@@ -1,6 +1,7 @@
 package br.com.residenciasaldeoes.data;
 
 import br.com.residenciasaldeoes.block.EmeraldChestBlockEntity;
+import br.com.residenciasaldeoes.ResidenceConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -13,7 +14,6 @@ import java.util.*;
 /** Loaded-world index: never enumerates blocks or creates chunk tickets. */
 @Mod.EventBusSubscriber(modid="residenciasaldeoes")
 public final class EmeraldChestIndex {
-    public static final int SEARCH_RADIUS=1000;
     private static final Map<ServerLevel,Map<Long,Set<BlockPos>>> LEVELS=new WeakHashMap<>();
     private EmeraldChestIndex(){}
     public static void register(ServerLevel level,BlockPos pos){
@@ -30,15 +30,16 @@ public final class EmeraldChestIndex {
         return result;
     }
     public static List<BlockPos> nearby(ServerLevel level,BlockPos center){
+        int searchRadius=ResidenceConfig.CHEST_SEARCH_RADIUS.get();
         List<BlockPos> result=new ArrayList<>();var chunks=LEVELS.get(level);if(chunks==null)return result;
-        int minX=(center.getX()-SEARCH_RADIUS)>>4,maxX=(center.getX()+SEARCH_RADIUS)>>4;
-        int minZ=(center.getZ()-SEARCH_RADIUS)>>4,maxZ=(center.getZ()+SEARCH_RADIUS)>>4;
+        int minX=(center.getX()-searchRadius)>>4,maxX=(center.getX()+searchRadius)>>4;
+        int minZ=(center.getZ()-searchRadius)>>4,maxZ=(center.getZ()+searchRadius)>>4;
         for(var entry:new ArrayList<>(chunks.entrySet())){
             ChunkPos chunk=new ChunkPos(entry.getKey());if(chunk.x<minX||chunk.x>maxX||chunk.z<minZ||chunk.z>maxZ)continue;
             for(BlockPos pos:new ArrayList<>(entry.getValue())){
                 if(!level.hasChunkAt(pos)){unregister(level,pos);continue;}
                 if(!(level.getBlockEntity(pos) instanceof EmeraldChestBlockEntity)){unregister(level,pos);continue;}
-                if(pos.distSqr(center)<=(double)SEARCH_RADIUS*SEARCH_RADIUS)result.add(pos);
+                if(pos.distSqr(center)<=(double)searchRadius*searchRadius)result.add(pos);
             }
         }
         result.sort(Comparator.<BlockPos>comparingDouble(p->p.distSqr(center)).thenComparing(Comparator.naturalOrder()));

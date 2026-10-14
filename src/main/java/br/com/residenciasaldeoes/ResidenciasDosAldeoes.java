@@ -18,6 +18,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -46,6 +48,7 @@ public class ResidenciasDosAldeoes {
     public ResidenciasDosAldeoes() {
         IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
         BLOCKS.register(bus); ITEMS.register(bus); BLOCK_ENTITIES.register(bus); MENUS.register(bus);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, ResidenceConfig.SPEC, "residenciasaldeoes-common.toml");
         ModNetwork.register();
         MinecraftForge.EVENT_BUS.register(new VillagerResidenceEvents());
     }

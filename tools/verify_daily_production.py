@@ -4,6 +4,7 @@ root = Path('.')
 data = (root / 'src/main/java/br/com/residenciasaldeoes/data/ResidenceData.java').read_text()
 be = (root / 'src/main/java/br/com/residenciasaldeoes/block/ResidentialAnchorBlockEntity.java').read_text()
 events = (root / 'src/main/java/br/com/residenciasaldeoes/VillagerResidenceEvents.java').read_text()
+config = (root / 'src/main/java/br/com/residenciasaldeoes/ResidenceConfig.java').read_text()
 menu = (root / 'src/main/java/br/com/residenciasaldeoes/menu/AnchorMenu.java').read_text()
 screen = (root / 'src/main/java/br/com/residenciasaldeoes/client/AnchorScreen.java').read_text()
 
@@ -23,12 +24,18 @@ assert 'after.dayTime()-before.dayTime()==1L' in events
 assert 'DAWN_COMMAND_WINDOW_TICKS=1_200L' in events
 assert 'boolean adjustedClock=' in events
 assert 'oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS' in events
-assert 'TICKS_AFTER_DAWN_FOR_PAYMENT=200L' in events
-assert 'TICKS_AFTER_PAYMENT_FOR_COLLECTION=300L' in events
-assert 'COURIER_MAX_FRAGMENTS_PER_TRIP=15' in events
-assert 'takeAvailableFragments(COURIER_MAX_FRAGMENTS_PER_TRIP)' in events
-assert 'gameTime+TICKS_AFTER_DAWN_FOR_PAYMENT' in events
-assert 'currentGameTime+TICKS_AFTER_PAYMENT_FOR_COLLECTION' in events
+assert 'defineInRange("fragmentosBasePorResidente", 3, 0, 64)' in config
+assert 'defineInRange("esperaPagamentoTicks", 200, 20, 12000)' in config
+assert 'defineInRange("esperaTransporteTicks", 300, 20, 12000)' in config
+assert 'defineInRange("maximoPorViagem", 15, 1, 64)' in config
+assert 'defineInRange("alcanceLocalizacaoBau", 1000, 16, 4096)' in config
+index = (root / 'src/main/java/br/com/residenciasaldeoes/data/EmeraldChestIndex.java').read_text()
+assert 'ResidenceConfig.CHEST_SEARCH_RADIUS.get()' in index
+assert 'level.hasChunkAt(pos)' in index
+assert 'ResidenceConfig.PAYMENT_DELAY_TICKS.get()' in events
+assert 'ResidenceConfig.COLLECTION_DELAY_TICKS.get()' in events
+assert 'ResidenceConfig.MAX_FRAGMENTS_PER_TRIP.get()' in events
+assert 'takeAvailableFragments(ResidenceConfig.MAX_FRAGMENTS_PER_TRIP.get())' in events
 assert 'currentGameTime<task.dueGameTime()' in events
 assert 'RESIDENT_MATURITY_TICKS' not in events
 assert 'next_production_dawn_event_id' in data and 'lastAcceptedDawnGameTime' in data

@@ -100,6 +100,25 @@ public final class ResidenceGameTests {
         for(BlockPos pos:fixtures){if(level.getBlockEntity(pos) instanceof EmeraldChestBlockEntity chest)chest.clearContent();level.removeBlock(pos,false);}
         h.succeed();
     }
+    @GameTest(template="empty",timeoutTicks=100,batch="index")
+    public static void captured_resident_identity_rebinds_without_duplicates(GameTestHelper h){
+        var level=h.getLevel();var data=ResidenceData.get(level);BlockPos home=h.absolutePos(new BlockPos(6,2,6));
+        Villager original=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,4));
+        check(data.link(level,home,original).equals("ok"),"Could not register capture fixture");
+        check(data.reconcileCapturedResident(level,original),"Registered resident identity was not initialized");
+        net.minecraft.nbt.CompoundTag captured=original.getPersistentData().copy();
+        Villager duplicateWhileOriginalExists=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,4));duplicateWhileOriginalExists.getPersistentData().merge(captured);
+        check(!data.reconcileCapturedResident(level,duplicateWhileOriginalExists),"Duplicate capture copy took a live resident registration");
+        original.discard();
+        Villager released=h.spawn(EntityType.VILLAGER,new BlockPos(7,2,4));released.getPersistentData().merge(captured);
+        ResidenceData reloaded=ResidenceData.load(data.save(new net.minecraft.nbt.CompoundTag()));
+        check(reloaded.reconcileCapturedResident(level,released),"Release with a new entity UUID did not restore the resident link");
+        check(reloaded.owner(released.getUUID())!=null&&reloaded.count(level.dimension(),home)==1,"Resident record was lost or duplicated after release");
+        check(reloaded.owner(captured.getUUID("residenciasaldeoes_resident_identity"))==null,"Stable identity leaked into the entity UUID owner index");
+        Villager ordinary=h.spawn(EntityType.VILLAGER,new BlockPos(8,2,4));
+        check(!reloaded.reconcileCapturedResident(level,ordinary),"Ordinary villager was treated as a resident");
+        System.out.println("CAPTURE_IDENTITY_REBIND_PASSED persisted_token=true duplicate_live_entity_rejected=true");h.succeed();
+    }
     @GameTest(template="empty",timeoutTicks=100,batch="lid")
     public static void courier_lid_leases_and_player_overlap(GameTestHelper h){
         BlockPos pos=new BlockPos(2,2,2);h.setBlock(pos,ResidenciasDosAldeoes.EMERALD_CHEST.get());
