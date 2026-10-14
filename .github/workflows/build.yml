@@ -31,11 +31,6 @@ jobs:
       - name: Run actual Forge GameTest server
         timeout-minutes: 12
         run: python3 tools/run_gametest_ci.py
-      - name: Attempt graphical development client
-        if: always()
-        timeout-minutes: 8
-        continue-on-error: true
-        run: python3 tools/run_visual_ci.py
       - name: Prepare compiled JAR, complete source and report
         if: always()
         run: python3 tools/prepare_delivery.py
