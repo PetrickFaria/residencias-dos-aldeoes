@@ -1,7 +1,7 @@
 from pathlib import Path
 import os, hashlib, subprocess, shutil
 
-version='1.0.49'
+version=dict(line.split('=',1) for line in Path('gradle.properties').read_text().splitlines() if '=' in line)['mod_version']
 out=Path('artifact-output');out.mkdir(exist_ok=True)
 jar=Path(f'build/libs/residencias-dos-aldeoes-{version}.jar')
 shutil.copy2(jar,out/jar.name)
@@ -15,10 +15,13 @@ sha=os.environ['GITHUB_SHA']
 
 Minecraft Java 1.19.2 / Forge 43.5.0 / Java 17.
 
-- Preview de residência: removido envio de faces por BufferUploader privado; preenchimentos usam RenderType dedicado e buffer compartilhado. Contornos e dimensões preservados.
-- Porta Reforçada: comportamento de abertura herdado de DoorBlock, pequeno afastamento dos reforços metálicos das faces externas e ícone GUI afinado; modelos do mundo preservados.
-- Geração de golens e gatos: aldeões residentes excluídos apenas dos critérios de população pertinentes.
-- Camas: reivindicações exclusivas verificadas no início do sono e tratadas em conflitos/ocupação temporária.
+- Renderização de limites: um único listener em AFTER_TRANSLUCENT_BLOCKS; contornos e preenchimentos usam uma fonte de buffer privada por frame e as coordenadas das caixas foram mantidas.
+- Bloco Residencial: painel verde com facetas discretas; modelo, dimensões e colisão preservados.
+- Baú Esmerálico: manteve as texturas refinadas já presentes e a animação/27 slots; não foi alterada a receita.
+- Fragmento: textura 16x16 redesenhada como cristal irregular; identificador e receita preservados.
+- Configuração: config/residenciasaldeoes-common.toml; padrões 3, 200, 300, 15 e 1000. Reinicie o jogo/servidor para reler o TOML.
+- Capture to Mob: identidade persistente para reconciliar um residente recriado com outro UUID; duplicatas com o original carregado são recusadas; sem dependência obrigatória.
+- GameTests Forge: 16 testes aprovados, incluindo persistência de inventário, transporte, range e rebind de identidade.
 
 Commit: {sha}.
 SHA-256 JAR: {hashlib.sha256(jar.read_bytes()).hexdigest()}.
