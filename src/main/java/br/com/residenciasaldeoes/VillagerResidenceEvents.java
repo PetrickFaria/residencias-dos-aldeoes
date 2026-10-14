@@ -364,6 +364,18 @@ public class VillagerResidenceEvents {
         long time=level.getDayTime()%24000L;boolean night=time>=13000L&&time<23000L;
         boolean inside=insideResidence(villager.getX(),villager.getY(),villager.getZ(),home);
         BlockPos sleepingAt=villager.getSleepingPos().orElse(null);
+        if(villager.isSleeping()&&sleepingAt!=null){
+            UUID bedOwner=data.bedOwner(level.dimension(),sleepingAt);
+            if(bedOwner!=null&&!bedOwner.equals(villager.getUUID())){
+                // A stale or pre-existing collision must not steal the reserved bed.
+                villager.stopSleeping();villager.getNavigation().stop();
+                villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+                villager.getBrain().eraseMemory(MemoryModuleType.PATH);
+                ResidenceData.BedClaim ownClaim=data.bedClaim(villager.getUUID());
+                if(ownClaim==null||ownClaim.bed().equals(sleepingAt))data.releaseBed(villager.getUUID());
+                sleepingAt=null;
+            }
+        }
         if(villager.isSleeping()&&sleepingAt!=null&&!bedInsideHome(level,sleepingAt,home)){
             // The home bounds may have changed while this villager or its saved bed claim was unloaded.
             villager.stopSleeping();villager.getNavigation().stop();
@@ -390,12 +402,35 @@ public class VillagerResidenceEvents {
             if(!night){if(villager.isSleeping())villager.stopSleeping();return;}
             if(villager.isSleeping()){
                 ResidenceData.BedClaim claim=data.bedClaim(villager.getUUID());
-                if(sleepingAt!=null&&level.getBlockState(sleepingAt).getBlock() instanceof BedBlock&&(claim==null||!sleepingAt.equals(claim.bed())))data.reserveBed(villager.getUUID(),level.dimension(),home.pos,sleepingAt);
+                if(sleepingAt!=null&&level.getBlockState(sleepingAt).getBlock() instanceof BedBlock
+                        &&(claim==null||!sleepingAt.equals(claim.bed()))
+                        &&!data.reserveBed(villager.getUUID(),level.dimension(),home.pos,sleepingAt)){
+                    villager.stopSleeping();villager.getNavigation().stop();
+                    villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+                    villager.getBrain().eraseMemory(MemoryModuleType.PATH);
+                }
             }else if(villager.tickCount%40==0){
                 ResidenceData.BedClaim claim=data.bedClaim(villager.getUUID());BlockPos bed=claim!=null&&claim.dimension().equals(level.dimension())&&claim.home().equals(home.pos)?claim.bed():null;
-                if(bed!=null&&(!level.hasChunkAt(bed)||!(level.getBlockState(bed).getBlock() instanceof BedBlock)||level.getBlockState(bed).getValue(BedBlock.PART)!=net.minecraft.world.level.block.state.properties.BedPart.HEAD||level.getBlockState(bed).getValue(BedBlock.OCCUPIED))){data.releaseBed(villager.getUUID());bed=null;}
+                if(bed!=null&&!data.ownsBed(level.dimension(),bed,villager.getUUID())){
+                    data.releaseBed(villager.getUUID());bed=null;
+                }
+                if(bed!=null&&!level.hasChunkAt(bed))return;
+                if(bed!=null&&(!(level.getBlockState(bed).getBlock() instanceof BedBlock)
+                        ||level.getBlockState(bed).getValue(BedBlock.PART)!=net.minecraft.world.level.block.state.properties.BedPart.HEAD
+                        ||!bedInsideHome(level,bed,home))){
+                    data.releaseBed(villager.getUUID());bed=null;
+                }
                 if(bed==null){bed=findAvailableBed(level,data,villager,home.pos,home.size);if(bed!=null&&!data.reserveBed(villager.getUUID(),level.dimension(),home.pos,bed))bed=null;}
-                if(bed!=null){if(villager.blockPosition().distSqr(bed)<=4.0D)villager.startSleeping(bed);else villager.getNavigation().moveTo(bed.getX()+.5D,bed.getY(),bed.getZ()+.5D,.85D);}
+                if(bed!=null&&level.hasChunkAt(bed)){
+                    if(level.getBlockState(bed).getValue(BedBlock.OCCUPIED)){
+                        // Preserve this resident's bed link while an intruder or player is using it.
+                        return;
+                    }
+                    if(data.ownsBed(level.dimension(),bed,villager.getUUID())){
+                        if(villager.blockPosition().distSqr(bed)<=4.0D)villager.startSleeping(bed);
+                        else villager.getNavigation().moveTo(bed.getX()+.5D,bed.getY(),bed.getZ()+.5D,.85D);
+                    }
+                }
             }
             return;
         }

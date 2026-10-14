@@ -1,7 +1,7 @@
 from pathlib import Path
 import os, hashlib, subprocess, shutil
 
-version='1.0.48'
+version='1.0.49'
 out=Path('artifact-output');out.mkdir(exist_ok=True)
 jar=Path(f'build/libs/residencias-dos-aldeoes-{version}.jar')
 shutil.copy2(jar,out/jar.name)

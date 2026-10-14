@@ -13,16 +13,28 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.GameRenderer;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.math.Matrix4f;
 import net.minecraft.world.phys.AABB;
 import java.util.List;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.renderer.RenderStateShard;
 
 @Mod.EventBusSubscriber(modid="residenciasaldeoes",value=Dist.CLIENT)
 public final class ResidencePreview {
+    private static final RenderType FILL = RenderType.create("residenciasaldeoes:residence_preview_fill",
+            DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 256, false, true,
+            RenderType.CompositeState.builder()
+                    .setShaderState(RenderStateShard.POSITION_COLOR_SHADER)
+                    .setTextureState(RenderStateShard.NO_TEXTURE)
+                    .setTransparencyState(RenderStateShard.TRANSLUCENT_TRANSPARENCY)
+                    .setDepthTestState(RenderStateShard.LEQUAL_DEPTH_TEST)
+                    .setCullState(RenderStateShard.NO_CULL)
+                    .setLightmapState(RenderStateShard.NO_LIGHTMAP)
+                    .setOverlayState(RenderStateShard.NO_OVERLAY)
+                    .setWriteMaskState(RenderStateShard.COLOR_WRITE)
+                    .createCompositeState(false));
     private static List<ModNetwork.PreviewEntry> entries=List.of();
     private ResidencePreview(){}
     public static void setEntries(List<ModNetwork.PreviewEntry> next){entries=List.copyOf(next);}
@@ -32,8 +44,8 @@ public final class ResidencePreview {
         Minecraft mc=Minecraft.getInstance();if(mc.level==null||mc.player==null)return;
         MultiBufferSource.BufferSource buffers=mc.renderBuffers().bufferSource();
         var pose=event.getPoseStack();var cam=event.getCamera().getPosition();
-        RenderSystem.lineWidth(3.0F);RenderSystem.enableBlend();RenderSystem.defaultBlendFunc();RenderSystem.disableCull();RenderSystem.depthMask(false);RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        BufferBuilder fill=null;
+        RenderSystem.depthMask(false);
+        VertexConsumer fill=null;
         for(var e:entries){
             if(!mc.level.dimension().location().equals(e.dimension()))continue;
             BlockPos pos=e.pos();int r=e.size()/2;
@@ -47,7 +59,7 @@ public final class ResidencePreview {
             double playerX=mc.player.getX()-pos.getX(),playerY=mc.player.getY()-pos.getY(),playerZ=mc.player.getZ()-pos.getZ();
             boolean playerInside=playerX>=box.minX&&playerX<box.maxX&&playerY>=box.minY&&playerY<box.maxY&&playerZ>=box.minZ&&playerZ<box.maxZ;
             if(shouldRender(e.permanent(),playerInside)){
-                if(fill==null){fill=new BufferBuilder(256);fill.begin(VertexFormat.Mode.QUADS,DefaultVertexFormat.POSITION_COLOR);}
+                if(fill==null)fill=buffers.getBuffer(FILL);
                 var matrix=pose.last().pose();float alpha=0.035F;
                 planeXZ(fill,matrix,box.minY,box.minX,box.maxX,box.minZ,box.maxZ,alpha);planeXZ(fill,matrix,box.maxY,box.minX,box.maxX,box.minZ,box.maxZ,alpha);
                 planeYZ(fill,matrix,box.minX,box.minY,box.maxY,box.minZ,box.maxZ,alpha);planeYZ(fill,matrix,box.maxX,box.minY,box.maxY,box.minZ,box.maxZ,alpha);
@@ -56,8 +68,10 @@ public final class ResidencePreview {
             }
             pose.popPose();
         }
-        if(fill!=null)BufferUploader.drawWithShader(fill.end());
-        buffers.endBatch(RenderType.lines());RenderSystem.depthMask(true);RenderSystem.enableCull();RenderSystem.disableBlend();RenderSystem.lineWidth(1.0F);
+        if(fill!=null)buffers.endBatch(FILL);
+        RenderSystem.depthMask(false);RenderSystem.lineWidth(3.0F);
+        buffers.endBatch(RenderType.lines());
+        RenderSystem.depthMask(true);RenderSystem.lineWidth(1.0F);
     }
     private static void planeXZ(com.mojang.blaze3d.vertex.VertexConsumer o,Matrix4f m,double y,double x0,double x1,double z0,double z1,float a){vertex(o,m,x0,y,z0,a);vertex(o,m,x1,y,z0,a);vertex(o,m,x1,y,z1,a);vertex(o,m,x0,y,z1,a);}
     private static void planeYZ(com.mojang.blaze3d.vertex.VertexConsumer o,Matrix4f m,double x,double y0,double y1,double z0,double z1,float a){vertex(o,m,x,y0,z0,a);vertex(o,m,x,y1,z0,a);vertex(o,m,x,y1,z1,a);vertex(o,m,x,y0,z1,a);}

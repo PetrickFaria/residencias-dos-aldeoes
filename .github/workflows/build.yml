@@ -1,4 +1,4 @@
-name: Build and Forge GameTest 1.0.48
+name: Build and Forge GameTest 1.0.49
 on:
   push:
   pull_request:
@@ -25,6 +25,7 @@ jobs:
           python3 tools/verify_fragment_drops.py
           python3 tools/verify_approved_geometry.py
           python3 tools/verify_texture_finish.py
+          python3 tools/verify_resident_spawn_exclusions.py
       - name: Build installable mod
         timeout-minutes: 15
         run: bash gradlew --no-daemon clean build
@@ -38,7 +39,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.48
+          name: residencias-dos-aldeoes-1.0.49
           path: |
             build/libs/*.jar
             gametest-console.log

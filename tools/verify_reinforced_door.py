@@ -10,10 +10,10 @@ assert 'ITEMS.register("reinforced_door"' in main and 'CreativeModeTab.TAB_DECOR
 assert 'extends DoorBlock' in door and 'panelShape' not in door
 assert 'getShape(' not in door and 'getCollisionShape(' not in door
 assert '.strength(5.0F, 5.0F)' in door and 'Material.WOOD' in door
-assert 'level.setBlock(lowerPos, changed, 10)' in door and 'upper.setValue(OPEN, opening)' in door
-assert 'SoundEvents.WOODEN_DOOR_OPEN' in door and 'SoundEvents.WOODEN_DOOR_CLOSE' in door
+assert 'InteractionResult use(' not in door and 'super.use(' not in door
+assert 'DoorBlock' in door, 'Use the inherited vanilla door state and interaction behavior.'
 item=json.loads((resources/'assets/residenciasaldeoes/models/item/reinforced_door.json').read_text())
-assert item['display']['gui']['scale']==[1.0,1.0,1.0]
+assert item['display']['gui']['scale']==[0.75,1.0,1.0]
 recipe=json.loads((resources/'data/residenciasaldeoes/recipes/reinforced_door.json').read_text())
 assert recipe['pattern']==['INI','NDN','INI']
 assert recipe['key']['I']['item']=='minecraft:iron_ingot'
@@ -71,4 +71,13 @@ for path in resources.glob('assets/residenciasaldeoes/models/block/reinforced_do
  assert any(e['from'][0]<0 or e['to'][0]>3 for e in model['elements'][1:])
  assert any(e['faces'].get('north',{}).get('texture')=='#iron' and e['from'][2]<0 for e in model['elements'])
  assert any(e['faces'].get('south',{}).get('texture')=='#iron' and e['to'][2]>16 for e in model['elements'])
-print('Vanilla door parents, 64 state mappings, cutout window alpha, noncoplanar metal edges, vanilla-sized GUI icon and recipe checks passed.')
+ name=path.name
+ if 'bottom' in name:
+  assert all(e['from'][1]>=-0.02 for e in model['elements'][1:])
+  if 'bottom' in name:
+   assert any(e['from'][1]==-0.02 for e in model['elements'][1:])
+ if 'top' in name:
+  assert all(e['to'][1]<=16.02 for e in model['elements'][1:])
+  if 'top' in name:
+   assert any(e['to'][1]==16.02 for e in model['elements'][1:])
+print('Vanilla door states, 64 model mappings, cutout window alpha, subtle top/bottom metal relief, reference-sized GUI icon and recipe checks passed.')

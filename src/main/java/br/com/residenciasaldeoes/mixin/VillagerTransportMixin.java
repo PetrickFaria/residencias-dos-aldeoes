@@ -1,14 +1,26 @@
 package br.com.residenciasaldeoes.mixin;
 
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.server.level.ServerLevel;
+import br.com.residenciasaldeoes.data.ResidenceData;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /** Delivery owns navigation while active; ordinary Brain activities resume afterward. */
 @Mixin(Villager.class)
 public abstract class VillagerTransportMixin {
+    @Inject(method="golemSpawnConditionsMet",at=@At("HEAD"),cancellable=true)
+    private void residenciasaldeoes$excludeResidentsFromGolemPopulation(long gameTime,
+                                                                         CallbackInfoReturnable<Boolean> callback) {
+        Villager villager=(Villager)(Object)this;
+        if(villager.level instanceof ServerLevel level
+                &&ResidenceData.get(level).owner(villager.getUUID())!=null)
+            callback.setReturnValue(false);
+    }
+
     @Inject(method="customServerAiStep",at=@At("HEAD"),cancellable=true)
     private void residenciasaldeoes$deliveryOwnsNavigation(CallbackInfo callback) {
         Villager villager=(Villager)(Object)this;

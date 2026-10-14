@@ -59,7 +59,9 @@ public class ResidenceData extends SavedData {
     }
     private static String key(ResourceKey<Level> dim, BlockPos pos) { return dim.location()+"|"+pos.asLong(); }
     public BedClaim bedClaim(UUID villager){return bedsByVillager.get(villager);}
+    public UUID bedOwner(ResourceKey<Level> dim,BlockPos bed){return bedOwners.get(key(dim,bed));}
     public boolean isBedReserved(ResourceKey<Level> dim,BlockPos bed,UUID villager){UUID owner=bedOwners.get(key(dim,bed));return owner!=null&&!owner.equals(villager);}
+    public boolean ownsBed(ResourceKey<Level> dim,BlockPos bed,UUID villager){return villager.equals(bedOwner(dim,bed));}
     public boolean reserveBed(UUID villager,ResourceKey<Level> dim,BlockPos home,BlockPos bed){String k=key(dim,bed);UUID owner=bedOwners.get(k);if(owner!=null&&!owner.equals(villager))return false;releaseBed(villager);bedsByVillager.put(villager,new BedClaim(dim,home.immutable(),bed.immutable()));bedOwners.put(k,villager);setDirty();return true;}
     public void releaseBed(UUID villager){BedClaim old=bedsByVillager.remove(villager);if(old!=null){bedOwners.remove(key(old.dimension(),old.bed()),villager);setDirty();}}
     public static ResidenceData get(ServerLevel level) { return level.getServer().overworld().getDataStorage().computeIfAbsent(ResidenceData::load, ResidenceData::new, NAME); }

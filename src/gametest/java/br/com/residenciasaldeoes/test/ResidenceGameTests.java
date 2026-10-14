@@ -392,6 +392,20 @@ public final class ResidenceGameTests {
         check(v.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET).isEmpty(),"Stale walk target remained during sleep");
         h.succeed();
     }
+    @GameTest(template="empty",timeoutTicks=100,batch="sleep")
+    public static void resident_bed_claims_are_exclusive(GameTestHelper h){
+        var level=h.getLevel();var data=ResidenceData.get(level);
+        BlockPos home=h.absolutePos(new BlockPos(6,2,6));
+        BlockPos bed=h.absolutePos(new BlockPos(5,2,5));
+        var owner=java.util.UUID.randomUUID();var intruder=java.util.UUID.randomUUID();
+        check(data.reserveBed(owner,level.dimension(),home,bed),"First resident could not reserve bed");
+        check(!data.reserveBed(intruder,level.dimension(),home,bed),"Second resident replaced an existing bed claim");
+        check(owner.equals(data.bedOwner(level.dimension(),bed)),"Bed ownership changed after a rejected claim");
+        check(data.bedClaim(intruder)==null,"Rejected resident received a claim");
+        check(data.reserveBed(intruder,level.dimension(),home,bed.east()),"Second resident could not reserve another bed");
+        check(owner.equals(data.bedOwner(level.dimension(),bed)),"Separate claim disturbed the original bed");
+        h.succeed();
+    }
     @GameTest(template="empty",timeoutTicks=400,batch="dawn")
     public static void command_dawn_payment(GameTestHelper h){
         floor(h);BlockPos hp=new BlockPos(6,2,6);h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());
