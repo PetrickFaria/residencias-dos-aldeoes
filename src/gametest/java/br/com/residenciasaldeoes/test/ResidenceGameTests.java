@@ -32,8 +32,20 @@ public final class ResidenceGameTests {
         try{Method m=VillagerResidenceEvents.class.getDeclaredMethod(name,types);m.setAccessible(true);return m.invoke(new VillagerResidenceEvents(),args);}
         catch(Exception e){throw new RuntimeException(e);}
     }
-    private static void floor(GameTestHelper h){for(int x=0;x<16;x++)for(int z=0;z<16;z++)h.setBlock(new BlockPos(x,1,z),Blocks.STONE);}
+    private static void floor(GameTestHelper h){
+        for(int x=0;x<16;x++)for(int z=0;z<16;z++){
+            h.setBlock(new BlockPos(x,1,z),Blocks.STONE);
+            // Keep ordinary idle wandering inside the disposable test platform.
+            if(x==0||x==15||z==0||z==15)for(int y=2;y<=4;y++)h.setBlock(new BlockPos(x,y,z),Blocks.STONE);
+        }
+    }
     private static void clearFixtureWorld(net.minecraft.server.level.ServerLevel level){
+        // The preceding drop test intentionally spawns a skeleton; it must not
+        // follow and attack residents in subsequent navigation fixtures.
+        java.util.List<net.minecraft.world.entity.Entity> stale=new java.util.ArrayList<>();
+        level.getAllEntities().forEach(stale::add);
+        for(var entity:stale)
+            if(entity instanceof net.minecraft.world.entity.LivingEntity && !(entity instanceof net.minecraft.world.entity.player.Player))entity.discard();
         var data=ResidenceData.get(level);
         for(var home:new java.util.ArrayList<>(data.homes())){
             if(!home.dimension.equals(level.dimension()))continue;
