@@ -43,7 +43,7 @@ public final class ResidenceGameTests {
         check(anchor.getSize()==3,"Use the default small residence");
         check(h.absolutePos(cp).distSqr(h.absolutePos(hp))>1,"Chest must lie outside the old one-block radius");
         check(!h.getLevel().isEmptyBlock(h.absolutePos(hp).relative(Direction.NORTH)),"Reproduce solid neighbors at anchor Y");
-        check(invoke("findApproach",new Class[]{net.minecraft.server.level.ServerLevel.class,BlockPos.class,Villager.class},h.getLevel(),h.absolutePos(hp),v)!=null,"Floor anchor has no walkable approach");
+        h.runAtTickTime(30,()->check(invoke("findApproach",new Class[]{net.minecraft.server.level.ServerLevel.class,BlockPos.class,Villager.class},h.getLevel(),h.absolutePos(hp),v)!=null,"Floor anchor has no walkable approach"));
         h.getLevel().setDayTime(18000);int[] paid={0};double[] pickup={0};
         h.runAtTickTime(5,()->h.getLevel().setDayTime(0));
         h.runAtTickTime(190,()->check(anchor.isEmpty(),"Payment happened before the original 200 ticks"));

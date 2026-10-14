@@ -159,14 +159,15 @@ public class VillagerResidenceEvents {
             if(anchor.isEmpty()){data.completeCollection(home,pending);continue;}
             for(UUID id:home.residents){
                 if(!(level.getEntity(id) instanceof Villager villager)||!villager.isAlive()||villager.isBaby()
-                        ||villager.isNoAi()||villager.isSleeping()||villager.isTrading())continue;
+                        ||villager.isNoAi()||villager.isSleeping()||villager.isTrading()
+                        ||currentGameTime<villager.getPersistentData().getLong("residenciasaldeoes_courier_retry_after"))continue;
                 BlockPos homeApproach=findApproach(level,home.pos,villager);
                 if(homeApproach==null)continue;
                 BlockPos chest=findEmeraldChest(level,home,villager);
                 if(chest==null)continue;
                 BlockPos chestApproach=findApproach(level,chest,villager);
                 if(chestApproach==null)continue;
-                CompoundTag job=new CompoundTag();job.putLong("anchor",home.pos.asLong());job.putLong("chest",chest.asLong());job.putLong("period",pending.period());job.putLong("started",currentGameTime);job.put("previous_hand",villager.getItemBySlot(EquipmentSlot.MAINHAND).save(new CompoundTag()));job.putLong("home_approach",homeApproach.asLong());job.putLong("chest_approach",chestApproach.asLong());job.putInt("stage",0);
+                CompoundTag job=new CompoundTag();job.putLong("anchor",home.pos.asLong());job.putLong("chest",chest.asLong());job.putLong("period",pending.period());job.putLong("started",currentGameTime);job.put("previous_hand",villager.getItemBySlot(EquipmentSlot.MAINHAND).save(new CompoundTag()));job.putLong("home_approach",homeApproach.asLong());job.putLong("chest_approach",chestApproach.asLong());job.putInt("stage",0);job.putLong("last_progress",currentGameTime);job.putLong("last_progress_pos",villager.blockPosition().asLong());
                 villager.getPersistentData().put(EMERALD_TRANSFER,job);
                 break;
             }
@@ -198,13 +199,24 @@ public class VillagerResidenceEvents {
         }
         approaches.sort(Comparator.<BlockPos>comparingDouble(p->villager.blockPosition().distSqr(p)).thenComparing(Comparator.naturalOrder()));
         for(BlockPos candidate:approaches){net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().createPath(candidate,0);if(path!=null&&path.canReach())return candidate;}
-        // A partial path does not prove access to storage; leave the queued task/items intact.
+        // Partial routes allow physical approach toward a door or a destination outside the initial search range.
+        // Collection/deposit still require arrival; a stalled route is bounded and preserves cargo.
+        for(BlockPos candidate:approaches){net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().createPath(candidate,0);if(path!=null&&path.getNodeCount()>1)return candidate;}
         return null;
     }
     private boolean tickEmeraldTransfer(ServerLevel level,Villager villager){
 
         if(!villager.getPersistentData().contains(EMERALD_TRANSFER))return false;
         CompoundTag job=villager.getPersistentData().getCompound(EMERALD_TRANSFER);
+        long now=level.getServer().overworld().getGameTime();
+        long position=villager.blockPosition().asLong();
+        if(!job.contains("last_progress")||position!=job.getLong("last_progress_pos")){
+            job.putLong("last_progress",now);job.putLong("last_progress_pos",position);
+        }else if(now-job.getLong("last_progress")>200L){
+            finishEmeraldTransfer(level,villager,job,true);
+            villager.getPersistentData().putLong("residenciasaldeoes_courier_retry_after",now+200L);
+            return true;
+        }
         villager.getBrain().stopAll(level,villager);
         villager.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
         villager.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.PATH);
