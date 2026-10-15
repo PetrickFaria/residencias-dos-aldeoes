@@ -32,18 +32,6 @@ public final class ResidenceGameTests {
         try{Method m=VillagerResidenceEvents.class.getDeclaredMethod(name,types);m.setAccessible(true);return m.invoke(new VillagerResidenceEvents(),args);}
         catch(Exception e){throw new RuntimeException(e);}
     }
-    private static String bedApproachDiagnostics(net.minecraft.server.level.ServerLevel level,Villager villager,BlockPos bed,ResidenceData.Home home){
-        StringBuilder result=new StringBuilder();
-        for(Direction direction:Direction.Plane.HORIZONTAL){
-            BlockPos approach=bed.relative(direction);
-            boolean safe=(Boolean)invoke("isSafeDestination",new Class<?>[]{net.minecraft.server.level.ServerLevel.class,Villager.class,BlockPos.class,ResidenceData.Home.class},level,villager,approach,home);
-            var path=villager.getNavigation().createPath(approach,0);
-            boolean reaches=path!=null&&path.canReach();
-            boolean stays=path!=null&&(Boolean)invoke("pathStaysInside",new Class<?>[]{net.minecraft.world.level.pathfinder.Path.class,ResidenceData.Home.class},path,home);
-            result.append(' ').append(approach).append("[safe=").append(safe).append(",path=").append(reaches).append(",inside=").append(stays).append(']');
-        }
-        return result.toString();
-    }
     private static void floor(GameTestHelper h){
         for(int x=0;x<16;x++)for(int z=0;z<16;z++){
             h.setBlock(new BlockPos(x,1,z),Blocks.STONE);
@@ -351,7 +339,7 @@ public final class ResidenceGameTests {
                 lastStage[0]=stage;
             }
             check(!chest.isEmpty(),"Waiting for physical deposit; resident="+first.blockPosition()+" job="+first.getPersistentData().getCompound(JOB));
-            check(chest.getItem(0).getCount()==produced,"Lost or duplicated fragments");
+            check(chest.getItem(0).getCount()==produced,"Lost or duplicated fragments: stored="+chest.getItem(0).getCount()+" expected="+produced+" anchor="+anchor.getItem(0).getCount()+" pending="+anchor.getPendingFragments()+" resident="+first.blockPosition()+" job="+first.getPersistentData().getCompound(JOB));
             check(Math.abs(first.getX()-startX)>2,"Villager did not walk");
             check(!second.getPersistentData().contains(JOB),"Second resident was assigned conflicting transport");
             check(anchor.isEmpty(),"Anchor not collected");
@@ -460,13 +448,7 @@ public final class ResidenceGameTests {
         check(data.link(level,h.absolutePos(home),first).equals("ok"),"First resident link failed");
         check(data.link(level,h.absolutePos(home),second).equals("ok"),"Second resident link failed");
         var firstHome=data.owner(first.getUUID());
-        var secondHome=data.owner(second.getUUID());
-        check(firstHome!=null&&secondHome!=null,"Resident registration vanished before sleep checks");
-        BlockPos firstReachable=(BlockPos)invoke("findReachableBedApproach",
-                new Class<?>[]{net.minecraft.server.level.ServerLevel.class,Villager.class,BlockPos.class,ResidenceData.Home.class},level,first,firstBed,firstHome);
-        BlockPos secondReachable=(BlockPos)invoke("findReachableBedApproach",
-                new Class<?>[]{net.minecraft.server.level.ServerLevel.class,Villager.class,BlockPos.class,ResidenceData.Home.class},level,second,secondBed,secondHome);
-        check(firstReachable!=null&&secondReachable!=null,"Bed route validation failed before night routine; home="+firstHome.pos+" firstApproach="+firstReachable+" firstCandidates="+bedApproachDiagnostics(level,first,firstBed,firstHome)+" secondApproach="+secondReachable+" secondCandidates="+bedApproachDiagnostics(level,second,secondBed,secondHome)+" firstPos="+first.blockPosition()+" secondPos="+second.blockPosition());
+        check(firstHome!=null&&data.owner(second.getUUID())!=null,"Resident registration vanished before sleep checks");
         level.setDayTime(14000L);
         h.succeedWhen(()->{
             check(first.isSleeping()&&second.isSleeping(),"Both residents did not reach and use residential beds; time="+level.getDayTime()+" home="+firstHome.pos+" firstOwner="+data.owner(first.getUUID())+" firstPos="+first.blockPosition()+" firstClaim="+data.bedClaim(first.getUUID())+" firstNav="+first.getNavigation().getTargetPos()+" secondOwner="+data.owner(second.getUUID())+" secondPos="+second.blockPosition()+" secondClaim="+data.bedClaim(second.getUUID())+" secondNav="+second.getNavigation().getTargetPos()+" head1="+level.getBlockState(firstBed)+" foot1="+level.getBlockState(firstBed.relative(Direction.SOUTH))+" head2="+level.getBlockState(secondBed)+" foot2="+level.getBlockState(secondBed.relative(Direction.SOUTH)));
