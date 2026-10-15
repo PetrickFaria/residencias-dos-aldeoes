@@ -10,7 +10,7 @@ assert 'resident_identity' in data and 'u.hasUUID("resident_identity")' in data
 assert 'reconcileCapturedResident(ServerLevel level,Villager villager)' in data
 assert 'serverLevel.getEntity(current)!=null' in data and 'if(owner(id)!=null)return false' in data
 assert 'data.reconcileCapturedResident(sl,v)' in events
-assert 'ResidenceData.get(sl).unlink(sl,v.getUUID())' in events  # Real deaths still remove registrations.
+assert 'data.unlink(sl,v.getUUID())' in events  # Real deaths still remove registrations after the notification check.
 assert 'captured_resident_identity_rebinds_without_duplicates' in tests
 assert 'Duplicate capture copy took a live resident registration' in tests
 assert 'capturetomob' not in mods  # Optional compatibility; no hard dependency.

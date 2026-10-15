@@ -1,5 +1,5 @@
 from pathlib import Path
-import os, hashlib, subprocess, shutil
+import os, hashlib, subprocess, shutil, re
 
 version=dict(line.split('=',1) for line in Path('gradle.properties').read_text().splitlines() if '=' in line)['mod_version']
 out=Path('artifact-output');out.mkdir(exist_ok=True)
@@ -11,6 +11,9 @@ for name in ['gametest-console.log','client-console.log','client-restore-console
     if p.exists():shutil.copy2(p,out/name)
 if Path('build/screenshots').exists():shutil.copytree('build/screenshots',out/'screenshots',dirs_exist_ok=True)
 sha=os.environ['GITHUB_SHA']
+game_test_log=Path('gametest-console.log')
+match=re.search(r'All (\d+) required tests passed',game_test_log.read_text(encoding='utf-8',errors='replace')) if game_test_log.exists() else None
+game_test_result=f"{match.group(1)} Forge GameTests aprovados" if match else "resultado Forge GameTest não identificado no log"
 (out/f'relatorio-{version}.md').write_text(f"""# Residências dos Aldeões {version}
 
 Minecraft Java 1.19.2 / Forge 43.5.0 / Java 17.
@@ -18,10 +21,14 @@ Minecraft Java 1.19.2 / Forge 43.5.0 / Java 17.
 - Renderização de limites: um único listener em AFTER_TRANSLUCENT_BLOCKS; contornos e preenchimentos usam uma fonte de buffer privada por frame e as coordenadas das caixas foram mantidas.
 - Bloco Residencial: painel verde com facetas discretas; modelo, dimensões e colisão preservados.
 - Baú Esmerálico: manteve as texturas refinadas já presentes e a animação/27 slots; não foi alterada a receita.
-- Fragmento: textura 16x16 redesenhada como cristal irregular; identificador e receita preservados.
+- Fragmento: ícone 16x16 com silhueta e distribuição de pixels do fragmento de ametista vanilla 1.19.2, recolorido em verde; identificador e receita preservados.
+- Notificações: mortes de residentes usam o apelido e causa identificável; conversão em bruxa é separada e remove a associação residencial. Mensagens são limitadas à dimensão.
+- Camas: a reserva é mantida por residente; camas quebradas, fora dos limites ou sem aproximação navegável são liberadas, e a busca só ocorre durante a rotina noturna espaçada.
+- Golens: removido o bloqueio do mod ao método vanilla de elegibilidade; nenhum sistema de geração artificial foi adicionado. A presença de condições naturais precisa ser verificada no mundo de jogo.
 - Configuração: config/residenciasaldeoes-common.toml; padrões 3, 200, 300, 15 e 1000. Reinicie o jogo/servidor para reler o TOML.
 - Capture to Mob: identidade persistente para reconciliar um residente recriado com outro UUID; duplicatas com o original carregado são recusadas; sem dependência obrigatória.
-- GameTests Forge: 16 testes aprovados, incluindo persistência de inventário, transporte, range e rebind de identidade.
+- GameTests Forge: {game_test_result}, incluindo transporte, persistência, camas e notificações.
+- Limitação: GameTests não simulam a validação gráfica nem garantem que o mundo reúna as condições naturais de geração de golens.
 
 Commit: {sha}.
 SHA-256 JAR: {hashlib.sha256(jar.read_bytes()).hexdigest()}.

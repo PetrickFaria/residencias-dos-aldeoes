@@ -6,7 +6,11 @@ import br.com.residenciasaldeoes.menu.AnchorMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.monster.Witch;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.nbt.CompoundTag;
@@ -59,6 +63,8 @@ public class VillagerResidenceEvents {
     private static final long THREAT_RETURN_TIMEOUT_TICKS=150L;
     private static final long RETURN_RETRY_TICKS=20L;
     private static final String EMERALD_TRANSFER="residenciasaldeoes_emerald_transfer";
+    private static final String RESIDENT_DEATH_NOTICE="residenciasaldeoes_death_notice_sent";
+    private static final String RESIDENT_WITCH_NOTICE="residenciasaldeoes_witch_notice_sent";
     /**
      * Captures /time changes before a same-tick set/add can be overwritten by the level sampler.
      * The predicted clock sample also prevents the corresponding END tick from counting twice.
@@ -417,15 +423,23 @@ public class VillagerResidenceEvents {
                         ||!bedInsideHome(level,bed,home))){
                     data.releaseBed(villager.getUUID());bed=null;
                 }
-                if(bed==null){bed=findAvailableBed(level,data,villager,home.pos,home.size);if(bed!=null&&!data.reserveBed(villager.getUUID(),level.dimension(),home.pos,bed))bed=null;}
+                BlockPos bedApproach=bed==null?null:findReachableBedApproach(level,villager,bed,home);
+                if(bed!=null&&bedApproach==null){
+                    // A saved claim can outlive a blocked route. Release it so another
+                    // accessible bed in this residence can be considered.
+                    data.releaseBed(villager.getUUID());bed=null;
+                }
+                if(bed==null){bed=findAvailableBed(level,data,villager,home);if(bed!=null&&!data.reserveBed(villager.getUUID(),level.dimension(),home.pos,bed))bed=null;}
                 if(bed!=null&&level.hasChunkAt(bed)){
                     if(level.getBlockState(bed).getValue(BedBlock.OCCUPIED)){
                         // Preserve this resident's bed link while an intruder or player is using it.
                         return;
                     }
                     if(data.ownsBed(level.dimension(),bed,villager.getUUID())){
-                        if(villager.blockPosition().distSqr(bed)<=4.0D)villager.startSleeping(bed);
-                        else villager.getNavigation().moveTo(bed.getX()+.5D,bed.getY(),bed.getZ()+.5D,.85D);
+                        if(bedApproach==null)bedApproach=findReachableBedApproach(level,villager,bed,home);
+                        if(bedApproach==null){data.releaseBed(villager.getUUID());return;}
+                        if(villager.blockPosition().distSqr(bedApproach)<=4.0D)villager.startSleeping(bed);
+                        else villager.getNavigation().moveTo(bedApproach.getX()+.5D,bedApproach.getY(),bedApproach.getZ()+.5D,.85D);
                     }
                 }
             }
@@ -610,8 +624,8 @@ public class VillagerResidenceEvents {
         }
         return null;
     }
-    private BlockPos findAvailableBed(ServerLevel level,ResidenceData data,Villager villager,BlockPos anchor,int size){
-        int r=size/2;
+    private BlockPos findAvailableBed(ServerLevel level,ResidenceData data,Villager villager,ResidenceData.Home home){
+        BlockPos anchor=home.pos;int size=home.size,r=size/2;
         for(int y=anchor.getY()+1;y<anchor.getY()+size+1;y++)
             for(int x=anchor.getX()-r;x<=anchor.getX()+r;x++)
                 for(int z=anchor.getZ()-r;z<=anchor.getZ()+r;z++){
@@ -624,8 +638,27 @@ public class VillagerResidenceEvents {
                     BlockPos foot=p.relative(state.getValue(BedBlock.FACING).getOpposite());
                     if(foot.getX()<anchor.getX()-r||foot.getX()>anchor.getX()+r||foot.getZ()<anchor.getZ()-r||foot.getZ()>anchor.getZ()+r||foot.getY()<anchor.getY()+1||foot.getY()>=anchor.getY()+size+1)continue;
                     if(!level.hasChunkAt(foot))continue;
-                    return p;
+                    BlockState footState=level.getBlockState(foot);
+                    if(!(footState.getBlock() instanceof BedBlock)
+                            ||footState.getValue(BedBlock.PART)!=net.minecraft.world.level.block.state.properties.BedPart.FOOT
+                            ||footState.getValue(BedBlock.FACING)!=state.getValue(BedBlock.FACING))continue;
+                    if(findReachableBedApproach(level,villager,p,home)!=null)return p;
                 }
+        return null;
+    }
+    private BlockPos findReachableBedApproach(ServerLevel level,Villager villager,BlockPos bed,ResidenceData.Home home){
+        List<BlockPos> approaches=new ArrayList<>();
+        for(Direction direction:Direction.Plane.HORIZONTAL){
+            BlockPos approach=bed.relative(direction);
+            if(!insideResidence(approach,home)||!level.hasChunkAt(approach)||!level.hasChunkAt(approach.below()))continue;
+            if(!isSafeDestination(level,villager,approach,home))continue;
+            approaches.add(approach);
+        }
+        approaches.sort(Comparator.comparingDouble(villager.blockPosition()::distSqr));
+        for(BlockPos approach:approaches){
+            Path path=villager.getNavigation().createPath(approach,0);
+            if(path!=null&&path.canReach()&&pathStaysInside(path,home))return approach;
+        }
         return null;
     }
     private BlockPos findSafeSpot(ServerLevel level,Villager v,BlockPos anchor,int size){
@@ -672,12 +705,40 @@ public class VillagerResidenceEvents {
         event.getEntity().displayClientMessage(net.minecraft.network.chat.Component.translatable(key),true);
         if(result.equals("ok"))tag.putBoolean(REG,false);
     }
+    private static void broadcastResidentNotice(ServerLevel level,Villager villager,ResidenceData data,String marker,Component message){
+        if(data.owner(villager.getUUID())==null||villager.getPersistentData().getBoolean(marker))return;
+        villager.getPersistentData().putBoolean(marker,true);
+        for(ServerPlayer player:level.players())player.sendSystemMessage(message);
+    }
+    private static Component describeResidentDeath(String name,DamageSource source){
+        net.minecraft.world.entity.Entity attacker=source.getEntity();
+        if(attacker instanceof Zombie)return Component.literal(name+" foi morto por um zumbi.");
+        if(attacker instanceof AbstractSkeleton)return Component.literal(name+" foi morto por um esqueleto.");
+        if(attacker instanceof net.minecraft.world.entity.monster.Creeper)return Component.literal(name+" foi morto por um creeper.");
+        if(attacker!=null)return Component.literal(name+" foi morto por ").append(attacker.getDisplayName()).append(Component.literal("."));
+        String suffix=switch(source.getMsgId()){
+            case "fall","fallingBlock","flyIntoWall"->" morreu devido a uma queda.";
+            case "onFire","inFire","lava","hotFloor"->" morreu queimado.";
+            case "drown","dryout"->" morreu afogado.";
+            case "lightningBolt"->" morreu atingido por um raio.";
+            case "starve"->" morreu de fome.";
+            case "freeze"->" morreu congelado.";
+            default->" morreu.";
+        };
+        return Component.literal(name+suffix);
+    }
     @SubscribeEvent public void onVillagerConversion(LivingConversionEvent.Post event){
-        if(!(event.getEntity() instanceof Villager villager)
-                ||!(event.getOutcome() instanceof net.minecraft.world.entity.monster.ZombieVillager)
-                ||!(villager.level instanceof ServerLevel level))return;
+        if(!(event.getEntity() instanceof Villager villager)||!(villager.level instanceof ServerLevel level)
+                ||(!(event.getOutcome() instanceof Witch)&&!(event.getOutcome() instanceof net.minecraft.world.entity.monster.ZombieVillager)))return;
+        ResidenceData data=ResidenceData.get(level);
         if(villager.getPersistentData().contains(EMERALD_TRANSFER))finishEmeraldTransfer(level,villager,villager.getPersistentData().getCompound(EMERALD_TRANSFER),true);
-        ResidenceData.get(level).unlinkConverted(level,villager,event.getOutcome());
+        if(event.getOutcome() instanceof Witch){
+            String name=data.residentName(villager.getUUID());
+            broadcastResidentNotice(level,villager,data,RESIDENT_WITCH_NOTICE,Component.literal(name+" foi transformado em bruxa."));
+            data.unlinkConverted(level,villager,event.getOutcome());
+        }else if(event.getOutcome() instanceof net.minecraft.world.entity.monster.ZombieVillager){
+            data.unlinkConverted(level,villager,event.getOutcome());
+        }
     }
     @SubscribeEvent public void onVillagerDrops(LivingDropsEvent event){
         if(!(event.getEntity() instanceof Villager villager)||villager.isBaby()||!(villager.level instanceof ServerLevel))return;
@@ -688,5 +749,5 @@ public class VillagerResidenceEvents {
         int count=villager.getRandom().nextInt(10)==0?2:1;
         event.getDrops().add(new ItemEntity(villager.level,villager.getX(),villager.getY(),villager.getZ(),new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),count)));
     }
-    @SubscribeEvent public void onDeath(LivingDeathEvent event){if(event.getEntity() instanceof Villager v&&v.level instanceof ServerLevel sl){if(v.getPersistentData().contains(EMERALD_TRANSFER))finishEmeraldTransfer(sl,v,v.getPersistentData().getCompound(EMERALD_TRANSFER),true);ResidenceData.get(sl).unlink(sl,v.getUUID());}}
+    @SubscribeEvent public void onDeath(LivingDeathEvent event){if(event.getEntity() instanceof Villager v&&v.level instanceof ServerLevel sl){ResidenceData data=ResidenceData.get(sl);if(data.owner(v.getUUID())!=null){String name=data.residentName(v.getUUID());broadcastResidentNotice(sl,v,data,RESIDENT_DEATH_NOTICE,describeResidentDeath(name,event.getSource()));}if(v.getPersistentData().contains(EMERALD_TRANSFER))finishEmeraldTransfer(sl,v,v.getPersistentData().getCompound(EMERALD_TRANSFER),true);data.unlink(sl,v.getUUID());}}
 }

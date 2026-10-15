@@ -425,6 +425,84 @@ public final class ResidenceGameTests {
         check(owner.equals(data.bedOwner(level.dimension(),bed)),"Separate claim disturbed the original bed");
         h.succeed();
     }
+    @GameTest(template="empty",timeoutTicks=400,batch="sleep")
+    public static void residents_reach_and_use_distinct_residential_beds(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos home=new BlockPos(6,2,6);
+        h.setBlock(home,ResidenciasDosAldeoes.ANCHOR.get());
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(home);
+        check(anchor.setSize(5),"Could not expand residence for two sleepers");
+        for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
+        var headState=Blocks.RED_BED.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD)
+                .setValue(net.minecraft.world.level.block.BedBlock.FACING,Direction.NORTH)
+                .setValue(net.minecraft.world.level.block.BedBlock.OCCUPIED,false);
+        BlockPos firstBed=new BlockPos(5,3,5),secondBed=new BlockPos(7,3,5);
+        for(BlockPos bed:new BlockPos[]{firstBed,secondBed}){
+            BlockPos foot=bed.relative(Direction.SOUTH);
+            level.setBlock(foot,headState.setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT),2);
+            level.setBlock(bed,headState,2);
+        }
+        Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,7));first.setAge(0);
+        Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(7,3,7));second.setAge(0);
+        var data=ResidenceData.get(level);
+        check(data.link(level,h.absolutePos(home),first).equals("ok"),"First resident link failed");
+        check(data.link(level,h.absolutePos(home),second).equals("ok"),"Second resident link failed");
+        level.setDayTime(14000L);
+        h.succeedWhen(()->{
+            check(first.isSleeping()&&second.isSleeping(),"Both residents did not reach and use residential beds");
+            check(data.bedClaim(first.getUUID())!=null&&data.bedClaim(second.getUUID())!=null,"Sleeping residents have no persisted bed claims");
+            BlockPos firstClaim=data.bedClaim(first.getUUID()).bed(),secondClaim=data.bedClaim(second.getUUID()).bed();
+            check(!firstClaim.equals(secondClaim),"Two residents claimed the same bed");
+            check(first.getSleepingPos().orElse(null)!=null&&second.getSleepingPos().orElse(null)!=null,
+                    "Resident sleep position was not recorded");
+        });
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="sleep")
+    public static void resident_death_notice_uses_alias_and_unregisters_once(GameTestHelper h){
+        var level=h.getLevel();BlockPos home=new BlockPos(6,2,6);h.setBlock(home,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));resident.setAge(0);
+        var data=ResidenceData.get(level);check(data.link(level,h.absolutePos(home),resident).equals("ok"),"Resident link failed");
+        data.renameResident(resident.getUUID(),"Marta");
+        String message=((net.minecraft.network.chat.Component)invoke("describeResidentDeath",
+                new Class<?>[]{String.class,net.minecraft.world.damagesource.DamageSource.class},"Marta",net.minecraft.world.damagesource.DamageSource.FALL)).getString();
+        check(message.equals("Marta morreu devido a uma queda."),"Unexpected fall notice: "+message);
+        var zombie=net.minecraft.world.entity.EntityType.ZOMBIE.create(level);var skeleton=net.minecraft.world.entity.EntityType.SKELETON.create(level);
+        check(zombie!=null&&skeleton!=null,"Could not create death cause fixtures");
+        String zombieMessage=((net.minecraft.network.chat.Component)invoke("describeResidentDeath",
+                new Class<?>[]{String.class,net.minecraft.world.damagesource.DamageSource.class},"Marta",net.minecraft.world.damagesource.DamageSource.mobAttack(zombie))).getString();
+        String skeletonMessage=((net.minecraft.network.chat.Component)invoke("describeResidentDeath",
+                new Class<?>[]{String.class,net.minecraft.world.damagesource.DamageSource.class},"Marta",net.minecraft.world.damagesource.DamageSource.mobAttack(skeleton))).getString();
+        check(zombieMessage.equals("Marta foi morto por um zumbi."),"Unexpected zombie notice: "+zombieMessage);
+        check(skeletonMessage.equals("Marta foi morto por um esqueleto."),"Unexpected skeleton notice: "+skeletonMessage);
+        String fireMessage=((net.minecraft.network.chat.Component)invoke("describeResidentDeath",
+                new Class<?>[]{String.class,net.minecraft.world.damagesource.DamageSource.class},"Marta",net.minecraft.world.damagesource.DamageSource.ON_FIRE)).getString();
+        String drownMessage=((net.minecraft.network.chat.Component)invoke("describeResidentDeath",
+                new Class<?>[]{String.class,net.minecraft.world.damagesource.DamageSource.class},"Marta",net.minecraft.world.damagesource.DamageSource.DROWN)).getString();
+        check(fireMessage.equals("Marta morreu queimado.")&&drownMessage.equals("Marta morreu afogado."),"Fire/drowning cause classification failed");
+        VillagerResidenceEvents events=new VillagerResidenceEvents();
+        var death=new net.minecraftforge.event.entity.living.LivingDeathEvent(resident,net.minecraft.world.damagesource.DamageSource.FALL);
+        events.onDeath(death);events.onDeath(death);
+        check(data.owner(resident.getUUID())==null,"Dead resident remained registered");
+        check(resident.getPersistentData().getBoolean("residenciasaldeoes_death_notice_sent"),"Death notice was not guarded against duplicates");
+        Villager ordinary=h.spawn(EntityType.VILLAGER,new BlockPos(8,2,8));ordinary.setAge(0);
+        events.onDeath(new net.minecraftforge.event.entity.living.LivingDeathEvent(ordinary,net.minecraft.world.damagesource.DamageSource.GENERIC));
+        check(!ordinary.getPersistentData().contains("residenciasaldeoes_death_notice_sent"),"Ordinary villager received resident notification state");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="sleep")
+    public static void resident_witch_conversion_notifies_and_unregisters(GameTestHelper h){
+        var level=h.getLevel();BlockPos home=new BlockPos(6,2,6);h.setBlock(home,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));resident.setAge(0);
+        var data=ResidenceData.get(level);check(data.link(level,h.absolutePos(home),resident).equals("ok"),"Resident link failed");
+        data.renameResident(resident.getUUID(),"Marta");
+        var witch=net.minecraft.world.entity.EntityType.WITCH.create(level);check(witch!=null,"Could not create witch conversion outcome");
+        new VillagerResidenceEvents().onVillagerConversion(new net.minecraftforge.event.entity.living.LivingConversionEvent.Post(resident,witch));
+        check(data.owner(resident.getUUID())==null,"Transformed villager remained registered");
+        check(data.bedClaim(resident.getUUID())==null,"Transformed resident retained a bed reservation");
+        check(resident.getPersistentData().getBoolean("residenciasaldeoes_witch_notice_sent"),"Witch conversion notice was not emitted");
+        check(!resident.getPersistentData().getBoolean("residenciasaldeoes_death_notice_sent"),"Witch conversion was marked as a death");
+        h.succeed();
+    }
     @GameTest(template="empty",timeoutTicks=400,batch="dawn")
     public static void command_dawn_payment(GameTestHelper h){
         floor(h);BlockPos hp=new BlockPos(6,2,6);h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());
