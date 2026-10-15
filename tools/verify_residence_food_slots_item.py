@@ -41,5 +41,5 @@ assert data[24]==8 and data[25]==6, "Texture must be 8-bit RGBA so alpha transpa
 recipe_files=list((root/"src/main/resources/data/residenciasaldeoes/recipes").glob("*.json"))
 fragment_recipes=[p for p in recipe_files if "emerald_fragment" in p.read_text()]
 assert fragment_recipes==[root/"src/main/resources/data/residenciasaldeoes/recipes/emerald_from_fragment.json"]
-assert 'VERSION="8"' in (root/"src/main/java/br/com/residenciasaldeoes/network/ModNetwork.java").read_text()
+assert 'VERSION="9"' in (root/"src/main/java/br/com/residenciasaldeoes/network/ModNetwork.java").read_text()
 print("Residence food, output slots, item, recipe, localization, and threat timeout checks passed.")
