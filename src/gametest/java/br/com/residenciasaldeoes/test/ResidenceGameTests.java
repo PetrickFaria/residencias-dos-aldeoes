@@ -449,7 +449,7 @@ public final class ResidenceGameTests {
         check(data.link(level,h.absolutePos(home),second).equals("ok"),"Second resident link failed");
         level.setDayTime(14000L);
         h.succeedWhen(()->{
-            check(first.isSleeping()&&second.isSleeping(),"Both residents did not reach and use residential beds");
+            check(first.isSleeping()&&second.isSleeping(),"Both residents did not reach and use residential beds; firstPos="+first.blockPosition()+" firstClaim="+data.bedClaim(first.getUUID())+" firstNav="+first.getNavigation().getTargetPos()+" secondPos="+second.blockPosition()+" secondClaim="+data.bedClaim(second.getUUID())+" secondNav="+second.getNavigation().getTargetPos()+" head1="+level.getBlockState(firstBed)+" foot1="+level.getBlockState(firstBed.relative(Direction.SOUTH))+" head2="+level.getBlockState(secondBed)+" foot2="+level.getBlockState(secondBed.relative(Direction.SOUTH)));
             check(data.bedClaim(first.getUUID())!=null&&data.bedClaim(second.getUUID())!=null,"Sleeping residents have no persisted bed claims");
             BlockPos firstClaim=data.bedClaim(first.getUUID()).bed(),secondClaim=data.bedClaim(second.getUUID()).bed();
             check(!firstClaim.equals(secondClaim),"Two residents claimed the same bed");
