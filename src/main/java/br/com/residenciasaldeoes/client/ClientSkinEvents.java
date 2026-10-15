@@ -14,5 +14,6 @@ public final class ClientSkinEvents {
     @SubscribeEvent
     public static void logout(ClientPlayerNetworkEvent.LoggingOut event) {
         VillagerSkinTextures.clearAll();
+        ResidentOpacity.clearAll();
     }
 }

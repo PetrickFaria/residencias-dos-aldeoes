@@ -9,6 +9,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.BlockPos;
@@ -51,6 +52,8 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     private final List<SkinChoice> skinChoices=new ArrayList<>();
     private Button skinConfirm,skinCancel;
     private Button skinPreviewCenter;
+    private OpacitySlider skinOpacitySlider;
+    private int pendingOpacity=100;
     private int skinScroll,skinDialogLeft,skinDialogTop;
     private float skinPreviewYaw=SKIN_PREVIEW_DEFAULT_YAW,skinPreviewPitch;
     private boolean draggingSkinPreview;
@@ -68,7 +71,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     private static String cacheKey(ResourceLocation dimension,BlockPos pos){return dimension+"|"+pos.asLong();}
 
     public static void receiveResidents(ResourceLocation dimension,BlockPos pos,List<ModNetwork.ResidentEntry> entries,boolean preview){
-        List<ModNetwork.ResidentEntry> copy=List.copyOf(entries);CACHE.put(cacheKey(dimension,pos),new Snapshot(copy,preview));
+        List<ModNetwork.ResidentEntry> copy=List.copyOf(entries);for(var entry:copy)ResidentOpacity.set(entry.id(),entry.opacity());CACHE.put(cacheKey(dimension,pos),new Snapshot(copy,preview));
         Minecraft mc=Minecraft.getInstance();
         if(mc.level!=null&&mc.level.dimension().location().equals(dimension)&&mc.screen instanceof AnchorScreen s&&s.menu.getPos().equals(pos))s.applySnapshot(copy,preview);
     }
@@ -141,18 +144,20 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         closeCustomization();skinOpen=true;skinScroll=0;skinChoices.clear();skinChoices.add(new SkinChoice("",Component.translatable("gui.residenciasaldeoes.original_skin").getString(),null));
         ModNetwork.ResidentEntry selectedResident=residents.stream().filter(r->r.id().equals(selected)).findFirst().orElse(null);
         String current=selectedResident==null?"":selectedResident.skinKey();
-        pendingSkin=current;
+        pendingSkin=current;pendingOpacity=selectedResident==null?100:selectedResident.opacity();
         resetSkinPreviewView();
         if(!current.isEmpty())ModNetwork.requestSkin(menu.getPos(),selected);
         for(SkinFiles.SkinFile file:SkinFiles.list())skinChoices.add(new SkinChoice(file.id(),file.label(),file));
         if(!current.isEmpty()&&skinChoices.stream().noneMatch(o->o.id().equals(current)))skinChoices.add(new SkinChoice(current,Component.translatable("gui.residenciasaldeoes.current_skin",current).getString(),null));
-        skinDialogLeft=leftPos+(imageWidth-220)/2;skinDialogTop=topPos+(imageHeight-160)/2;
+        skinDialogLeft=leftPos+(imageWidth-220)/2;skinDialogTop=topPos+(imageHeight-190)/2;
         skinPreviewVillager=minecraft.level==null?null:EntityType.VILLAGER.create(minecraft.level);
         updateSkinPreview();
         setMainButtonsActive(false);
         rebuildSkinButtons();
-        skinConfirm=addStyledButton(skinDialogLeft+16,skinDialogTop+132,86,20,Component.literal("Confirmar"),b->confirmSkin(),0xFF0D4B25,0xFF70C982);
-        skinCancel=addStyledButton(skinDialogLeft+118,skinDialogTop+132,86,20,Component.literal("Cancelar"),b->closeSkinDialog(),0xFF0D4B25,0xFF70C982);
+        skinOpacitySlider=new OpacitySlider(skinDialogLeft+10,skinDialogTop+118);
+        if(skinPreviewVillager!=null)ResidentOpacity.set(skinPreviewVillager.getUUID(),pendingOpacity);
+        skinConfirm=addStyledButton(skinDialogLeft+16,skinDialogTop+164,86,20,Component.literal("Confirmar"),b->confirmSkin(),0xFF0D4B25,0xFF70C982);
+        skinCancel=addStyledButton(skinDialogLeft+118,skinDialogTop+164,86,20,Component.literal("Cancelar"),b->closeSkinDialog(),0xFF0D4B25,0xFF70C982);
         skinPreviewCenter=addStyledButton(skinDialogLeft+153,skinDialogTop+112,60,14,Component.literal("Centralizar"),b->resetSkinPreviewView(),0xFF0D4B25,0xFF70C982);
     }
     private void resetSkinPreviewView(){skinPreviewYaw=SKIN_PREVIEW_DEFAULT_YAW;skinPreviewPitch=0.0F;}
@@ -168,6 +173,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     }
     private void updateSkinPreview(){
         if(skinPreviewVillager==null)return;
+        ResidentOpacity.set(skinPreviewVillager.getUUID(),pendingOpacity);
         if(pendingSkin.isEmpty()){VillagerSkinTextures.clear(skinPreviewVillager.getUUID());return;}
         SkinChoice option=skinChoices.stream().filter(o->o.id().equals(pendingSkin)).findFirst().orElse(null);
         try{byte[] png=option!=null&&option.file()!=null?SkinFiles.read(option.file()):VillagerSkinTextures.getPng(selected);if(png!=null)VillagerSkinTextures.receive(skinPreviewVillager.getUUID(),pendingSkin,png,SkinApplicationMode.COMPLETE);}catch(IOException ignored){}
@@ -185,13 +191,14 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         }else if(!pendingSkin.isEmpty()&&currentMode!=SkinApplicationMode.COMPLETE){
             ModNetwork.assignSkin(menu.getPos(),selected,pendingSkin,new byte[0],SkinApplicationMode.COMPLETE);
         }
+        if(selectedResident==null||selectedResident.opacity()!=pendingOpacity)ModNetwork.setResidentOpacity(menu.getPos(),selected,pendingOpacity);
         closeSkinDialog();openCustomization();
     }
     private void closeSkinDialog(){
         if(!skinOpen)return;
         for(Button b:skinButtons)removeWidget(b);skinButtons.clear();
-        if(skinConfirm!=null)removeWidget(skinConfirm);if(skinCancel!=null)removeWidget(skinCancel);if(skinPreviewCenter!=null)removeWidget(skinPreviewCenter);skinConfirm=null;skinCancel=null;skinPreviewCenter=null;
-        skinOpen=false;if(skinPreviewVillager!=null)VillagerSkinTextures.clear(skinPreviewVillager.getUUID());skinPreviewVillager=null;setMainButtonsActive(true);openCustomization();
+        if(skinConfirm!=null)removeWidget(skinConfirm);if(skinCancel!=null)removeWidget(skinCancel);if(skinPreviewCenter!=null)removeWidget(skinPreviewCenter);skinConfirm=null;skinCancel=null;skinPreviewCenter=null;skinOpacitySlider=null;
+        skinOpen=false;if(skinPreviewVillager!=null){VillagerSkinTextures.clear(skinPreviewVillager.getUUID());ResidentOpacity.clear(skinPreviewVillager.getUUID());}skinPreviewVillager=null;setMainButtonsActive(true);openCustomization();
     }
     public static void skinReceived(UUID resident){Minecraft mc=Minecraft.getInstance();if(mc.screen instanceof AnchorScreen screen)screen.refreshPreviewSkin(resident);}
     private void refreshPreviewSkin(UUID resident){if(!skinOpen||skinPreviewVillager==null||!resident.equals(selected)||!Objects.equals(pendingSkin,residents.stream().filter(r->r.id().equals(resident)).map(ModNetwork.ResidentEntry::skinKey).findFirst().orElse("")))return;byte[] bytes=VillagerSkinTextures.getPng(resident);if(bytes!=null)VillagerSkinTextures.receive(skinPreviewVillager.getUUID(),pendingSkin,bytes,SkinApplicationMode.COMPLETE);}
@@ -210,7 +217,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         String newName=renameField.getValue().trim();
         if(newName.isEmpty())return;
         ModNetwork.renameResident(menu.getPos(),selected,newName);
-        List<ModNetwork.ResidentEntry> next=residents.stream().map(e->e.id().equals(selected)?new ModNetwork.ResidentEntry(e.id(),newName,e.bed(),e.work(),e.chest(),e.food(),e.skinKey(),e.skinMode()):e).toList();
+        List<ModNetwork.ResidentEntry> next=residents.stream().map(e->e.id().equals(selected)?new ModNetwork.ResidentEntry(e.id(),newName,e.bed(),e.work(),e.chest(),e.food(),e.skinKey(),e.skinMode(),e.opacity()):e).toList();
         if(minecraft.level!=null)receiveResidents(minecraft.level.dimension().location(),menu.getPos(),next,previewOn);
         closeRename(true);
     }
@@ -290,13 +297,14 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     }
     private void renderSkinDialog(PoseStack p,int x,int y,float q){
         fill(p,leftPos+3,topPos+3,leftPos+imageWidth-3,topPos+imageHeight-3,0x99000000);
-        fill(p,skinDialogLeft,skinDialogTop,skinDialogLeft+220,skinDialogTop+160,0xFF30251C);fill(p,skinDialogLeft+2,skinDialogTop+2,skinDialogLeft+218,skinDialogTop+158,0xFF644A30);
+        fill(p,skinDialogLeft,skinDialogTop,skinDialogLeft+220,skinDialogTop+190,0xFF30251C);fill(p,skinDialogLeft+2,skinDialogTop+2,skinDialogLeft+218,skinDialogTop+188,0xFF644A30);
         Component heading=Component.translatable("gui.residenciasaldeoes.skin_title");font.draw(p,heading,skinDialogLeft+(220-font.width(heading))/2,skinDialogTop+9,0xFFFFEBCB);
         fill(p,skinDialogLeft+7,skinDialogTop+22,skinDialogLeft+213,skinDialogTop+111,0xFF393125);
         for(Button b:skinButtons)b.render(p,x,y,q);
         if(skinChoices.isEmpty())font.draw(p,Component.translatable("gui.residenciasaldeoes.no_skins"),skinDialogLeft+12,skinDialogTop+32,0xFFD3C8AF);
         if(skinChoices.size()>5)renderSkinScrollbar(p);
         if(skinPreviewVillager!=null)renderSkinPreview(p);
+        if(skinOpacitySlider!=null)skinOpacitySlider.render(p,x,y,q);
         if(skinPreviewCenter!=null)skinPreviewCenter.render(p,x,y,q);
         if(skinConfirm!=null)skinConfirm.render(p,x,y,q);if(skinCancel!=null)skinCancel.render(p,x,y,q);
         renderSkinFolderHint(p);
@@ -353,8 +361,9 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         if(personalizationOpen){if(x<dialogLeft||x>=dialogLeft+180||y<dialogTop||y>=dialogTop+112)return true;return super.mouseClicked(x,y,button);}
         if(skinOpen){
             setFocused(null);
-            if(x<skinDialogLeft||x>=skinDialogLeft+220||y<skinDialogTop||y>=skinDialogTop+160)return true;
+            if(x<skinDialogLeft||x>=skinDialogLeft+220||y<skinDialogTop||y>=skinDialogTop+190)return true;
             if(button==0&&x>=skinDialogLeft+SKIN_PREVIEW_LEFT&&x<skinDialogLeft+SKIN_PREVIEW_RIGHT&&y>=skinDialogTop+SKIN_PREVIEW_TOP&&y<skinDialogTop+SKIN_PREVIEW_BOTTOM){draggingSkinPreview=true;skinPreviewDragX=x;skinPreviewDragY=y;return true;}
+            if(skinOpacitySlider!=null&&skinOpacitySlider.mouseClicked(x,y,button))return true;
             if(button==0&&hasSkinScrollbar()&&x>=skinScrollbarX()-2&&x<skinScrollbarX()+7&&y>=skinDialogTop+25&&y<skinDialogTop+110){setSkinScrollFromPointer(y);return true;}
             return dispatchSkinDialogClick(x,y,button);
         }
@@ -389,8 +398,8 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         setFocused(null);
         return true;
     }
-    @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy){if(draggingSkinPreview&&button==0){skinPreviewYaw=(skinPreviewYaw+(float)(x-skinPreviewDragX)*3.0F)%360.0F;skinPreviewPitch=Math.max(-90.0F,Math.min(90.0F,skinPreviewPitch-(float)(y-skinPreviewDragY)*2.0F));skinPreviewDragX=x;skinPreviewDragY=y;return true;}if(draggingScrollbar&&button==0){int travel=LIST_HEIGHT-scrollbarThumbHeight(),max=residents.size()-VISIBLE_ROWS;if(travel>0&&max>0)scroll=Math.max(0,Math.min(max,scrollbarDragStart+(int)Math.round((y-scrollbarDragStartY)*max/travel)));return true;}return super.mouseDragged(x,y,button,dx,dy);}
-    @Override public boolean mouseReleased(double x,double y,int button){if(button==0&&draggingSkinPreview){draggingSkinPreview=false;return true;}if(button==0&&draggingScrollbar){draggingScrollbar=false;return true;}return super.mouseReleased(x,y,button);}
+    @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy){if(skinOpen&&skinOpacitySlider!=null&&skinOpacitySlider.mouseDragged(x,y,button,dx,dy))return true;if(draggingSkinPreview&&button==0){skinPreviewYaw=(skinPreviewYaw+(float)(x-skinPreviewDragX)*3.0F)%360.0F;skinPreviewPitch=Math.max(-90.0F,Math.min(90.0F,skinPreviewPitch-(float)(y-skinPreviewDragY)*2.0F));skinPreviewDragX=x;skinPreviewDragY=y;return true;}if(draggingScrollbar&&button==0){int travel=LIST_HEIGHT-scrollbarThumbHeight(),max=residents.size()-VISIBLE_ROWS;if(travel>0&&max>0)scroll=Math.max(0,Math.min(max,scrollbarDragStart+(int)Math.round((y-scrollbarDragStartY)*max/travel)));return true;}return super.mouseDragged(x,y,button,dx,dy);}
+    @Override public boolean mouseReleased(double x,double y,int button){if(skinOpen&&skinOpacitySlider!=null&&skinOpacitySlider.mouseReleased(x,y,button))return true;if(button==0&&draggingSkinPreview){draggingSkinPreview=false;return true;}if(button==0&&draggingScrollbar){draggingScrollbar=false;return true;}return super.mouseReleased(x,y,button);}
     @Override public boolean mouseScrolled(double x,double y,double delta){if(skinOpen&&x>=skinDialogLeft+7&&x<skinDialogLeft+213&&y>=skinDialogTop+22&&y<skinDialogTop+111&&skinChoices.size()>5){skinScroll=Math.max(0,Math.min(skinChoices.size()-5,skinScroll-(int)Math.signum(delta)));rebuildSkinButtons();return true;}if(!renameOpen&&!personalizationOpen&&x>=leftPos+6&&x<leftPos+imageWidth-6&&y>=topPos+ROW_TOP&&y<topPos+ROW_TOP+LIST_HEIGHT&&residents.size()>VISIBLE_ROWS){scroll=Math.max(0,Math.min(residents.size()-VISIBLE_ROWS,scroll-(int)Math.signum(delta)));return true;}return super.mouseScrolled(x,y,delta);}
     @Override public boolean keyPressed(int keyCode,int scanCode,int modifiers){
         if(personalizationOpen&&keyCode==GLFW.GLFW_KEY_ESCAPE){closeCustomization();return true;}
@@ -407,6 +416,18 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     @Override public boolean charTyped(char character,int modifiers){if(renameOpen&&renameField!=null&&renameField.isFocused()){renameField.charTyped(character,modifiers);return true;}return super.charTyped(character,modifiers);}
     private boolean isTextKey(int k){return (k>=GLFW.GLFW_KEY_A&&k<=GLFW.GLFW_KEY_Z)||(k>=GLFW.GLFW_KEY_0&&k<=GLFW.GLFW_KEY_9)||k==GLFW.GLFW_KEY_SPACE||(k>=GLFW.GLFW_KEY_KP_0&&k<=GLFW.GLFW_KEY_KP_9)||k==GLFW.GLFW_KEY_KP_DECIMAL||k==GLFW.GLFW_KEY_KP_DIVIDE||k==GLFW.GLFW_KEY_KP_MULTIPLY||k==GLFW.GLFW_KEY_KP_SUBTRACT||k==GLFW.GLFW_KEY_KP_ADD||k==GLFW.GLFW_KEY_MINUS||k==GLFW.GLFW_KEY_EQUAL||k==GLFW.GLFW_KEY_LEFT_BRACKET||k==GLFW.GLFW_KEY_RIGHT_BRACKET||k==GLFW.GLFW_KEY_SEMICOLON||k==GLFW.GLFW_KEY_APOSTROPHE||k==GLFW.GLFW_KEY_GRAVE_ACCENT||k==GLFW.GLFW_KEY_BACKSLASH||k==GLFW.GLFW_KEY_COMMA||k==GLFW.GLFW_KEY_PERIOD||k==GLFW.GLFW_KEY_SLASH;}
     private int capacity(int s){for(int i=0;i<5;i++)if(ResidenceData.DIMENSIONS[i]==s)return ResidenceData.CAPACITIES[i];return 1;}
+
+    private final class OpacitySlider extends AbstractSliderButton {
+        private OpacitySlider(int x,int y){super(x,y,136,20,Component.empty(),pendingOpacity/100.0D);updateMessage();}
+        @Override protected void updateMessage(){setMessage(Component.literal("Opacidade: "+Math.max(0,Math.min(100,(int)Math.round(value*100)))+"%"));}
+        @Override protected void applyValue(){pendingOpacity=Math.max(0,Math.min(100,(int)Math.round(value*100)));if(skinPreviewVillager!=null)ResidentOpacity.set(skinPreviewVillager.getUUID(),pendingOpacity);}
+        @Override protected void renderButton(PoseStack p,int mouseX,int mouseY,float partialTicks){
+            int edge=isHoveredOrFocused()?0xFF70C982:0xFF537B50;fill(p,x,y,x+width,y+height,edge);fill(p,x+1,y+1,x+width-1,y+height-1,0xFF294029);
+            int center=(x+width/2),trackY=y+15;fill(p,x+7,trackY-1,x+width-7,trackY+2,0xFF182318);
+            int knobX=x+7+(int)Math.round((width-14)*value);fill(p,knobX-2,trackY-3,knobX+3,trackY+4,0xFFD9E7B6);
+            Minecraft.getInstance().font.draw(p,getMessage(),x+(width-Minecraft.getInstance().font.width(getMessage()))/2.0F,y+3,0xFFFFEBCB);
+        }
+    }
 
     /** Visual-only widget skin. Coordinates, size, message and callback remain unchanged. */
     private class StyledButton extends Button {

@@ -5,7 +5,10 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "residencias.refmap.json",
   "client": [
-    "VillagerRendererMixin"
+    "VillagerRendererMixin",
+    "LivingEntityRendererOpacityMixin",
+    "RenderTypeOpacityMixin",
+    "BufferBuilderOpacityMixin"
   ],
   "injectors": {
     "defaultRequire": 1

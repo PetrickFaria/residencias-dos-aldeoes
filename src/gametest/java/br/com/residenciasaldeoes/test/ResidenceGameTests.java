@@ -207,6 +207,30 @@ public final class ResidenceGameTests {
             }
         });
     }
+
+    @GameTest(template="empty",timeoutTicks=100)
+    public static void resident_opacity_is_individual_and_persistent(GameTestHelper h){
+        var level=h.getLevel();var data=ResidenceData.get(level);
+        Villager translucent=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,3));
+        Villager opaque=h.spawn(EntityType.VILLAGER,new BlockPos(9,2,9));
+        BlockPos firstHome=h.absolutePos(new BlockPos(2,1,2)),secondHome=h.absolutePos(new BlockPos(10,1,10));
+        check("ok".equals(data.link(level,firstHome,translucent)),"first resident should link for opacity persistence test");
+        check("ok".equals(data.link(level,secondHome,opaque)),"second resident should link for opacity independence test");
+        check(data.residentOpacity(translucent.getUUID())==100,"legacy/default opacity should be 100 percent");
+        check(data.residentOpacity(opaque.getUUID())==100,"each resident should default independently to 100 percent");
+        data.setResidentOpacity(translucent.getUUID(),37);
+        data.setResidentOpacity(opaque.getUUID(),0);
+        var restored=ResidenceData.load(data.save(new net.minecraft.nbt.CompoundTag()));
+        check(restored.residentOpacity(translucent.getUUID())==37,"first resident opacity should survive SavedData serialization");
+        check(restored.residentOpacity(opaque.getUUID())==0,"zero opacity should persist independently");
+        data.setResidentOpacity(translucent.getUUID(),150);
+        check(data.residentOpacity(translucent.getUUID())==100,"opacity should clamp to 100");
+        data.setResidentOpacity(translucent.getUUID(),-4);
+        check(data.residentOpacity(translucent.getUUID())==0,"opacity should clamp to zero");
+        data.unlink(level,translucent.getUUID());data.unlink(level,opaque.getUUID());
+        translucent.discard();opaque.discard();
+        h.succeed();
+    }
     @GameTest(template="empty",timeoutTicks=100)
     public static void ten_output_slots_and_legacy_nbt(GameTestHelper h){
         BlockPos pos=new BlockPos(2,2,2);
