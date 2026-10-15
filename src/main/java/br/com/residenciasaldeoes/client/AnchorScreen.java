@@ -421,7 +421,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         private OpacitySlider(int x,int y){super(x,y,136,20,Component.empty(),pendingOpacity/100.0D);updateMessage();}
         @Override protected void updateMessage(){setMessage(Component.literal("Opacidade: "+Math.max(0,Math.min(100,(int)Math.round(value*100)))+"%"));}
         @Override protected void applyValue(){pendingOpacity=Math.max(0,Math.min(100,(int)Math.round(value*100)));if(skinPreviewVillager!=null)ResidentOpacity.set(skinPreviewVillager.getUUID(),pendingOpacity);}
-        @Override protected void renderButton(PoseStack p,int mouseX,int mouseY,float partialTicks){
+        @Override public void renderButton(PoseStack p,int mouseX,int mouseY,float partialTicks){
             int edge=isHoveredOrFocused()?0xFF70C982:0xFF537B50;fill(p,x,y,x+width,y+height,edge);fill(p,x+1,y+1,x+width-1,y+height-1,0xFF294029);
             int center=(x+width/2),trackY=y+15;fill(p,x+7,trackY-1,x+width-7,trackY+2,0xFF182318);
             int knobX=x+7+(int)Math.round((width-14)*value);fill(p,knobX-2,trackY-3,knobX+3,trackY+4,0xFFD9E7B6);
