@@ -19,7 +19,7 @@ import java.util.*;
 /** Client-side dynamic textures keyed by villager UUID; no entity model or AI is replaced. */
 public final class VillagerSkinTextures {
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final Set<Integer> SUPPORTED_SIZES = Set.of(64, 128, 256, 512);
+    private static final Set<Integer> SUPPORTED_SIZES = Set.of(64, 128, 256, 512, 1024);
     private static final Map<UUID, ResourceLocation> TEXTURES = new HashMap<>();
     private static final Map<UUID, byte[]> PNGS = new HashMap<>();
     private static final Map<UUID, SkinApplicationMode> MODES = new HashMap<>();
@@ -89,7 +89,7 @@ public final class VillagerSkinTextures {
         NativeImage image = NativeImage.read(new ByteArrayInputStream(data));
         if (image.getWidth() != image.getHeight() || !SUPPORTED_SIZES.contains(image.getWidth())) {
             image.close();
-            throw new IllegalArgumentException("PNG precisa medir 64, 128, 256 ou 512 pixels quadrados");
+            throw new IllegalArgumentException("PNG precisa medir 64, 128, 256, 512 ou 1024 pixels quadrados");
         }
         return image;
     }

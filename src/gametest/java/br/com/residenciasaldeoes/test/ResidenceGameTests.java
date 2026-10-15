@@ -4,6 +4,7 @@ import br.com.residenciasaldeoes.ResidenciasDosAldeoes;
 import br.com.residenciasaldeoes.VillagerResidenceEvents;
 import br.com.residenciasaldeoes.block.*;
 import br.com.residenciasaldeoes.data.ResidenceData;
+import br.com.residenciasaldeoes.data.WardrobePackage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
@@ -22,6 +23,10 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import java.lang.reflect.Method;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @GameTestHolder("residenciasaldeoes")
 @PrefixGameTestTemplate(false)
@@ -229,6 +234,21 @@ public final class ResidenceGameTests {
         check(data.residentOpacity(translucent.getUUID())==0,"opacity should clamp to zero");
         data.unlink(level,translucent.getUUID());data.unlink(level,opaque.getUUID());
         translucent.discard();opaque.discard();
+        h.succeed();
+    }
+
+    @GameTest(template="empty",timeoutTicks=100)
+    public static void wardrobe_package_accepts_1024_skin_atlas(GameTestHelper h){
+        try{
+            var image=new java.awt.image.BufferedImage(1024,1024,java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            ByteArrayOutputStream png=new ByteArrayOutputStream();javax.imageio.ImageIO.write(image,"png",png);
+            ByteArrayOutputStream archive=new ByteArrayOutputStream();
+            try(ZipOutputStream zip=new ZipOutputStream(archive)){
+                zip.putNextEntry(new ZipEntry("manifest.json"));zip.write("{\"schema\":1,\"base_texture\":\"textures/base.png\"}".getBytes(StandardCharsets.UTF_8));zip.closeEntry();
+                zip.putNextEntry(new ZipEntry("textures/base.png"));zip.write(png.toByteArray());zip.closeEntry();
+            }
+            check(WardrobePackage.parse(archive.toByteArray()).baseTexture().equals("textures/base.png"),"1024x1024 skin atlas should pass wardrobe validation");
+        }catch(Exception invalid){throw new net.minecraft.gametest.framework.GameTestAssertException("1024x1024 skin atlas was rejected: "+invalid.getMessage());}
         h.succeed();
     }
     @GameTest(template="empty",timeoutTicks=100)

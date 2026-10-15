@@ -10,8 +10,9 @@ import java.util.zip.ZipInputStream;
 
 /** Validated, declarative villager wardrobe package. No code or arbitrary paths are loaded from a pack. */
 public final class WardrobePackage {
-    public static final int MAX_ARCHIVE_BYTES = 1_500_000;
-    private static final int MAX_TOTAL_UNPACKED = 3_000_000;
+    public static final int MAX_ARCHIVE_BYTES = 12_000_000;
+    private static final int MAX_TOTAL_UNPACKED = 20_000_000;
+    private static final int MAX_TEXTURE_BYTES = 8_000_000;
     private final byte[] archive;
     private final String baseTexture;
     private final String outerTexture;
@@ -69,6 +70,6 @@ public final class WardrobePackage {
         }return result;
     }
     private static float[] triple(JsonArray a,boolean required)throws IOException{if(a==null||a.size()!=3){if(required)throw new IOException("Vetor 3D inválido");return new float[]{0,0,0};}float[] v=new float[3];for(int i=0;i<3;i++){v[i]=a.get(i).getAsFloat();if(!Float.isFinite(v[i])||Math.abs(v[i])>32)throw new IOException("Vetor fora dos limites");}return v;}
-    private static void validatePng(byte[] data)throws IOException{if(data==null||data.length<24||data.length>800_000||data[0]!=(byte)137||data[1]!='P'||data[2]!='N'||data[3]!='G'||data[12]!='I'||data[13]!='H'||data[14]!='D'||data[15]!='R')throw new IOException("Textura PNG inválida");int w=readInt(data,16),h=readInt(data,20);if(w!=h||!Set.of(64,128,256,512).contains(w))throw new IOException("PNG deve medir 64, 128, 256 ou 512 quadrados");java.awt.image.BufferedImage image=javax.imageio.ImageIO.read(new ByteArrayInputStream(data));if(image==null||image.getWidth()!=w||image.getHeight()!=h)throw new IOException("Conteúdo PNG inválido");}
+    private static void validatePng(byte[] data)throws IOException{if(data==null||data.length<24||data.length>MAX_TEXTURE_BYTES||data[0]!=(byte)137||data[1]!='P'||data[2]!='N'||data[3]!='G'||data[12]!='I'||data[13]!='H'||data[14]!='D'||data[15]!='R')throw new IOException("Textura PNG inválida");int w=readInt(data,16),h=readInt(data,20);if(w!=h||!Set.of(64,128,256,512,1024).contains(w))throw new IOException("PNG deve medir 64, 128, 256, 512 ou 1024 quadrados");java.awt.image.BufferedImage image=javax.imageio.ImageIO.read(new ByteArrayInputStream(data));if(image==null||image.getWidth()!=w||image.getHeight()!=h)throw new IOException("Conteúdo PNG inválido");}
     private static int readInt(byte[] b,int i){return(b[i]&255)<<24|(b[i+1]&255)<<16|(b[i+2]&255)<<8|(b[i+3]&255);}
 }

@@ -21,4 +21,4 @@ print(f"Forge confirmed all {passed.group(1)} required GameTests passed.")
 if result.returncode and 'Gradle build daemon disappeared unexpectedly' not in text:
     sys.exit(result.returncode)
 if result.returncode:
-    print('Forge confirmed all sixteen GameTests passed; Gradle reported daemon shutdown afterward.')
+    print(f"Forge confirmed all {passed.group(1)} GameTests passed; Gradle reported daemon shutdown afterward.")

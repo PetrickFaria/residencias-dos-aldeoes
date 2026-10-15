@@ -102,7 +102,7 @@ public final class ModNetwork {
   if(png!=null&&png.length>3&&png[0]=='P'&&png[1]=='K'){try{WardrobePackage.parse(png);return true;}catch(Exception invalid){return false;}}
   if(png==null||png.length<24||png.length>MAX_SKIN_BYTES)return false;
   byte[] signature={(byte)137,80,78,71,13,10,26,10};for(int i=0;i<8;i++)if(png[i]!=signature[i])return false;
-  int w=readInt(png,16),h=readInt(png,20);if(!(png[12]=='I'&&png[13]=='H'&&png[14]=='D'&&png[15]=='R'&&w==h&&Set.of(64,128,256,512).contains(w)))return false;
+  int w=readInt(png,16),h=readInt(png,20);if(!(png[12]=='I'&&png[13]=='H'&&png[14]=='D'&&png[15]=='R'&&w==h&&Set.of(64,128,256,512,1024).contains(w)))return false;
   try{var image=ImageIO.read(new ByteArrayInputStream(png));return image!=null&&image.getWidth()==w&&image.getHeight()==h;}catch(Exception invalid){return false;}
  }
  private static int readInt(byte[] b,int i){return (b[i]&255)<<24|(b[i+1]&255)<<16|(b[i+2]&255)<<8|(b[i+3]&255);}
