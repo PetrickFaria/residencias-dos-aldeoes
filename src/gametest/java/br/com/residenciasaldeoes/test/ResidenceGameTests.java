@@ -448,7 +448,7 @@ public final class ResidenceGameTests {
                 .setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD)
                 .setValue(net.minecraft.world.level.block.BedBlock.FACING,Direction.NORTH)
                 .setValue(net.minecraft.world.level.block.BedBlock.OCCUPIED,false);
-        BlockPos firstBed=new BlockPos(5,3,5),secondBed=new BlockPos(7,3,5);
+        BlockPos firstBed=h.absolutePos(new BlockPos(5,3,5)),secondBed=h.absolutePos(new BlockPos(7,3,5));
         for(BlockPos bed:new BlockPos[]{firstBed,secondBed}){
             BlockPos foot=bed.relative(Direction.SOUTH);
             level.setBlock(foot,headState.setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT),2);
