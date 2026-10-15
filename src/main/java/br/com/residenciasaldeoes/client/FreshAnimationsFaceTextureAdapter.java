@@ -42,7 +42,7 @@ final class FreshAnimationsFaceTextureAdapter {
 
     static NativeImage adaptIfAvailable(NativeImage skin, boolean completeSkin) {
         if (!completeSkin || skin.getWidth() != skin.getHeight()
-                || skin.getWidth() < 64 || skin.getWidth() > 512
+                || skin.getWidth() < 64 || skin.getWidth() > 1024
                 || skin.getWidth() % 64 != 0 || !freshAnimations18IsActive()) {
             return skin;
         }
