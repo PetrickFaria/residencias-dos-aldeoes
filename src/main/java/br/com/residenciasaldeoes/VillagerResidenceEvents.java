@@ -365,8 +365,8 @@ public class VillagerResidenceEvents {
 
         net.minecraft.nbt.ListTag doors=task.getList("doors",net.minecraft.nbt.Tag.TAG_LONG);
         int index=task.getInt("index");
-        // Close a target door only after the resident reaches the far-side waypoint.
-        // Closing while still in the doorway lets vanilla DoorInteractGoal reopen it.
+        // Stop the route before closing at arm's reach. If the navigation goal remains
+        // active, vanilla DoorInteractGoal can reopen the door on the very next step.
         ListTag visitedDoors=task.getList("visited_doors",Tag.TAG_LONG);
         Set<Long> visited=new HashSet<>();for(int i=0;i<visitedDoors.size();i++)visited.add(((net.minecraft.nbt.LongTag)visitedDoors.get(i)).getAsLong());
         for(int i=0;i<doors.size();i++){
@@ -406,8 +406,10 @@ public class VillagerResidenceEvents {
                     ||!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
                 index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");continue;
             }
-            if(task.getLong("route_door")==doorPos.asLong()&&task.contains("route_target")
-                    &&villager.distanceToSqr(net.minecraft.world.phys.Vec3.atBottomCenterOf(BlockPos.of(task.getLong("route_target"))))<=1.75D){
+            if(villager.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(doorPos))<=4.0D){
+                villager.getNavigation().stop();
+                villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+                villager.getBrain().eraseMemory(MemoryModuleType.PATH);
                 door.setOpen(villager,level,state,doorPos,false);
                 RESIDENTIAL_DOOR_COOLDOWNS.computeIfAbsent(level,ignored->new HashMap<>())
                         .put(doorPos.asLong(),now+DOOR_REOPEN_COOLDOWN);
@@ -431,16 +433,14 @@ public class VillagerResidenceEvents {
                     &&!villager.getNavigation().isDone())return true;
             if(now-routeAttempt<20L)return true;
             task.putLong("last_route_attempt",now);
-            BlockPos approach=findDoorExitApproach(level,doorPos,villager);
+            BlockPos approach=findApproach(level,doorPos,villager);
             Path path=approach==null?null:villager.getNavigation().createPath(approach,0);
-            if(path==null||(path.getNodeCount()<=1
-                    &&villager.distanceToSqr(net.minecraft.world.phys.Vec3.atBottomCenterOf(approach))>1.75D)){
+            if(path==null||path.getNodeCount()<=1){
                 int attempts=task.getInt("attempts")+1;task.putInt("attempts",attempts);
                 if(attempts>=3){index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");}
                 return true;
             }
             task.putLong("route_door",doorPos.asLong());
-            task.putLong("route_target",approach.asLong());
             task.putLong("last_progress",now);task.putLong("last_pos",currentPos.asLong());
             villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
             villager.getBrain().eraseMemory(MemoryModuleType.PATH);
@@ -551,24 +551,6 @@ public class VillagerResidenceEvents {
         // Partial routes allow physical approach toward a door or a destination outside the initial search range.
         // Collection/deposit still require arrival; a stalled route is bounded and preserves cargo.
         for(BlockPos candidate:approaches){net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().createPath(candidate,0);if(path!=null&&path.getNodeCount()>1)return candidate;}
-        return null;
-    }
-    /** Select an accessible tile on the far side of an open doorway. */
-    private static BlockPos findDoorExitApproach(ServerLevel level,BlockPos door,Villager villager){
-        List<BlockPos> candidates=new ArrayList<>();
-        for(Direction direction:Direction.Plane.HORIZONTAL)for(int dy=-1;dy<=1;dy++){
-            BlockPos candidate=door.relative(direction).offset(0,dy,0);
-            if(!level.hasChunkAt(candidate)||!level.hasChunkAt(candidate.below()))continue;
-            if(level.getBlockState(candidate.below()).getCollisionShape(level,candidate.below()).isEmpty())continue;
-            var offset=net.minecraft.world.phys.Vec3.atBottomCenterOf(candidate).subtract(villager.position());
-            if(level.noCollision(villager,villager.getBoundingBox().move(offset)))candidates.add(candidate);
-        }
-        candidates.sort(Comparator.<BlockPos>comparingDouble(villager.blockPosition()::distSqr).reversed()
-                .thenComparing(Comparator.naturalOrder()));
-        for(BlockPos candidate:candidates){
-            Path path=villager.getNavigation().createPath(candidate,0);
-            if(path!=null&&(path.canReach()||path.getNodeCount()>1))return candidate;
-        }
         return null;
     }
     private boolean tickEmeraldTransfer(ServerLevel level,Villager villager){
