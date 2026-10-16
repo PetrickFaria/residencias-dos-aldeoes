@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Verify skin-reference assets and critical opacity/night-door hooks."""
 from pathlib import Path
-from PIL import Image
+import struct
 import json
 
 root = Path(__file__).resolve().parents[1]
@@ -23,19 +23,22 @@ assert "renderNameTag" in name_mixin and "beginNameTag" in name_mixin and "endNa
 assert "EntityRendererNameTagOpacityMixin" in mixins["client"]
 assert "Set.of(64, 128, 256, 512, 1024)" in textures
 
+# Validate PNG dimensions and alpha-capable format using only Python's stdlib;
+# the GitHub runner does not install Pillow.
+def png_info(path):
+    data = path.read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    width, height, bit_depth, color_type = struct.unpack(">IIBB", data[16:26])
+    return width, height, bit_depth, color_type
+
 skin_docs = root / "docs/skins"
 for side in (256, 1024):
-    template = Image.open(skin_docs / f"villager_skin_template_{side}.png").convert("RGBA")
-    assert template.size == (side, side)
-    assert template.getchannel("A").getextrema() == (0, 0)
-guide = Image.open(skin_docs / "villager_uv_regions_guide.png")
-assert guide.size[0] >= 1500 and guide.size[1] >= 1100
-atlas = Image.open(skin_docs / "villager_uv_guide_1024.png")
-assert atlas.size == (1024, 1024)
-corrected = Image.open(skin_docs / "aldeao_creeper_256_corrigido.png").convert("RGBA")
-assert corrected.size == (256, 256)
-for box in ((32*4, 0, 64*4, 18*4), (30*4, 47*4, 64*4, 64*4)):
-    assert corrected.crop(box).getchannel("A").getextrema() == (0, 0)
+    width, height, bit_depth, color_type = png_info(skin_docs / f"villager_skin_template_{side}.png")
+    assert (width, height, bit_depth, color_type) == (side, side, 8, 6)
+width, height, *_ = png_info(skin_docs / "villager_uv_regions_guide.png")
+assert width >= 1500 and height >= 1100
+assert png_info(skin_docs / "villager_uv_guide_1024.png")[:2] == (1024, 1024)
+assert png_info(skin_docs / "aldeao_creeper_256_corrigido.png") == (256, 256, 8, 6)
 
 assert "crossedNightfall" in events and "beginNightDoorClosure" in events
 assert "level.hasChunkAt(pos)" in events and "state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)" in events
