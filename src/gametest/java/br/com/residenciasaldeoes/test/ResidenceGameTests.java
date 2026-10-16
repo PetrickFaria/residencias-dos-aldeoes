@@ -352,7 +352,7 @@ public final class ResidenceGameTests {
         }
         h.succeed();
     }
-    private static void placeOpenDoor(GameTestHelper h,BlockPos pos,net.minecraft.world.level.block.DoorBlock block){
+    private static void placeOpenDoor(GameTestHelper h,BlockPos pos,net.minecraft.world.level.block.Block block){
         var lower=block.defaultBlockState().setValue(DoorBlock.HALF,DoubleBlockHalf.LOWER).setValue(DoorBlock.OPEN,true);
         var upper=block.defaultBlockState().setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER).setValue(DoorBlock.OPEN,true);
         h.setBlock(pos,lower);h.setBlock(pos.above(),upper);
