@@ -432,10 +432,10 @@ public final class ResidenceGameTests {
         for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
         Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,7));ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
         check(data.link(level,absoluteHome,leader).equals("ok"),"Could not link sleeping leader");
-        BlockPos bed=h.absolutePos(new BlockPos(5,3,5));var bedHead=Blocks.WHITE_BED.defaultBlockState()
+        BlockPos bedLocal=new BlockPos(5,3,5),bed=h.absolutePos(bedLocal);var bedHead=Blocks.WHITE_BED.defaultBlockState()
                 .setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD)
                 .setValue(net.minecraft.world.level.block.BedBlock.FACING,Direction.NORTH);
-        h.setBlock(bed.relative(Direction.SOUTH),bedHead.setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT));h.setBlock(bed,bedHead);
+        h.setBlock(bedLocal.relative(Direction.SOUTH),bedHead.setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT));h.setBlock(bedLocal,bedHead);
         ResidenceData.Home residentHome=data.owner(leader.getUUID());BlockPos bedFoot=bed.relative(Direction.SOUTH);
         boolean bedIsInside=(Boolean)invoke("bedInsideHome",new Class[]{net.minecraft.server.level.ServerLevel.class,BlockPos.class,ResidenceData.Home.class},level,bed,residentHome);
         check(bedIsInside,"Fixture bed is outside the registered residential volume; home="+residentHome.pos+" size="+residentHome.size+" head="+bed+" headState="+level.getBlockState(bed)+" foot="+bedFoot+" footState="+level.getBlockState(bedFoot)+" chunk="+level.hasChunkAt(bed));
