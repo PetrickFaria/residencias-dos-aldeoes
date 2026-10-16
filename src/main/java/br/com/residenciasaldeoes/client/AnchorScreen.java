@@ -352,9 +352,13 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         try{
             // The normal renderer scope covers in-world residents. Explicitly scope the temporary preview entity too,
             // so the same RenderType and vertex-alpha hooks see its selected opacity during this GUI render.
+            // The GUI's entity shader also receives the alpha directly; this keeps the preview translucent
+            // even when a renderer layer supplies its own VertexConsumer/RenderType implementation.
             ResidentOpacity.beginPreviewRender(skinPreviewVillager);
+            float previewAlpha=ResidentOpacity.renderingPercent()/100.0F;
+            RenderSystem.setShaderColor(1.0F,1.0F,1.0F,previewAlpha);
             try{dispatcher.render(skinPreviewVillager,0,0,0,0,1.0F,poses,buffers,15728880);buffers.endBatch();}
-            finally{ResidentOpacity.endPreviewRender();}
+            finally{RenderSystem.setShaderColor(1.0F,1.0F,1.0F,1.0F);ResidentOpacity.endPreviewRender();}
         }finally{dispatcher.overrideCameraOrientation(null);dispatcher.setRenderShadow(true);Lighting.setupFor3DItems();poses.popPose();}
     }
     private boolean hasSkinScrollbar(){return skinChoices.size()>5;}

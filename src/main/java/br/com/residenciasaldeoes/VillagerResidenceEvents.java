@@ -63,6 +63,10 @@ public class VillagerResidenceEvents {
     private static final long THREAT_RETURN_TIMEOUT_TICKS=150L;
     private static final long RETURN_RETRY_TICKS=20L;
     private static final String EMERALD_TRANSFER="residenciasaldeoes_emerald_transfer";
+    private static final String NIGHT_DOOR_TASK="residenciasaldeoes_night_door_task";
+    private static final Map<ServerLevel,Map<String,Long>> NIGHT_DOOR_NIGHTS=new WeakHashMap<>();
+    private static final long NIGHT_START=13_000L, NIGHT_END=23_000L;
+    private static final double NIGHT_DOOR_WALK_SPEED=.48D;
     private static final String RESIDENT_DEATH_NOTICE="residenciasaldeoes_death_notice_sent";
     private static final String RESIDENT_WITCH_NOTICE="residenciasaldeoes_witch_notice_sent";
     /**
@@ -87,7 +91,10 @@ public class VillagerResidenceEvents {
         long oldTime=Math.floorMod(before,DAY_LENGTH),newTime=Math.floorMod(target,DAY_LENGTH);
         boolean setIntoDawn=action.equals("set")&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
         boolean addIntoDawn=action.equals("add")&&oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
+        boolean setIntoNight=action.equals("set")&&oldTime<NIGHT_START&&newTime>=NIGHT_START&&newTime<NIGHT_END;
+        boolean addIntoNight=action.equals("add")&&oldTime<NIGHT_START&&newTime>=NIGHT_START&&newTime<NIGHT_END;
         PRODUCTION_CLOCKS.put(level,new DawnSample(level.getGameTime(),target));
+        if(setIntoNight||addIntoNight)beginNightDoorClosure(level,Math.floorDiv(target,DAY_LENGTH));
         if(setIntoDawn||addIntoDawn)
             processProductionDawn(level,level.getServer().overworld().getGameTime());
     }
@@ -98,6 +105,8 @@ public class VillagerResidenceEvents {
         DawnSample previous=PRODUCTION_CLOCKS.put(level,new DawnSample(levelGameTime,dayTime));
         if(previous!=null&&crossedNaturalDawn(previous,new DawnSample(levelGameTime,dayTime)))
             processProductionDawn(level,productionGameTime);
+        if(previous!=null&&crossedNightfall(previous,new DawnSample(levelGameTime,dayTime)))
+            beginNightDoorClosure(level,Math.floorDiv(dayTime,DAY_LENGTH));
         processLoadedProduction(level,productionGameTime);
         beginScheduledCollections(level,productionGameTime);
     }
@@ -112,6 +121,173 @@ public class VillagerResidenceEvents {
                 &&after.gameTime()-before.gameTime()<=1L
                 &&after.dayTime()-before.dayTime()!=1L;
         return adjustedClock&&oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS;
+    }
+    private static boolean crossedNightfall(DawnSample before,DawnSample after){
+        long oldTime=Math.floorMod(before.dayTime(),DAY_LENGTH);
+        long newTime=Math.floorMod(after.dayTime(),DAY_LENGTH);
+        if(oldTime>=NIGHT_START||newTime<NIGHT_START||newTime>=NIGHT_END)return false;
+        boolean naturalTick=after.gameTime()-before.gameTime()==1L
+                &&after.dayTime()-before.dayTime()==1L;
+        boolean adjustedClock=after.gameTime()>=before.gameTime()
+                &&after.gameTime()-before.gameTime()<=1L
+                &&after.dayTime()-before.dayTime()!=1L;
+        return naturalTick||adjustedClock;
+    }
+    /** One bounded scan per loaded residence at the start of each night. */
+    private void beginNightDoorClosure(ServerLevel level,long nightPeriod){
+        ResidenceData data=ResidenceData.get(level);
+        Map<String,Long> processed=NIGHT_DOOR_NIGHTS.computeIfAbsent(level,ignored->new HashMap<>());
+        for(ResidenceData.Home home:new ArrayList<>(data.homes())){
+            if(!home.dimension.equals(level.dimension())||home.residents.isEmpty()||!level.hasChunkAt(home.pos))continue;
+            String homeKey=home.dimension.location()+"|"+home.pos.asLong();
+            if(processed.getOrDefault(homeKey,Long.MIN_VALUE)==nightPeriod)continue;
+            processed.put(homeKey,nightPeriod);
+            if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))continue;
+
+            // Residents are kept in registration order. Only the first one is the housekeeper;
+            // an unavailable first resident never causes a later resident to take over.
+            UUID firstId=home.residents.iterator().next();
+            if(!(level.getEntity(firstId) instanceof Villager first)||!first.isAlive()||first.isBaby()
+                    ||first.isNoAi()||first.isSleeping()||first.isTrading()
+                    ||first.getPersistentData().contains(EMERALD_TRANSFER))continue;
+            List<BlockPos> openDoors=findOpenResidentialDoors(level,home);
+            if(openDoors.isEmpty())continue;
+            openDoors.sort(Comparator.<BlockPos>comparingLong(first.blockPosition()::distSqr)
+                    .thenComparing(Comparator.naturalOrder()));
+            net.minecraft.nbt.ListTag doors=new net.minecraft.nbt.ListTag();
+            for(BlockPos door:openDoors)doors.add(net.minecraft.nbt.LongTag.valueOf(door.asLong()));
+            net.minecraft.nbt.CompoundTag task=new net.minecraft.nbt.CompoundTag();
+            task.putLong("home",home.pos.asLong());
+            task.putString("dimension",home.dimension.location().toString());
+            task.putLong("night",nightPeriod);
+            task.putLong("started",level.getGameTime());
+            task.putLong("last_progress",level.getGameTime());
+            task.putLong("last_pos",first.blockPosition().asLong());
+            task.putLong("last_route_attempt",Long.MIN_VALUE/2);
+            task.putInt("index",0);
+            task.putInt("attempts",0);
+            task.put("doors",doors);
+            first.getPersistentData().put(NIGHT_DOOR_TASK,task);
+        }
+    }
+
+    private static List<BlockPos> findOpenResidentialDoors(ServerLevel level,ResidenceData.Home home){
+        List<BlockPos> found=new ArrayList<>();
+        int radius=home.size/2;
+        // ResidencePreview bounds are [x-r,x+r+1) × [homeY+1,homeY+size+1)
+        // × [z-r,z+r+1). Expand each face by one block, without loading chunks.
+        int minX=home.pos.getX()-radius-1,maxX=home.pos.getX()+radius+1;
+        int minY=home.pos.getY(),maxY=home.pos.getY()+home.size+1;
+        int minZ=home.pos.getZ()-radius-1,maxZ=home.pos.getZ()+radius+1;
+        for(int y=minY;y<=maxY;y++)for(int x=minX;x<=maxX;x++)for(int z=minZ;z<=maxZ;z++){
+            BlockPos pos=new BlockPos(x,y,z);
+            if(!level.hasChunkAt(pos))continue;
+            BlockState state=level.getBlockState(pos);
+            if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                    &&state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
+                    &&state.getMaterial()==net.minecraft.world.level.material.Material.WOOD
+                    &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==DoubleBlockHalf.LOWER
+                    &&state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))found.add(pos.immutable());
+        }
+        return found;
+    }
+
+    /** Returns true while this resident's bounded door-closing task owns navigation. */
+    private boolean tickNightDoorClosure(ServerLevel level,Villager villager){
+        var entityData=villager.getPersistentData();
+        if(!entityData.contains(NIGHT_DOOR_TASK))return false;
+        net.minecraft.nbt.CompoundTag task=entityData.getCompound(NIGHT_DOOR_TASK);
+        ResidenceData data=ResidenceData.get(level);
+        ResidenceData.Home home=data.owner(villager.getUUID());
+        long homePos=task.getLong("home");
+        if(home==null||!home.dimension.equals(level.dimension())||home.pos.asLong()!=homePos
+                ||home.residents.isEmpty()||!home.residents.iterator().next().equals(villager.getUUID())
+                ||!task.getString("dimension").equals(level.dimension().location().toString())
+                ||!level.hasChunkAt(home.pos)
+                ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity)){
+            finishNightDoorClosure(villager);return true;
+        }
+        long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH),now=level.getGameTime();
+        if(phase<NIGHT_START||phase>=NIGHT_END||now-task.getLong("started")>10_000L
+                ||villager.isSleeping()||villager.isNoAi()||villager.isTrading()
+                ||entityData.contains(EMERALD_TRANSFER)){
+            finishNightDoorClosure(villager);return true;
+        }
+
+        net.minecraft.nbt.ListTag doors=task.getList("doors",net.minecraft.nbt.Tag.TAG_LONG);
+        int index=task.getInt("index");
+        while(index<doors.size()){
+            BlockPos doorPos=BlockPos.of(doors.getLong(index));
+            if(!level.hasChunkAt(doorPos)){
+                index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");continue;
+            }
+            BlockState state=level.getBlockState(doorPos);
+            if(!(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock door)
+                    ||!state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
+                    ||state.getMaterial()!=net.minecraft.world.level.material.Material.WOOD
+                    ||state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)!=DoubleBlockHalf.LOWER
+                    ||!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
+                index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");continue;
+            }
+            if(villager.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(doorPos))<=4.0D){
+                door.setOpen(villager,level,state,doorPos,false);
+                index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");
+                task.putLong("last_progress",now);task.putLong("last_pos",villager.blockPosition().asLong());
+                continue;
+            }
+
+            BlockPos currentPos=villager.blockPosition();
+            if(currentPos.asLong()!=task.getLong("last_pos")){
+                task.putLong("last_pos",currentPos.asLong());task.putLong("last_progress",now);
+            }else if(now-task.getLong("last_progress")>=200L){
+                villager.getNavigation().stop();
+                int attempts=task.getInt("attempts")+1;task.putInt("attempts",attempts);
+                task.putLong("last_progress",now);task.remove("route_door");
+                if(attempts>=3){index++;task.putInt("index",index);task.putInt("attempts",0);continue;}
+            }
+
+            long routeAttempt=task.getLong("last_route_attempt");
+            if(task.contains("route_door")&&task.getLong("route_door")==doorPos.asLong()
+                    &&!villager.getNavigation().isDone())return true;
+            if(now-routeAttempt<20L)return true;
+            task.putLong("last_route_attempt",now);
+            Path path=findDoorApproach(level,villager,doorPos);
+            if(path==null){
+                int attempts=task.getInt("attempts")+1;task.putInt("attempts",attempts);
+                if(attempts>=3){index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");}
+                return true;
+            }
+            task.putLong("route_door",doorPos.asLong());
+            task.putLong("last_progress",now);task.putLong("last_pos",currentPos.asLong());
+            villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+            villager.getBrain().eraseMemory(MemoryModuleType.PATH);
+            villager.getNavigation().moveTo(path,NIGHT_DOOR_WALK_SPEED);
+            return true;
+        }
+        finishNightDoorClosure(villager);
+        return true;
+    }
+
+    private static Path findDoorApproach(ServerLevel level,Villager villager,BlockPos door){
+        List<Path> paths=new ArrayList<>();
+        for(Direction direction:Direction.Plane.HORIZONTAL)for(int dy=-1;dy<=1;dy++){
+            BlockPos feet=door.relative(direction).offset(0,dy,0);
+            if(!level.hasChunkAt(feet)||!level.hasChunkAt(feet.above())||!level.hasChunkAt(feet.below()))continue;
+            if(!level.getBlockState(feet.below()).isFaceSturdy(level,feet.below(),Direction.UP))continue;
+            if(!level.noCollision(villager,new AABB(feet.getX()+.15,feet.getY(),feet.getZ()+.15,
+                    feet.getX()+.85,feet.getY()+1.95,feet.getZ()+.85)))continue;
+            Path path=villager.getNavigation().createPath(feet,0);
+            if(path!=null&&path.canReach())paths.add(path);
+        }
+        paths.sort(Comparator.comparingInt(Path::getNodeCount));
+        return paths.isEmpty()?null:paths.get(0);
+    }
+
+    private static void finishNightDoorClosure(Villager villager){
+        villager.getPersistentData().remove(NIGHT_DOOR_TASK);
+        villager.getNavigation().stop();
+        villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+        villager.getBrain().eraseMemory(MemoryModuleType.PATH);
     }
     @SubscribeEvent public void onProductionSleepFinished(SleepFinishedTimeEvent event){
         if(event.getLevel() instanceof ServerLevel level){
@@ -357,6 +533,7 @@ public class VillagerResidenceEvents {
     @SubscribeEvent public void onVillagerTick(LivingEvent.LivingTickEvent event){
         if(!(event.getEntity() instanceof Villager villager)||!(villager.level instanceof ServerLevel level))return;
         if(villager.getPersistentData().contains(EMERALD_TRANSFER)){tickEmeraldTransfer(level,villager);return;}
+        if(villager.getPersistentData().contains(NIGHT_DOOR_TASK)){tickNightDoorClosure(level,villager);return;}
         boolean weather=level.isRaining();var entityData=villager.getPersistentData();
         boolean forced=entityData.getBoolean(RETURN_FORCED);
         if(villager.tickCount%10!=0&&!weather&&!forced)return;

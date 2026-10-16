@@ -6,6 +6,7 @@
   "refmap": "residencias.refmap.json",
   "client": [
     "VillagerRendererMixin",
+    "EntityRendererNameTagOpacityMixin",
     "LivingEntityRendererOpacityMixin",
     "RenderTypeOpacityMixin",
     "BufferBuilderOpacityMixin"

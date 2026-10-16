@@ -1,4 +1,4 @@
-name: Build and Forge GameTest 1.0.56
+name: Build and Forge GameTest 1.0.57
 on:
   push:
   pull_request:
@@ -28,6 +28,8 @@ jobs:
           python3 tools/verify_resident_spawn_exclusions.py
           python3 tools/verify_emerald_fragment_texture.py
           python3 tools/verify_capture_identity.py
+          python3 tools/verify_skin_preview_ui.py
+          python3 tools/verify_skin_opacity_uv_and_night_doors.py
       - name: Build installable mod
         timeout-minutes: 15
         run: bash gradlew --no-daemon clean build
@@ -41,7 +43,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.56
+          name: residencias-dos-aldeoes-1.0.57
           path: |
             build/libs/*.jar
             gametest-console.log

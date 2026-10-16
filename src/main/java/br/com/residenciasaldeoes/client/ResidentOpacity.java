@@ -9,6 +9,7 @@ public final class ResidentOpacity {
     private static final Map<UUID, Integer> VALUES = new ConcurrentHashMap<>();
     private static final ThreadLocal<Integer> RENDERING = new ThreadLocal<>();
     private static final ThreadLocal<Integer> PREVIEW_RENDERING = new ThreadLocal<>();
+    private static final ThreadLocal<Integer> NAME_TAG_DEPTH = ThreadLocal.withInitial(() -> 0);
 
     private ResidentOpacity() {}
 
@@ -17,7 +18,7 @@ public final class ResidentOpacity {
         if (id != null) VALUES.put(id, Math.max(0, Math.min(100, value)));
     }
     public static void clear(UUID id) { if (id != null) VALUES.remove(id); }
-    public static void clearAll() { VALUES.clear(); RENDERING.remove(); PREVIEW_RENDERING.remove(); }
+    public static void clearAll() { VALUES.clear(); RENDERING.remove(); PREVIEW_RENDERING.remove(); NAME_TAG_DEPTH.remove(); }
 
     public static void beginRender(net.minecraft.world.entity.Entity entity) {
         RENDERING.remove();
@@ -32,7 +33,14 @@ public final class ResidentOpacity {
         PREVIEW_RENDERING.set(entity instanceof net.minecraft.world.entity.npc.Villager villager ? get(villager.getUUID()) : 100);
     }
     public static void endPreviewRender() { PREVIEW_RENDERING.remove(); }
+    /** Keep Minecraft's name-tag pass independent from the resident model opacity. */
+    public static void beginNameTag() { NAME_TAG_DEPTH.set(NAME_TAG_DEPTH.get() + 1); }
+    public static void endNameTag() {
+        int depth = NAME_TAG_DEPTH.get() - 1;
+        if (depth <= 0) NAME_TAG_DEPTH.remove(); else NAME_TAG_DEPTH.set(depth);
+    }
     public static int renderingPercent() {
+        if (NAME_TAG_DEPTH.get() > 0) return 100;
         Integer preview = PREVIEW_RENDERING.get();
         if (preview != null) return preview;
         Integer value = RENDERING.get();

@@ -70,6 +70,7 @@ public final class ResidenceGameTests {
     @BeforeBatch(batch="available") public static void before_available(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     @BeforeBatch(batch="index") public static void before_index(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     @BeforeBatch(batch="lid") public static void before_lid(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    @BeforeBatch(batch="doors") public static void before_doors(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     @BeforeBatch(batch="outputs") public static void before_outputs(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     @BeforeBatch(batch="sleep") public static void before_sleep(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     private static double navigationSpeed(Villager v){
@@ -350,6 +351,38 @@ public final class ResidenceGameTests {
             }
         }
         h.succeed();
+    }
+    private static void placeOpenDoor(GameTestHelper h,BlockPos pos,net.minecraft.world.level.block.DoorBlock block){
+        var lower=block.defaultBlockState().setValue(DoorBlock.HALF,DoubleBlockHalf.LOWER).setValue(DoorBlock.OPEN,true);
+        var upper=block.defaultBlockState().setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER).setValue(DoorBlock.OPEN,true);
+        h.setBlock(pos,lower);h.setBlock(pos.above(),upper);
+    }
+    @GameTest(template="empty",timeoutTicks=900,batch="doors")
+    public static void first_resident_physically_closes_loaded_wooden_doors_in_bounded_area(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);
+        h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));first.setAge(0);
+        Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,8));second.setAge(0);second.setNoAi(true);
+        ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
+        check("ok".equals(data.link(level,absoluteHome,first)),"First resident registration failed");
+        check("ok".equals(data.link(level,absoluteHome,second)),"Second resident registration failed");
+
+        BlockPos inside=new BlockPos(7,2,6),oneBeyond=new BlockPos(8,2,6),twoBeyond=new BlockPos(9,2,6),iron=new BlockPos(6,2,7);
+        placeOpenDoor(h,inside,Blocks.OAK_DOOR);placeOpenDoor(h,oneBeyond,Blocks.SPRUCE_DOOR);
+        placeOpenDoor(h,twoBeyond,Blocks.OAK_DOOR);placeOpenDoor(h,iron,Blocks.IRON_DOOR);
+        level.setDayTime(13_001L);
+        long uniqueNight=100_000L+level.getGameTime();
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,uniqueNight);
+        check(first.getPersistentData().contains("residenciasaldeoes_night_door_task"),"The first resident did not receive the task");
+        check(!second.getPersistentData().contains("residenciasaldeoes_night_door_task"),"A later resident received the task");
+        h.runAtTickTime(500,()->{
+            check(!level.getBlockState(h.absolutePos(inside)).getValue(DoorBlock.OPEN),"In-bounds wooden door stayed open");
+            check(!level.getBlockState(h.absolutePos(oneBeyond)).getValue(DoorBlock.OPEN),"One-block-out wooden door stayed open");
+            check(level.getBlockState(h.absolutePos(twoBeyond)).getValue(DoorBlock.OPEN),"Door two blocks outside the boundary was changed");
+            check(level.getBlockState(h.absolutePos(iron)).getValue(DoorBlock.OPEN),"Iron door was manipulated");
+            check(!first.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Completed door task remained stuck");
+            h.succeed();
+        });
     }
     @GameTest(template="empty",timeoutTicks=2600,batch="physical")
     public static void physical_transport_after_payment(GameTestHelper h){

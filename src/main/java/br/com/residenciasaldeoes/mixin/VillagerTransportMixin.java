@@ -6,14 +6,15 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Delivery owns navigation while active; ordinary Brain activities resume afterward. */
+/** Bounded resident jobs temporarily own navigation; ordinary Brain activities resume afterward. */
 @Mixin(Villager.class)
 public abstract class VillagerTransportMixin {
     @Inject(method="customServerAiStep",at=@At("HEAD"),cancellable=true)
     private void residenciasaldeoes$deliveryOwnsNavigation(CallbackInfo callback) {
         Villager villager=(Villager)(Object)this;
         if(villager.level instanceof net.minecraft.server.level.ServerLevel
-                &&villager.getPersistentData().contains("residenciasaldeoes_emerald_transfer"))
+                &&(villager.getPersistentData().contains("residenciasaldeoes_emerald_transfer")
+                ||villager.getPersistentData().contains("residenciasaldeoes_night_door_task")))
             callback.cancel();
     }
 
