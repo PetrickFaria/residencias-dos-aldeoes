@@ -276,8 +276,12 @@ public class VillagerResidenceEvents {
             if(leader==null)leader=villager;
             if(!villager.isSleeping())available.add(villager);
         }
-        // Prefer any awake resident who can route to a door; the registration leader is the fallback.
-        Villager chosen=chooseReachableDoorResident(level,candidates,available);
+        // At nightfall, keep the first registered resident as the primary worker
+        // when awake and reachable. If they are asleep, let another awake resident
+        // handle it instead of waking the leader unnecessarily.
+        Villager chosen=leader!=null&&!leader.isSleeping()
+                ?chooseReachableDoorResident(level,candidates,List.of(leader)):null;
+        if(chosen==null)chosen=chooseReachableDoorResident(level,candidates,available);
         if(chosen==null&&night&&mayWakeLeader&&leader!=null&&leader.isSleeping()){
             // Wake only when no awake resident can do the work. stopSleeping clears the bed pose/state;
             // leaving vanilla HOME and schedule memories intact lets it return to sleep afterwards.
