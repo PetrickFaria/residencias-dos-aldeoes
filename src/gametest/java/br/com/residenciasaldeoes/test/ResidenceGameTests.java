@@ -436,7 +436,9 @@ public final class ResidenceGameTests {
                 .setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD)
                 .setValue(net.minecraft.world.level.block.BedBlock.FACING,Direction.NORTH);
         h.setBlock(bed.relative(Direction.SOUTH),bedHead.setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT));h.setBlock(bed,bedHead);
-        check((Boolean)invoke("bedInsideHome",new Class[]{net.minecraft.server.level.ServerLevel.class,BlockPos.class,ResidenceData.Home.class},level,bed,data.owner(leader.getUUID())),"Fixture bed is outside the registered residential volume");
+        ResidenceData.Home residentHome=data.owner(leader.getUUID());BlockPos bedFoot=bed.relative(Direction.SOUTH);
+        boolean bedIsInside=(Boolean)invoke("bedInsideHome",new Class[]{net.minecraft.server.level.ServerLevel.class,BlockPos.class,ResidenceData.Home.class},level,bed,residentHome);
+        check(bedIsInside,"Fixture bed is outside the registered residential volume; home="+residentHome.pos+" size="+residentHome.size+" head="+bed+" headState="+level.getBlockState(bed)+" foot="+bedFoot+" footState="+level.getBlockState(bedFoot)+" chunk="+level.hasChunkAt(bed));
         check(data.reserveBed(leader.getUUID(),level.dimension(),absoluteHome,bed),"Could not reserve leader's current bed");
         leader.startSleeping(bed);placeOpenDoor(h,new BlockPos(7,3,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
         invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,300_000L+level.getGameTime());
