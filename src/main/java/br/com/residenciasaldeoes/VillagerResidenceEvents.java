@@ -68,10 +68,11 @@ public class VillagerResidenceEvents {
     private static final Map<ServerLevel,Map<String,Long>> NIGHT_DOOR_NIGHTS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<Long,Long>> RESIDENTIAL_DOOR_COOLDOWNS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<Long,Long>> PENDING_OPEN_DOORS=new WeakHashMap<>();
+    private static final Map<ServerLevel,Map<String,Long>> LAST_PERIODIC_DOOR_SCAN=new WeakHashMap<>();
     private static final Map<ServerLevel,Boolean> RAINING_STATE=new WeakHashMap<>();
     private static final long NIGHT_START=13_000L, NIGHT_END=23_000L;
     private static final double NIGHT_DOOR_WALK_SPEED=.48D;
-    private static final long DOOR_REOPEN_COOLDOWN=200L,DOOR_OPEN_STABILITY_TICKS=40L;
+    private static final long DOOR_REOPEN_COOLDOWN=200L,DOOR_OPEN_STABILITY_TICKS=40L,DOOR_SCAN_INTERVAL=100L;
     private static final String RESIDENT_DEATH_NOTICE="residenciasaldeoes_death_notice_sent";
     private static final String RESIDENT_WITCH_NOTICE="residenciasaldeoes_witch_notice_sent";
     /**
@@ -115,6 +116,7 @@ public class VillagerResidenceEvents {
         boolean raining=level.isRaining();
         Boolean wasRaining=RAINING_STATE.put(level,raining);
         if(raining&&!Boolean.TRUE.equals(wasRaining))beginWeatherDoorClosure(level);
+        scanLoadedResidentialDoors(level);
         processPendingDoorChanges(level);
         processLoadedProduction(level,productionGameTime);
         beginScheduledCollections(level,productionGameTime);
@@ -150,6 +152,7 @@ public class VillagerResidenceEvents {
                 pending.remove(entry.getKey());continue;
             }
             if(residentUsingDoorway(level,data,pos)){pending.put(entry.getKey(),now);continue;}
+            if(RESIDENTIAL_DOOR_COOLDOWNS.getOrDefault(level,Map.of()).getOrDefault(pos.asLong(),Long.MIN_VALUE/2)>now)continue;
             if(now-entry.getValue()<DOOR_OPEN_STABILITY_TICKS)continue;
             pending.remove(entry.getKey());
             for(ResidenceData.Home home:new ArrayList<>(data.homes())){
@@ -168,6 +171,23 @@ public class VillagerResidenceEvents {
                     &&resident.distanceToSqr(center)<=9.0D)return true;
         }
         return false;
+    }
+
+    /** Low-frequency fallback covers door state changes that do not emit a neighbor-notify event. */
+    private static void scanLoadedResidentialDoors(ServerLevel level){
+        long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
+        if((phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining())return;
+        long now=level.getGameTime();ResidenceData data=ResidenceData.get(level);
+        Map<String,Long> scans=LAST_PERIODIC_DOOR_SCAN.computeIfAbsent(level,ignored->new HashMap<>());
+        for(ResidenceData.Home home:new ArrayList<>(data.homes())){
+            if(!home.dimension.equals(level.dimension())||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
+                    ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))continue;
+            String key=home.dimension.location()+"|"+home.pos.asLong();
+            if(now-scans.getOrDefault(key,Long.MIN_VALUE/2)<DOOR_SCAN_INTERVAL)continue;
+            scans.put(key,now);
+            for(BlockPos door:findOpenResidentialDoors(level,home))
+                PENDING_OPEN_DOORS.computeIfAbsent(level,ignored->new HashMap<>()).putIfAbsent(door.asLong(),now);
+        }
     }
 
     private static boolean withinDoorBounds(BlockPos pos,ResidenceData.Home home){
@@ -267,7 +287,10 @@ public class VillagerResidenceEvents {
                 leader.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);leader.getBrain().eraseMemory(MemoryModuleType.PATH);
             }
         }
-        if(chosen==null)return;
+        if(chosen==null){
+            for(BlockPos door:candidates)cooldowns.put(door.asLong(),now+DOOR_SCAN_INTERVAL);
+            return;
+        }
         Villager taskOwner=chosen;
         candidates=new ArrayList<>(candidates);
         candidates.sort(Comparator.comparingDouble(taskOwner.blockPosition()::distSqr).thenComparing(Comparator.naturalOrder()));
