@@ -277,7 +277,7 @@ public class VillagerResidenceEvents {
             if(!level.noCollision(villager,new AABB(feet.getX()+.15,feet.getY(),feet.getZ()+.15,
                     feet.getX()+.85,feet.getY()+1.95,feet.getZ()+.85)))continue;
             Path path=villager.getNavigation().createPath(feet,0);
-            if(path!=null)paths.add(path);
+            if(path!=null&&path.getNodeCount()>1)paths.add(path);
         }
         paths.sort(Comparator.comparingInt(Path::getNodeCount));
         return paths.isEmpty()?null:paths.get(0);
