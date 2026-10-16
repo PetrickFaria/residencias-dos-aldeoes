@@ -368,7 +368,7 @@ public class VillagerResidenceEvents {
         // If navigation reaches another assigned doorway while crossing the house,
         // close it when the resident is physically beside it. This closes doors passed
         // en route without issuing a second navigation task or stopping at the wrong door.
-        for(int i=index;i<doors.size();i++){
+        for(int i=0;i<doors.size();i++){
             BlockPos nearby=BlockPos.of(((net.minecraft.nbt.LongTag)doors.get(i)).getAsLong());
             if(!withinDoorBounds(nearby,home)||!level.hasChunkAt(nearby)
                     ||villager.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(nearby))>4.0D)continue;
