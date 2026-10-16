@@ -162,6 +162,7 @@ public class ResidenceData extends SavedData {
             tag.remove("residenciasaldeoes_home_return_target_x");
             tag.remove("residenciasaldeoes_home_return_target_y");
             tag.remove("residenciasaldeoes_home_return_target_z");
+            tag.remove("residenciasaldeoes_bed_retry_after");
         }
         ResidentNameState state=residentNameStates.get(id);
         if(state!=null){if(entity!=null)restoreName(entity,state);else pendingNameRestorations.put(id,state);}

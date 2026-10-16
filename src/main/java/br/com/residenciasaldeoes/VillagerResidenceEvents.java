@@ -65,14 +65,15 @@ public class VillagerResidenceEvents {
     private static final long RETURN_RETRY_TICKS=20L;
     private static final String EMERALD_TRANSFER="residenciasaldeoes_emerald_transfer";
     private static final String NIGHT_DOOR_TASK="residenciasaldeoes_night_door_task";
+    private static final String BED_RETRY_AFTER="residenciasaldeoes_bed_retry_after";
     private static final Map<ServerLevel,Map<String,Long>> NIGHT_DOOR_NIGHTS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<Long,Long>> RESIDENTIAL_DOOR_COOLDOWNS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<Long,Long>> PENDING_OPEN_DOORS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<String,Long>> LAST_PERIODIC_DOOR_SCAN=new WeakHashMap<>();
-    private static final Map<ServerLevel,Boolean> RAINING_STATE=new WeakHashMap<>();
     private static final long NIGHT_START=13_000L, NIGHT_END=23_000L;
     private static final double NIGHT_DOOR_WALK_SPEED=.48D;
-    private static final long DOOR_REOPEN_COOLDOWN=200L,DOOR_OPEN_STABILITY_TICKS=40L,DOOR_SCAN_INTERVAL=100L;
+    private static final int BED_ANCHOR_INTERVAL=100;
+    private static final long DOOR_REOPEN_COOLDOWN=200L,DOOR_OPEN_STABILITY_TICKS=40L,DOOR_SCAN_INTERVAL=300L;
     private static final String RESIDENT_DEATH_NOTICE="residenciasaldeoes_death_notice_sent";
     private static final String RESIDENT_WITCH_NOTICE="residenciasaldeoes_witch_notice_sent";
     /**
@@ -113,9 +114,6 @@ public class VillagerResidenceEvents {
             processProductionDawn(level,productionGameTime);
         if(previous!=null&&crossedNightfall(previous,new DawnSample(levelGameTime,dayTime)))
             beginNightDoorClosure(level,Math.floorDiv(dayTime,DAY_LENGTH));
-        boolean raining=level.isRaining();
-        Boolean wasRaining=RAINING_STATE.put(level,raining);
-        if(raining&&!Boolean.TRUE.equals(wasRaining))beginWeatherDoorClosure(level);
         scanLoadedResidentialDoors(level);
         processPendingDoorChanges(level);
         processLoadedProduction(level,productionGameTime);
@@ -131,14 +129,14 @@ public class VillagerResidenceEvents {
                 ||state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)!=net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
                 ||!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))return;
         long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
-        if((phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining())return;
+        if(phase<NIGHT_START||phase>=NIGHT_END)return;
         PENDING_OPEN_DOORS.computeIfAbsent(level,ignored->new HashMap<>()).put(pos.asLong(),level.getGameTime());
     }
 
     /** Wait until an open door is no longer being used as a passage before assigning a closer. */
     private void processPendingDoorChanges(ServerLevel level){
         long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
-        if((phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining())return;
+        if(phase<NIGHT_START||phase>=NIGHT_END){PENDING_OPEN_DOORS.remove(level);return;}
         Map<Long,Long> pending=PENDING_OPEN_DOORS.get(level);if(pending==null||pending.isEmpty())return;
         long now=level.getGameTime();if(now%10L!=0L)return;ResidenceData data=ResidenceData.get(level);
         for(var entry:new ArrayList<>(pending.entrySet())){
@@ -157,7 +155,7 @@ public class VillagerResidenceEvents {
             pending.remove(entry.getKey());
             for(ResidenceData.Home home:new ArrayList<>(data.homes())){
                 if(!home.dimension.equals(level.dimension())||!level.hasChunkAt(home.pos)||!withinDoorBounds(pos,home))continue;
-                queueResidentialDoorTask(level,home,List.of(pos.immutable()),Math.floorDiv(level.getDayTime(),DAY_LENGTH),phase>=NIGHT_START&&phase<NIGHT_END);
+                queueResidentialDoorTask(level,home,List.of(pos.immutable()),Math.floorDiv(level.getDayTime(),DAY_LENGTH));
             }
         }
         if(pending.isEmpty())PENDING_OPEN_DOORS.remove(level);
@@ -173,11 +171,13 @@ public class VillagerResidenceEvents {
         return false;
     }
 
-    /** Low-frequency fallback covers door state changes that do not emit a neighbor-notify event. */
+    /** A fixed 300-tick fallback catches door changes that do not emit neighbor notifications. */
     private static void scanLoadedResidentialDoors(ServerLevel level){
         long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
-        if((phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining())return;
-        long now=level.getGameTime();ResidenceData data=ResidenceData.get(level);
+        if(phase<NIGHT_START||phase>=NIGHT_END)return;
+        long now=level.getGameTime();
+        if(now%DOOR_SCAN_INTERVAL!=0L)return;
+        ResidenceData data=ResidenceData.get(level);
         Map<String,Long> scans=LAST_PERIODIC_DOOR_SCAN.computeIfAbsent(level,ignored->new HashMap<>());
         for(ResidenceData.Home home:new ArrayList<>(data.homes())){
             if(!home.dimension.equals(level.dimension())||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
@@ -197,16 +197,7 @@ public class VillagerResidenceEvents {
                 &&pos.getY()>=home.pos.getY()&&pos.getY()<=home.pos.getY()+home.size+1;
     }
 
-    /** A single bounded sweep at nightfall or when rain starts; later changes are event-driven. */
-    private void beginWeatherDoorClosure(ServerLevel level){
-        ResidenceData data=ResidenceData.get(level);
-        for(ResidenceData.Home home:new ArrayList<>(data.homes())){
-            if(!home.dimension.equals(level.dimension())||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
-                    ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))continue;
-            long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
-            queueResidentialDoorTask(level,home,findOpenResidentialDoors(level,home),Math.floorDiv(level.getDayTime(),DAY_LENGTH),phase>=NIGHT_START&&phase<NIGHT_END);
-        }
-    }
+
     private static boolean crossedNaturalDawn(DawnSample before,DawnSample after){
         long oldTime=Math.floorMod(before.dayTime(),DAY_LENGTH);
         long newTime=Math.floorMod(after.dayTime(),DAY_LENGTH);
@@ -242,11 +233,12 @@ public class VillagerResidenceEvents {
             if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))continue;
 
             List<BlockPos> openDoors=findOpenResidentialDoors(level,home);
-            queueResidentialDoorTask(level,home,openDoors,nightPeriod,true);
+            queueResidentialDoorTask(level,home,openDoors,nightPeriod);
+            LAST_PERIODIC_DOOR_SCAN.computeIfAbsent(level,ignored->new HashMap<>()).put(homeKey,level.getGameTime());
         }
     }
 
-    private void queueResidentialDoorTask(ServerLevel level,ResidenceData.Home home,List<BlockPos> candidates,long period,boolean mayWakeLeader){
+    private void queueResidentialDoorTask(ServerLevel level,ResidenceData.Home home,List<BlockPos> candidates,long period){
         if(candidates.isEmpty()||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
                 ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))return;
         long now=level.getGameTime();
@@ -266,30 +258,74 @@ public class VillagerResidenceEvents {
             return;
         }
 
-        long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
-        boolean night=phase>=NIGHT_START&&phase<NIGHT_END;
-        List<Villager> available=new ArrayList<>();Villager leader=null;
+        // Overlapping residential bounds still share a single physical door. Do not
+        // let another home's active route start competing for an already assigned one.
+        Set<Long> assignedElsewhere=new HashSet<>();
+        for(ResidenceData.Home other:data.homes()){
+            if(other==home||!other.dimension.equals(level.dimension()))continue;
+            for(UUID id:other.residents)if(level.getEntity(id) instanceof Villager active&&active.getPersistentData().contains(NIGHT_DOOR_TASK)){
+                CompoundTag task=active.getPersistentData().getCompound(NIGHT_DOOR_TASK);
+                if(task.getLong("home")!=other.pos.asLong())continue;
+                ListTag doors=task.getList("doors",Tag.TAG_LONG);
+                for(int i=0;i<doors.size();i++)assignedElsewhere.add(((net.minecraft.nbt.LongTag)doors.get(i)).getAsLong());
+            }
+        }
+        candidates=new ArrayList<>(candidates.stream().filter(pos->!assignedElsewhere.contains(pos.asLong())).toList());
+        if(candidates.isEmpty())return;
+
+        List<Villager> active=new ArrayList<>();Villager leader=null;
         for(UUID id:home.residents){
             if(!(level.getEntity(id) instanceof Villager villager)||!villager.isAlive()||villager.isBaby()||villager.isNoAi()
                     ||villager.isTrading()||villager.getPersistentData().contains(EMERALD_TRANSFER)
                     ||villager.getPersistentData().contains(RETURN_ACTIVE)||villager.getPersistentData().contains(NIGHT_DOOR_TASK))continue;
             if(leader==null)leader=villager;
-            if(!villager.isSleeping())available.add(villager);
+            active.add(villager);
         }
-        // At nightfall, keep the first registered resident as the primary worker
-        // when awake and reachable. If they are asleep, let another awake resident
-        // handle it instead of waking the leader unnecessarily.
-        Villager chosen=leader!=null&&!leader.isSleeping()
-                ?chooseReachableDoorResident(level,candidates,List.of(leader)):null;
-        if(chosen==null)chosen=chooseReachableDoorResident(level,candidates,available);
-        if(chosen==null&&night&&mayWakeLeader&&leader!=null&&leader.isSleeping()){
-            // Wake only when no awake resident can do the work. stopSleeping clears the bed pose/state;
-            // leaving vanilla HOME and schedule memories intact lets it return to sleep afterwards.
-            chosen=chooseReachableDoorResident(level,candidates,List.of(leader));
-            if(chosen!=null){
-                leader.stopSleeping();leader.getNavigation().stop();
-                leader.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);leader.getBrain().eraseMemory(MemoryModuleType.PATH);
+        if(active.isEmpty())return;
+        // At a nighttime door assignment, reconcile sleeping positions and give each
+        // awake resident a distinct reachable bed before deciding who is bedless.
+        // This is an event-triggered pass, never part of the per-tick path.
+        for(Villager resident:active){
+            if(resident.isSleeping()){
+                BlockPos sleepingBed=resident.getSleepingPos().orElse(null);
+                if(sleepingBed!=null&&bedInsideHome(level,sleepingBed,home)
+                        &&(data.bedOwner(level.dimension(),sleepingBed)==null||data.ownsBed(level.dimension(),sleepingBed,resident.getUUID())))
+                    data.reserveBed(resident.getUUID(),level.dimension(),home.pos,sleepingBed);
+            }else if(!hasValidResidentialBed(level,data,resident,home)){
+                BlockPos available=findAvailableBed(level,data,resident,home);
+                if(available!=null)data.reserveBed(resident.getUUID(),level.dimension(),home.pos,available);
             }
+        }
+        List<Villager> awakeWithoutBed=new ArrayList<>();
+        for(Villager resident:active)
+            if(!resident.isSleeping()&&!hasValidResidentialBed(level,data,resident,home))awakeWithoutBed.add(resident);
+
+        Villager chosen=null;
+        if(!awakeWithoutBed.isEmpty()){
+            double nearest=Double.MAX_VALUE;
+            for(Villager resident:awakeWithoutBed){
+                double distance=leader==null?0.0D:resident.distanceToSqr(leader);
+                if(chosen==null||distance<nearest){chosen=resident;nearest=distance;}
+            }
+        }else if(leader!=null&&!leader.isSleeping()){
+            chosen=leader;
+        }else if(active.stream().allMatch(Villager::isSleeping)){
+            // Only wake the first resident when every active resident is asleep.
+            chosen=leader;
+        }else{
+            // If the leader sleeps while another bed-owning resident is already awake,
+            // use the first awake resident and leave the leader's bed undisturbed.
+            for(Villager resident:active)if(!resident.isSleeping()){chosen=resident;break;}
+        }
+        if(chosen!=null&&chosen.isSleeping()){
+            BlockPos returnBed=chosen.getSleepingPos().orElse(null);
+            ResidenceData.BedClaim claim=data.bedClaim(chosen.getUUID());
+            if(returnBed==null&&claim!=null&&claim.dimension().equals(level.dimension())&&claim.home().equals(home.pos))returnBed=claim.bed();
+            if(returnBed!=null&&bedInsideHome(level,returnBed,home)
+                    &&(data.bedOwner(level.dimension(),returnBed)==null||data.ownsBed(level.dimension(),returnBed,chosen.getUUID())))
+                data.reserveBed(chosen.getUUID(),level.dimension(),home.pos,returnBed);
+            chosen.stopSleeping();chosen.getNavigation().stop();
+            chosen.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);chosen.getBrain().eraseMemory(MemoryModuleType.PATH);
         }
         if(chosen==null){
             for(BlockPos door:candidates)cooldowns.put(door.asLong(),now+DOOR_SCAN_INTERVAL);
@@ -309,23 +345,13 @@ public class VillagerResidenceEvents {
         chosen.getPersistentData().put(NIGHT_DOOR_TASK,task);
     }
 
-    private Villager chooseReachableDoorResident(ServerLevel level,List<BlockPos> doors,List<Villager> candidates){
-        Villager best=null;double bestDistance=Double.MAX_VALUE;
-        for(Villager villager:candidates)for(BlockPos door:doors){
-            BlockPos approach=findApproach(level,door,villager);if(approach==null)continue;
-            double distance=villager.blockPosition().distSqr(approach);
-            if(distance<bestDistance){best=villager;bestDistance=distance;}
-        }
-        if(best!=null)return best;
-        // Path creation can temporarily return no route while a villager is sleeping,
-        // recovering from a Brain update, or when a GameTest/world section is settling.
-        // Keep a bounded task for the nearest available resident; the task retries a few
-        // times and abandons unreachable doors without teleporting or holding navigation.
-        for(Villager villager:candidates)for(BlockPos door:doors){
-            double distance=villager.blockPosition().distSqr(door);
-            if(distance<bestDistance){best=villager;bestDistance=distance;}
-        }
-        return best;
+    private static boolean hasValidResidentialBed(ServerLevel level,ResidenceData data,Villager resident,ResidenceData.Home home){
+        ResidenceData.BedClaim claim=data.bedClaim(resident.getUUID());
+        if(claim==null||!claim.dimension().equals(level.dimension())||!claim.home().equals(home.pos)
+                ||!data.ownsBed(level.dimension(),claim.bed(),resident.getUUID())||!bedInsideHome(level,claim.bed(),home))return false;
+        BlockState state=level.getBlockState(claim.bed());
+        return state.getValue(BedBlock.PART)==net.minecraft.world.level.block.state.properties.BedPart.HEAD
+                &&!state.getValue(BedBlock.OCCUPIED);
     }
 
     private static List<BlockPos> findOpenResidentialDoors(ServerLevel level,ResidenceData.Home home){
@@ -365,7 +391,7 @@ public class VillagerResidenceEvents {
             finishNightDoorClosure(villager);return true;
         }
         long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH),now=level.getGameTime();
-        if(((phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining())||now-task.getLong("started")>10_000L
+        if((phase<NIGHT_START||phase>=NIGHT_END)||now-task.getLong("started")>10_000L
                 ||villager.isSleeping()||villager.isNoAi()||villager.isTrading()
                 ||entityData.contains(EMERALD_TRANSFER)){
             finishNightDoorClosure(villager);return true;
@@ -765,7 +791,7 @@ public class VillagerResidenceEvents {
                     villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
                     villager.getBrain().eraseMemory(MemoryModuleType.PATH);
                 }
-            }else if(villager.tickCount%40==0){
+            }else if(villager.tickCount%BED_ANCHOR_INTERVAL==0&&level.getGameTime()>=entityData.getLong(BED_RETRY_AFTER)){
                 ResidenceData.BedClaim claim=data.bedClaim(villager.getUUID());BlockPos bed=claim!=null&&claim.dimension().equals(level.dimension())&&claim.home().equals(home.pos)?claim.bed():null;
                 if(bed!=null&&!data.ownsBed(level.dimension(),bed,villager.getUUID())){
                     data.releaseBed(villager.getUUID());bed=null;
@@ -785,13 +811,22 @@ public class VillagerResidenceEvents {
                 if(bed==null){bed=findAvailableBed(level,data,villager,home);if(bed!=null&&!data.reserveBed(villager.getUUID(),level.dimension(),home.pos,bed))bed=null;}
                 if(bed!=null&&level.hasChunkAt(bed)){
                     if(level.getBlockState(bed).getValue(BedBlock.OCCUPIED)){
-                        // Preserve this resident's bed link while an intruder or player is using it.
-                        return;
+                        // An awake resident cannot keep retrying a bed occupied by another
+                        // entity. Release the stale reservation and search the remaining beds.
+                        data.releaseBed(villager.getUUID());
+                        bed=findAvailableBed(level,data,villager,home);
+                        bedApproach=bed==null?null:findReachableBedApproach(level,villager,bed,home);
+                        if(bed!=null&&bedApproach==null){data.releaseBed(villager.getUUID());bed=null;}
+                        if(bed!=null&&!data.reserveBed(villager.getUUID(),level.dimension(),home.pos,bed))bed=null;
                     }
-                    if(data.ownsBed(level.dimension(),bed,villager.getUUID())){
+                    if(bed!=null&&data.ownsBed(level.dimension(),bed,villager.getUUID())){
                         if(bedApproach==null)bedApproach=findReachableBedApproach(level,villager,bed,home);
                         if(bedApproach==null){data.releaseBed(villager.getUUID());return;}
-                        if(villager.blockPosition().distSqr(bedApproach)<=4.0D)villager.startSleeping(bed);
+                        if(villager.blockPosition().distSqr(bedApproach)<=4.0D){
+                            villager.startSleeping(bed);
+                            if(villager.isSleeping())entityData.remove(BED_RETRY_AFTER);
+                            else{data.releaseBed(villager.getUUID());entityData.putLong(BED_RETRY_AFTER,level.getGameTime()+200L);}
+                        }
                         else villager.getNavigation().moveTo(bedApproach.getX()+.5D,bedApproach.getY(),bedApproach.getZ()+.5D,.85D);
                     }
                 }

@@ -393,16 +393,19 @@ public final class ResidenceGameTests {
     public static void open_door_task_uses_awake_resident_before_waking_sleeping_leader(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
         check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not configure home");
-        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));Villager awake=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,8));
+        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));Villager awake=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));
+        Villager nearestDoor=h.spawn(EntityType.VILLAGER,new BlockPos(8,2,6));
         ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
-        check(data.link(level,absoluteHome,leader).equals("ok")&&data.link(level,absoluteHome,awake).equals("ok"),"Could not link residents");
+        check(data.link(level,absoluteHome,leader).equals("ok")&&data.link(level,absoluteHome,awake).equals("ok")
+                &&data.link(level,absoluteHome,nearestDoor).equals("ok"),"Could not link residents");
         BlockPos bed=h.absolutePos(new BlockPos(4,2,8));h.setBlock(bed,Blocks.WHITE_BED.defaultBlockState().setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD));
         leader.startSleeping(bed);check(leader.isSleeping(),"Leader did not enter the fixture sleeping state");
         placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
         invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,200_000L+level.getGameTime());
         check(leader.isSleeping(),"Sleeping registration leader was woken despite another awake resident");
         check(!leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Sleeping leader received the door route");
-        check(awake.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Awake resident did not receive the reachable door route");
+        check(awake.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Awake resident closest to the first resident did not receive the door route");
+        check(!nearestDoor.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Door proximity incorrectly overrode the required resident priority");
         h.succeed();
     }
     @GameTest(template="empty",timeoutTicks=100,batch="doors")
@@ -422,26 +425,34 @@ public final class ResidenceGameTests {
         check(data.owner(villager.getUUID())==null&&data.bedClaim(villager.getUUID())==null,"Unlink retained residential registration or bed claim");
         h.succeed();
     }
-    @GameTest(template="empty",timeoutTicks=100,batch="doors")
-    public static void night_door_task_wakes_leader_only_when_every_resident_sleeps(GameTestHelper h){
+    @GameTest(template="empty",timeoutTicks=1000,batch="doors")
+    public static void night_door_task_wakes_leader_then_returns_to_same_bed(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not expand sleeping residence");
         Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
         check(data.link(level,absoluteHome,leader).equals("ok"),"Could not link sleeping leader");
-        BlockPos bed=h.absolutePos(new BlockPos(4,2,7));h.setBlock(bed,Blocks.WHITE_BED.defaultBlockState().setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD));
+        BlockPos bed=h.absolutePos(new BlockPos(4,2,7));var bedHead=Blocks.WHITE_BED.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD)
+                .setValue(net.minecraft.world.level.block.BedBlock.FACING,Direction.NORTH);
+        h.setBlock(bed.relative(Direction.SOUTH),bedHead.setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT));h.setBlock(bed,bedHead);
         leader.startSleeping(bed);placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
         invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,300_000L+level.getGameTime());
         check(!leader.isSleeping(),"Sleeping leader was not woken when no other resident was available");
         check(leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Woken leader did not receive the bounded door task");
-        h.succeed();
+        check(data.bedClaim(leader.getUUID())!=null&&data.bedClaim(leader.getUUID()).bed().equals(bed),"The original bed claim was not preserved while waking the leader");
+        h.succeedWhen(()->{
+            check(!level.getBlockState(h.absolutePos(new BlockPos(7,2,6))).getValue(DoorBlock.OPEN),"Resident did not physically close the nighttime door");
+            check(leader.isSleeping()&&leader.getSleepingPos().orElse(null)!=null&&leader.getSleepingPos().orElseThrow().equals(bed),"Resident did not return to its original bed after closing the door");
+        });
     }
     @GameTest(template="empty",timeoutTicks=100,batch="doors")
-    public static void rain_transition_schedules_open_door_closure(GameTestHelper h){
+    public static void night_door_closure_runs_during_storms(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
         Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));ResidenceData data=ResidenceData.get(level);
         check(data.link(level,h.absolutePos(homePos),resident).equals("ok"),"Could not link rain resident");
-        placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);level.setDayTime(6_000L);level.setWeatherParameters(0,12_000, true, false);
-        invoke("beginWeatherDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class},level);
-        check(resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Rain-time open door was not assigned to an awake resident");
+        placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);level.setWeatherParameters(0,12_000, true, true);
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,400_000L+level.getGameTime());
+        check(resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Storm-time nighttime door was not assigned to an awake resident");
         h.succeed();
     }
     @GameTest(template="empty",timeoutTicks=2600,batch="physical")
@@ -562,8 +573,8 @@ public final class ResidenceGameTests {
         check(owner.equals(data.bedOwner(level.dimension(),bed)),"Separate claim disturbed the original bed");
         h.succeed();
     }
-    @GameTest(template="empty",timeoutTicks=400,batch="sleep")
-    public static void residents_reach_and_use_distinct_residential_beds(GameTestHelper h){
+    @GameTest(template="empty",timeoutTicks=600,batch="sleep")
+    public static void three_residents_reach_and_use_three_distinct_residential_beds(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos home=new BlockPos(6,2,6);
         h.setBlock(home,ResidenciasDosAldeoes.ANCHOR.get());
         ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(home);
@@ -573,27 +584,29 @@ public final class ResidenceGameTests {
                 .setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD)
                 .setValue(net.minecraft.world.level.block.BedBlock.FACING,Direction.NORTH)
                 .setValue(net.minecraft.world.level.block.BedBlock.OCCUPIED,false);
-        BlockPos firstBed=h.absolutePos(new BlockPos(5,3,5)),secondBed=h.absolutePos(new BlockPos(7,3,5));
-        for(BlockPos bed:new BlockPos[]{firstBed,secondBed}){
+        BlockPos firstBed=h.absolutePos(new BlockPos(4,3,5)),secondBed=h.absolutePos(new BlockPos(5,3,5)),thirdBed=h.absolutePos(new BlockPos(7,3,5));
+        for(BlockPos bed:new BlockPos[]{firstBed,secondBed,thirdBed}){
             BlockPos foot=bed.relative(Direction.SOUTH);
             level.setBlock(foot,headState.setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT),2);
             level.setBlock(bed,headState,2);
         }
         Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,7));first.setAge(0);
         Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(7,3,7));second.setAge(0);
+        Villager third=h.spawn(EntityType.VILLAGER,new BlockPos(8,3,7));third.setAge(0);
         var data=ResidenceData.get(level);
         check(data.link(level,h.absolutePos(home),first).equals("ok"),"First resident link failed");
         check(data.link(level,h.absolutePos(home),second).equals("ok"),"Second resident link failed");
+        check(data.link(level,h.absolutePos(home),third).equals("ok"),"Third resident link failed");
         var firstHome=data.owner(first.getUUID());
         check(firstHome!=null&&data.owner(second.getUUID())!=null,"Resident registration vanished before sleep checks");
         level.setDayTime(14000L);
         h.succeedWhen(()->{
-            check(first.isSleeping()&&second.isSleeping(),"Both residents did not reach and use residential beds; time="+level.getDayTime()+" home="+firstHome.pos+" firstOwner="+data.owner(first.getUUID())+" firstPos="+first.blockPosition()+" firstClaim="+data.bedClaim(first.getUUID())+" firstNav="+first.getNavigation().getTargetPos()+" secondOwner="+data.owner(second.getUUID())+" secondPos="+second.blockPosition()+" secondClaim="+data.bedClaim(second.getUUID())+" secondNav="+second.getNavigation().getTargetPos()+" head1="+level.getBlockState(firstBed)+" foot1="+level.getBlockState(firstBed.relative(Direction.SOUTH))+" head2="+level.getBlockState(secondBed)+" foot2="+level.getBlockState(secondBed.relative(Direction.SOUTH)));
-            check(data.bedClaim(first.getUUID())!=null&&data.bedClaim(second.getUUID())!=null,"Sleeping residents have no persisted bed claims");
-            BlockPos firstClaim=data.bedClaim(first.getUUID()).bed(),secondClaim=data.bedClaim(second.getUUID()).bed();
-            check(!firstClaim.equals(secondClaim),"Two residents claimed the same bed");
-            check(first.getSleepingPos().orElse(null)!=null&&second.getSleepingPos().orElse(null)!=null,
-                    "Resident sleep position was not recorded");
+            check(first.isSleeping()&&second.isSleeping()&&third.isSleeping(),"Three residents did not reach and use residential beds; time="+level.getDayTime()+" first="+first.blockPosition()+" claim="+data.bedClaim(first.getUUID())+" second="+second.blockPosition()+" claim="+data.bedClaim(second.getUUID())+" third="+third.blockPosition()+" claim="+data.bedClaim(third.getUUID()));
+            check(data.bedClaim(first.getUUID())!=null&&data.bedClaim(second.getUUID())!=null&&data.bedClaim(third.getUUID())!=null,"Sleeping residents have no persisted bed claims");
+            BlockPos firstClaim=data.bedClaim(first.getUUID()).bed(),secondClaim=data.bedClaim(second.getUUID()).bed(),thirdClaim=data.bedClaim(third.getUUID()).bed();
+            check(!firstClaim.equals(secondClaim)&&!firstClaim.equals(thirdClaim)&&!secondClaim.equals(thirdClaim),"Residents did not claim three distinct beds");
+            check(first.getSleepingPos().orElse(null)!=null&&second.getSleepingPos().orElse(null)!=null&&third.getSleepingPos().orElse(null)!=null,
+                    "Resident sleep positions were not recorded");
         });
     }
     @GameTest(template="empty",timeoutTicks=100,batch="sleep")

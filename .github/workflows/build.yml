@@ -1,4 +1,4 @@
-name: Build and Forge GameTest 1.0.69
+name: Build and Forge GameTest 1.0.70
 on:
   push:
   pull_request:
@@ -43,7 +43,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.69
+          name: residencias-dos-aldeoes-1.0.70
           path: |
             build/libs/*.jar
             gametest-console.log

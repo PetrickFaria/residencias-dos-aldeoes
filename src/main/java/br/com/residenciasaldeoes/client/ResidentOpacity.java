@@ -33,6 +33,7 @@ public final class ResidentOpacity {
     public static void beginPreviewRender(net.minecraft.world.entity.Entity entity) {
         PREVIEW_RENDERING.set(entity instanceof net.minecraft.world.entity.npc.Villager villager ? get(villager.getUUID()) : 100);
     }
+    public static boolean isPreviewRendering() { return PREVIEW_RENDERING.get() != null; }
     public static void endPreviewRender() { PREVIEW_RENDERING.remove(); }
     /** Keep Minecraft's name-tag pass independent from the resident model opacity. */
     public static void beginNameTag() { NAME_TAG_DEPTH.set(NAME_TAG_DEPTH.get() + 1); }

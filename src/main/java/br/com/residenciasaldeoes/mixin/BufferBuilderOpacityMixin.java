@@ -12,6 +12,9 @@ public abstract class BufferBuilderOpacityMixin {
     @ModifyVariable(method = "color(IIII)Lcom/mojang/blaze3d/vertex/VertexConsumer;",
             at = @At("HEAD"), argsOnly = true, ordinal = 3)
     private int residenciasaldeoes$applyResidentAlpha(int alpha) {
+        // The GUI preview applies its alpha through the entity shader color, after
+        // switching cutout passes to translucent. Do not multiply that alpha twice.
+        if(ResidentOpacity.isPreviewRendering())return alpha;
         if(ResidentOpacity.hasPreviewAlphaOverride())return alpha;
         return Math.max(0, Math.min(255, Math.round(alpha * (ResidentOpacity.renderingPercent() / 100.0F))));
     }
