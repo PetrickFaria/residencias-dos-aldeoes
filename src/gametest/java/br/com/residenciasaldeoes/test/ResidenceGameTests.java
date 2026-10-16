@@ -376,6 +376,9 @@ public final class ResidenceGameTests {
         invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,uniqueNight);
         check(first.getPersistentData().contains("residenciasaldeoes_night_door_task"),"The first resident did not receive the task");
         check(!second.getPersistentData().contains("residenciasaldeoes_night_door_task"),"A later resident received the task");
+        Path doorPath=(Path)invoke("findDoorApproach",new Class[]{net.minecraft.server.level.ServerLevel.class,Villager.class,BlockPos.class},level,first,h.absolutePos(inside));
+        System.out.println("NIGHTDOOR-DIAG initial path="+(doorPath==null?"null":"nodes="+doorPath.getNodeCount()+" reach="+doorPath.canReach()+" target="+doorPath.getTarget())+" floor="+level.getBlockState(h.absolutePos(new BlockPos(4,1,6)))+" villager="+first.position());
+        h.runAtTickTime(100,()->System.out.println("NIGHTDOOR-DIAG tick100 alive="+first.isAlive()+" sleep="+first.isSleeping()+" owner="+(data.owner(first.getUUID())!=null)+" pos="+first.position()+" below="+level.getBlockState(first.blockPosition().below())+" task="+first.getPersistentData().getCompound("residenciasaldeoes_night_door_task")+" navDone="+first.getNavigation().isDone()));
         h.runAtTickTime(500,()->{
             check(!level.getBlockState(h.absolutePos(inside)).getValue(DoorBlock.OPEN),"In-bounds wooden door stayed open; villager="+first.position()+" navDone="+first.getNavigation().isDone()+" task="+first.getPersistentData().getCompound("residenciasaldeoes_night_door_task"));
             check(!level.getBlockState(h.absolutePos(oneBeyond)).getValue(DoorBlock.OPEN),"One-block-out wooden door stayed open");
