@@ -27,6 +27,10 @@ mixin {
  config 'residencias.mixins.json'
 }
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+processResources {
+ inputs.property 'mod_version', project.version
+ filesMatching('META-INF/mods.toml') { expand mod_version: project.version }
+}
 jar { manifest { attributes(['Specification-Title':'residenciasaldeoes','Specification-Vendor':'OpenAI','Specification-Version':'1','Implementation-Title':project.name,'Implementation-Version':project.jar.archiveVersion]) } }
 jar.finalizedBy('reobfJar')
 
