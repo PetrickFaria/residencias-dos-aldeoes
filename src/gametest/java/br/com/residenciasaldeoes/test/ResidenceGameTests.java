@@ -359,16 +359,16 @@ public final class ResidenceGameTests {
     }
     @GameTest(template="empty",timeoutTicks=900,batch="physical")
     public static void first_resident_physically_closes_loaded_wooden_doors_in_bounded_area(GameTestHelper h){
-        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);
+        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,9);
         h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
         check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not expand residence for two residents");
-        Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));first.setAge(0);
-        Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,8));second.setAge(0);second.setNoAi(true);
+        Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,7));first.setAge(0);
+        Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,10));second.setAge(0);second.setNoAi(true);
         ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
         check("ok".equals(data.link(level,absoluteHome,first)),"First resident registration failed");
         check("ok".equals(data.link(level,absoluteHome,second)),"Second resident registration failed");
 
-        BlockPos inside=new BlockPos(7,2,6),oneBeyond=new BlockPos(9,2,6),twoBeyond=new BlockPos(10,2,6),iron=new BlockPos(6,2,7);
+        BlockPos inside=new BlockPos(7,2,7),oneBeyond=new BlockPos(9,2,7),twoBeyond=new BlockPos(10,2,7),iron=new BlockPos(6,2,8);
         placeOpenDoor(h,inside,Blocks.OAK_DOOR);placeOpenDoor(h,oneBeyond,Blocks.SPRUCE_DOOR);
         placeOpenDoor(h,twoBeyond,Blocks.OAK_DOOR);placeOpenDoor(h,iron,Blocks.IRON_DOOR);
         level.setDayTime(13_001L);
