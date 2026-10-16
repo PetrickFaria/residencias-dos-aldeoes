@@ -377,7 +377,7 @@ public final class ResidenceGameTests {
         check(first.getPersistentData().contains("residenciasaldeoes_night_door_task"),"The first resident did not receive the task");
         check(!second.getPersistentData().contains("residenciasaldeoes_night_door_task"),"A later resident received the task");
         h.runAtTickTime(500,()->{
-            check(!level.getBlockState(h.absolutePos(inside)).getValue(DoorBlock.OPEN),"In-bounds wooden door stayed open");
+            check(!level.getBlockState(h.absolutePos(inside)).getValue(DoorBlock.OPEN),"In-bounds wooden door stayed open; villager="+first.position()+" navDone="+first.getNavigation().isDone()+" task="+first.getPersistentData().getCompound("residenciasaldeoes_night_door_task"));
             check(!level.getBlockState(h.absolutePos(oneBeyond)).getValue(DoorBlock.OPEN),"One-block-out wooden door stayed open");
             check(level.getBlockState(h.absolutePos(twoBeyond)).getValue(DoorBlock.OPEN),"Door two blocks outside the boundary was changed");
             check(level.getBlockState(h.absolutePos(iron)).getValue(DoorBlock.OPEN),"Iron door was manipulated");
