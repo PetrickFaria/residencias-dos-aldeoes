@@ -365,6 +365,23 @@ public class VillagerResidenceEvents {
 
         net.minecraft.nbt.ListTag doors=task.getList("doors",net.minecraft.nbt.Tag.TAG_LONG);
         int index=task.getInt("index");
+        // If navigation reaches another assigned doorway while crossing the house,
+        // close it when the resident is physically beside it. This closes doors passed
+        // en route without issuing a second navigation task or stopping at the wrong door.
+        for(int i=index;i<doors.size();i++){
+            BlockPos nearby=BlockPos.of(((net.minecraft.nbt.LongTag)doors.get(i)).getAsLong());
+            if(!withinDoorBounds(nearby,home)||!level.hasChunkAt(nearby)
+                    ||villager.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(nearby))>4.0D)continue;
+            BlockState nearbyState=level.getBlockState(nearby);
+            if(nearbyState.getBlock() instanceof net.minecraft.world.level.block.DoorBlock nearbyDoor
+                    &&nearbyState.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
+                    &&nearbyState.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
+                    &&nearbyState.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
+                nearbyDoor.setOpen(villager,level,nearbyState,nearby,false);
+                RESIDENTIAL_DOOR_COOLDOWNS.computeIfAbsent(level,ignored->new HashMap<>())
+                        .put(nearby.asLong(),now+DOOR_REOPEN_COOLDOWN);
+            }
+        }
         while(index<doors.size()){
             BlockPos doorPos=BlockPos.of(((net.minecraft.nbt.LongTag)doors.get(index)).getAsLong());
             if(!level.hasChunkAt(doorPos)){
