@@ -152,7 +152,7 @@ public class VillagerResidenceEvents {
                     ||first.getPersistentData().contains(EMERALD_TRANSFER))continue;
             List<BlockPos> openDoors=findOpenResidentialDoors(level,home);
             if(openDoors.isEmpty())continue;
-            openDoors.sort(Comparator.<BlockPos>comparingLong(first.blockPosition()::distSqr)
+            openDoors.sort(Comparator.comparingDouble(first.blockPosition()::distSqr)
                     .thenComparing(Comparator.naturalOrder()));
             net.minecraft.nbt.ListTag doors=new net.minecraft.nbt.ListTag();
             for(BlockPos door:openDoors)doors.add(net.minecraft.nbt.LongTag.valueOf(door.asLong()));
@@ -186,7 +186,7 @@ public class VillagerResidenceEvents {
             if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
                     &&state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
                     &&state.getMaterial()==net.minecraft.world.level.material.Material.WOOD
-                    &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==DoubleBlockHalf.LOWER
+                    &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
                     &&state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))found.add(pos.immutable());
         }
         return found;
@@ -217,7 +217,7 @@ public class VillagerResidenceEvents {
         net.minecraft.nbt.ListTag doors=task.getList("doors",net.minecraft.nbt.Tag.TAG_LONG);
         int index=task.getInt("index");
         while(index<doors.size()){
-            BlockPos doorPos=BlockPos.of(doors.getLong(index));
+            BlockPos doorPos=BlockPos.of(((net.minecraft.nbt.LongTag)doors.get(index)).getAsLong());
             if(!level.hasChunkAt(doorPos)){
                 index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");continue;
             }
@@ -225,7 +225,7 @@ public class VillagerResidenceEvents {
             if(!(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock door)
                     ||!state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
                     ||state.getMaterial()!=net.minecraft.world.level.material.Material.WOOD
-                    ||state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)!=DoubleBlockHalf.LOWER
+                    ||state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)!=net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
                     ||!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
                 index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");continue;
             }
