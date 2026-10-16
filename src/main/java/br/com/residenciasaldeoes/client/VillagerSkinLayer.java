@@ -99,7 +99,7 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
     }
 
     private void renderSteveSkin(PoseStack poses, MultiBufferSource buffers, int light, ResourceLocation skin) {
-        Object parentModel = ((RenderLayerParent<?, ?>) this).getModel();
+        Object parentModel = getParentModel();
         if (parentModel instanceof EntityModel<?> model) {
             model.renderToBuffer(poses, buffers.getBuffer(RenderType.entityCutoutNoCull(skin)), light,
                     OverlayTexture.NO_OVERLAY, 1.0F, 1.0F, 1.0F, 1.0F);
