@@ -455,12 +455,15 @@ public final class ResidenceGameTests {
     public static void night_door_task_resumes_inside_wandering_without_bed(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos home=new BlockPos(6,2,6);h.setBlock(home,ResidenciasDosAldeoes.ANCHOR.get());
         check(((ResidentialAnchorBlockEntity)h.getBlockEntity(home)).setSize(5),"Could not configure bedless residence");
-        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));var data=ResidenceData.get(level);
+        // The home bounds start one block above the anchor. Give the resident a real,
+        // walkable interior floor at that height instead of testing from below it.
+        for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,6));var data=ResidenceData.get(level);
         check(data.link(level,h.absolutePos(home),resident).equals("ok"),"Could not link bedless door resident");
-        placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
+        placeOpenDoor(h,new BlockPos(7,3,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
         invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,350_000L+level.getGameTime());
         h.succeedWhen(()->{
-            BlockPos door=h.absolutePos(new BlockPos(7,2,6));
+            BlockPos door=h.absolutePos(new BlockPos(7,3,6));
             check(!level.getBlockState(door).getValue(DoorBlock.OPEN),"Resident did not close the door");
             check(!resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Door route remained active after closing");
             var target=resident.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET).orElse(null);
