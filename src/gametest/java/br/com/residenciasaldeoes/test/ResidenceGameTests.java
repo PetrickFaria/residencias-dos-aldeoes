@@ -357,7 +357,7 @@ public final class ResidenceGameTests {
         var upper=block.defaultBlockState().setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER).setValue(DoorBlock.OPEN,true);
         h.setBlock(pos,lower);h.setBlock(pos.above(),upper);
     }
-    @GameTest(template="empty",timeoutTicks=900,batch="doors")
+    @GameTest(template="empty",timeoutTicks=900,batch="physical")
     public static void first_resident_physically_closes_loaded_wooden_doors_in_bounded_area(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);
         h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
