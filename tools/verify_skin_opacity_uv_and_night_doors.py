@@ -53,7 +53,8 @@ assert "home.residents.contains(villager.getUUID())" in events
 assert "phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining()" in events
 assert "level.hasChunkAt(pos)" in events and "state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)" in events
 assert "door.setOpen(villager,level,state,doorPos,false)" in events
-assert "findApproach(level,doorPos,villager)" in events and "NIGHT_DOOR_WALK_SPEED" in events
+assert "findDoorExitApproach(level,doorPos,villager)" in events and "NIGHT_DOOR_WALK_SPEED" in events
+assert "route_target" in events and "far-side waypoint" in events
 assert "now-task.getLong(\"last_progress\")>=200L" in events and "attempts>=3" in events
 assert "residenciasaldeoes_night_door_task" in transport
 
