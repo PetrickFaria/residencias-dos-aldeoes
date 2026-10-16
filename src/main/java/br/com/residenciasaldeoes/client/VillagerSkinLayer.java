@@ -90,7 +90,6 @@ public final class VillagerSkinLayer extends RenderLayer<Villager, VillagerModel
             return;
         }
         VillagerModel<Villager> model=getParentModel();
-        boolean complete=VillagerSkinTextures.isComplete(villager.getUUID());
         if (completeOverlay) {
             if (!complete) return;
             // Skin Completa already replaced the renderer's base texture through a
