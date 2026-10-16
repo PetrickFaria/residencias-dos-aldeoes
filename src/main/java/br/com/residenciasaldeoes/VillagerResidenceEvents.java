@@ -241,7 +241,7 @@ public class VillagerResidenceEvents {
     private void queueResidentialDoorTask(ServerLevel level,ResidenceData.Home home,List<BlockPos> candidates,long period){
         if(candidates.isEmpty()||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
                 ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))return;
-        long now=level.getGameTime();
+        long now=level.getGameTime();ResidenceData data=ResidenceData.get(level);
         Map<Long,Long> cooldowns=RESIDENTIAL_DOOR_COOLDOWNS.computeIfAbsent(level,ignored->new HashMap<>());
         cooldowns.entrySet().removeIf(entry->entry.getValue()<=now);
         candidates=candidates.stream().filter(p->withinDoorBounds(p,home)&&level.hasChunkAt(p)
