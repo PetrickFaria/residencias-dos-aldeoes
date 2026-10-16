@@ -251,8 +251,9 @@ public class VillagerResidenceEvents {
                     &&!villager.getNavigation().isDone())return true;
             if(now-routeAttempt<20L)return true;
             task.putLong("last_route_attempt",now);
-            Path path=findDoorApproach(level,villager,doorPos);
-            if(path==null){
+            BlockPos approach=findApproach(level,doorPos,villager);
+            Path path=approach==null?null:villager.getNavigation().createPath(approach,0);
+            if(path==null||path.getNodeCount()<=1){
                 int attempts=task.getInt("attempts")+1;task.putInt("attempts",attempts);
                 if(attempts>=3){index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");}
                 return true;
@@ -266,21 +267,6 @@ public class VillagerResidenceEvents {
         }
         finishNightDoorClosure(villager);
         return true;
-    }
-
-    private static Path findDoorApproach(ServerLevel level,Villager villager,BlockPos door){
-        List<Path> paths=new ArrayList<>();
-        for(Direction direction:Direction.Plane.HORIZONTAL)for(int dy=-1;dy<=1;dy++){
-            BlockPos feet=door.relative(direction).offset(0,dy,0);
-            if(!level.hasChunkAt(feet)||!level.hasChunkAt(feet.above())||!level.hasChunkAt(feet.below()))continue;
-            if(!level.getBlockState(feet.below()).isFaceSturdy(level,feet.below(),Direction.UP))continue;
-            if(!level.noCollision(villager,new AABB(feet.getX()+.15,feet.getY(),feet.getZ()+.15,
-                    feet.getX()+.85,feet.getY()+1.95,feet.getZ()+.85)))continue;
-            Path path=villager.getNavigation().createPath(feet,0);
-            if(path!=null&&path.getNodeCount()>1)paths.add(path);
-        }
-        paths.sort(Comparator.comparingInt(Path::getNodeCount));
-        return paths.isEmpty()?null:paths.get(0);
     }
 
     private static void finishNightDoorClosure(Villager villager){
