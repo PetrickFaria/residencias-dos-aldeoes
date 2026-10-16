@@ -1,0 +1,163 @@
+name: Publish next mod version
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: residencias-dos-aldeoes-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Select next sequential version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="$GITHUB_REF_NAME"
+          git fetch origin "$branch" --tags
+          git checkout --detach "origin/$branch"
+          head_sha="$(git rev-parse HEAD)"
+          exact_tag="$(git tag --points-at "$head_sha" --list 'v[0-9]*' | sort -V | tail -n 1)"
+          if [[ -n "$exact_tag" ]]; then
+            version="${exact_tag#v}"
+            jar="residencias-dos-aldeoes-$version.jar"
+            if gh release view "$exact_tag" --json assets --jq ".assets[].name" 2>/dev/null | grep -Fxq "$jar"; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "value=$version" >> "$GITHUB_OUTPUT"
+              echo "An already published version exists for this commit; nothing to increment."
+              exit 0
+            fi
+            echo "repair=true" >> "$GITHUB_OUTPUT"
+            echo "target=$head_sha" >> "$GITHUB_OUTPUT"
+            echo "value=$version" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          current="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          if [[ ! "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid mod_version in gradle.properties: $current" >&2
+            exit 1
+          fi
+
+          pending=""
+          while IFS=' ' read -r commit subject; do
+            if [[ "$subject" =~ ^chore\(release\):[[:space:]]prepare[[:space:]]([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              candidate="${BASH_REMATCH[1]}"
+              if [[ "$candidate" == "$current" ]] && ! git tag --list "v$candidate" | grep -q .; then
+                pending="$candidate"
+                break
+              fi
+            fi
+          done < <(git log -n 100 --format='%H %s')
+
+          if [[ -n "$pending" ]]; then
+            version="$pending"
+          else
+            base="$current"
+            latest_tag="$(git tag --list 'v[0-9]*' --sort=-version:refname | head -n 1)"
+            if [[ -n "$latest_tag" ]]; then
+              latest="${latest_tag#v}"
+              base="$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -n 1)"
+            fi
+            IFS='.' read -r major minor patch <<< "$base"
+            version="$major.$minor.$((patch + 1))"
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "repair=false" >> "$GITHUB_OUTPUT"
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "source=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "Version selected: $version (project version: $current)"
+      - name: Verify output and preserved behavior
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          python3 tools/verify_daily_production.py
+          python3 tools/verify_residence_food_slots_item.py
+          python3 tools/verify_reinforced_door.py
+          python3 tools/verify_emerald_chest.py
+          python3 tools/verify_fragment_drops.py
+          python3 tools/verify_approved_geometry.py
+          python3 tools/verify_texture_finish.py
+          python3 tools/verify_resident_spawn_exclusions.py
+          python3 tools/verify_emerald_fragment_texture.py
+          python3 tools/verify_capture_identity.py
+          python3 tools/verify_skin_preview_ui.py
+          python3 tools/verify_skin_opacity_uv_and_night_doors.py
+      - name: Build installable mod
+        if: steps.version.outputs.skip != 'true'
+        env:
+          ORG_GRADLE_PROJECT_mod_version: ${{ steps.version.outputs.value }}
+        timeout-minutes: 15
+        run: bash gradlew --no-daemon clean build
+      - name: Run Forge GameTest server
+        if: steps.version.outputs.skip != 'true'
+        env:
+          ORG_GRADLE_PROJECT_mod_version: ${{ steps.version.outputs.value }}
+        timeout-minutes: 12
+        run: python3 tools/run_gametest_ci.py
+      - name: Record version and publish release
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.value }}
+          REPAIR: ${{ steps.version.outputs.repair }}
+          SOURCE_SHA: ${{ steps.version.outputs.source }}
+          BRANCH: ${{ steps.version.outputs.branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar="build/libs/residencias-dos-aldeoes-$VERSION.jar"
+          test -s "$jar"
+
+          if [[ "$REPAIR" != "true" ]]; then
+            git fetch origin "$BRANCH"
+            remote_sha="$(git rev-parse "origin/$BRANCH")"
+            if [[ "$remote_sha" != "$SOURCE_SHA" ]]; then
+              echo "Branch advanced during the release build; refusing to publish stale code." >&2
+              exit 1
+            fi
+
+            current="$(sed -n 's/^mod_version=//p' gradle.properties)"
+            if [[ "$current" != "$VERSION" ]]; then
+              VERSION="$VERSION" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path("gradle.properties")
+          lines = p.read_text().splitlines()
+          lines = [f"mod_version={os.environ['VERSION']}" if x.startswith("mod_version=") else x for x in lines]
+          p.write_text("\n".join(lines) + "\n")
+          PY
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add gradle.properties
+              git commit -m "chore(release): prepare $VERSION"
+              git push origin "HEAD:refs/heads/$BRANCH"
+            fi
+            target="$(git rev-parse HEAD)"
+          else
+            target="${{ steps.version.outputs.target }}"
+          fi
+
+          tag="v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$jar" --clobber
+          else
+            gh release create "$tag" "$jar" --target "$target" \
+              --title "Residências dos Aldeões $VERSION" \
+              --notes "Build versioned for Minecraft Java 1.19.2, Forge 43.5.0, Java 17."
+          fi

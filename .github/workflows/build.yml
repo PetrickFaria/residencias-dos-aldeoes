@@ -1,4 +1,4 @@
-name: Build and Forge GameTest 1.0.73
+name: Build and Forge GameTest
 on:
   push:
   pull_request:
@@ -16,6 +16,9 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+      - name: Read project version
+        id: version
+        run: echo "value=$(sed -n 's/^mod_version=//p' gradle.properties)" >> "$GITHUB_OUTPUT"
       - name: Verify output and preserved behavior
         run: |
           python3 tools/verify_daily_production.py
@@ -43,7 +46,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: residencias-dos-aldeoes-1.0.73
+          name: residencias-dos-aldeoes-${{ steps.version.outputs.value }}
           path: |
             build/libs/*.jar
             gametest-console.log
