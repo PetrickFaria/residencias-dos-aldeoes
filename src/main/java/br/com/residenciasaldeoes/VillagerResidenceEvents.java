@@ -65,11 +65,13 @@ public class VillagerResidenceEvents {
     private static final long RETURN_RETRY_TICKS=20L;
     private static final String EMERALD_TRANSFER="residenciasaldeoes_emerald_transfer";
     private static final String NIGHT_DOOR_TASK="residenciasaldeoes_night_door_task";
+    private static final String NIGHT_DOOR_RESUME="residenciasaldeoes_night_door_resume";
     private static final String BED_RETRY_AFTER="residenciasaldeoes_bed_retry_after";
     private static final Map<ServerLevel,Map<String,Long>> NIGHT_DOOR_NIGHTS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<Long,Long>> RESIDENTIAL_DOOR_COOLDOWNS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<Long,Long>> PENDING_OPEN_DOORS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<String,Long>> LAST_PERIODIC_DOOR_SCAN=new WeakHashMap<>();
+    private static final Map<ServerLevel,Boolean> RAINING_STATE=new WeakHashMap<>();
     private static final long NIGHT_START=13_000L, NIGHT_END=23_000L;
     private static final double NIGHT_DOOR_WALK_SPEED=.48D;
     private static final int BED_ANCHOR_INTERVAL=100;
@@ -114,6 +116,9 @@ public class VillagerResidenceEvents {
             processProductionDawn(level,productionGameTime);
         if(previous!=null&&crossedNightfall(previous,new DawnSample(levelGameTime,dayTime)))
             beginNightDoorClosure(level,Math.floorDiv(dayTime,DAY_LENGTH));
+        boolean raining=level.isRaining();
+        Boolean wasRaining=RAINING_STATE.put(level,raining);
+        if(raining&&!Boolean.TRUE.equals(wasRaining))beginWeatherDoorClosure(level);
         scanLoadedResidentialDoors(level);
         processPendingDoorChanges(level);
         processLoadedProduction(level,productionGameTime);
@@ -129,14 +134,14 @@ public class VillagerResidenceEvents {
                 ||state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)!=net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
                 ||!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))return;
         long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
-        if(phase<NIGHT_START||phase>=NIGHT_END)return;
+        if((phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining())return;
         PENDING_OPEN_DOORS.computeIfAbsent(level,ignored->new HashMap<>()).put(pos.asLong(),level.getGameTime());
     }
 
     /** Wait until an open door is no longer being used as a passage before assigning a closer. */
     private void processPendingDoorChanges(ServerLevel level){
         long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
-        if(phase<NIGHT_START||phase>=NIGHT_END){PENDING_OPEN_DOORS.remove(level);return;}
+        if((phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining()){PENDING_OPEN_DOORS.remove(level);return;}
         Map<Long,Long> pending=PENDING_OPEN_DOORS.get(level);if(pending==null||pending.isEmpty())return;
         long now=level.getGameTime();if(now%10L!=0L)return;ResidenceData data=ResidenceData.get(level);
         for(var entry:new ArrayList<>(pending.entrySet())){
@@ -174,7 +179,7 @@ public class VillagerResidenceEvents {
     /** A fixed 300-tick fallback catches door changes that do not emit neighbor notifications. */
     private static void scanLoadedResidentialDoors(ServerLevel level){
         long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
-        if(phase<NIGHT_START||phase>=NIGHT_END)return;
+        if((phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining())return;
         long now=level.getGameTime();
         if(now%DOOR_SCAN_INTERVAL!=0L)return;
         ResidenceData data=ResidenceData.get(level);
@@ -220,6 +225,15 @@ public class VillagerResidenceEvents {
                 &&after.gameTime()-before.gameTime()<=1L
                 &&after.dayTime()-before.dayTime()!=1L;
         return naturalTick||adjustedClock;
+    }
+    /** Preserve the established rain-transition behavior while sharing the bounded door worker. */
+    private void beginWeatherDoorClosure(ServerLevel level){
+        ResidenceData data=ResidenceData.get(level);
+        for(ResidenceData.Home home:new ArrayList<>(data.homes())){
+            if(!home.dimension.equals(level.dimension())||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
+                    ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))continue;
+            queueResidentialDoorTask(level,home,findOpenResidentialDoors(level,home),Math.floorDiv(level.getDayTime(),DAY_LENGTH));
+        }
     }
     /** One bounded scan per loaded residence at the start of each night. */
     private void beginNightDoorClosure(ServerLevel level,long nightPeriod){
@@ -487,6 +501,8 @@ public class VillagerResidenceEvents {
 
     private static void finishNightDoorClosure(Villager villager){
         villager.getPersistentData().remove(NIGHT_DOOR_TASK);
+        // Resume a bed anchor or an interior stroll on the next entity tick.
+        villager.getPersistentData().putBoolean(NIGHT_DOOR_RESUME,true);
         villager.getNavigation().stop();
         villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
         villager.getBrain().eraseMemory(MemoryModuleType.PATH);
@@ -705,7 +721,7 @@ public class VillagerResidenceEvents {
             level.playSound(null,villager.blockPosition(),SoundEvents.VILLAGER_NO,SoundSource.NEUTRAL,0.75F,1.0F);
     }
     @SubscribeEvent public void onVillagerJoin(EntityJoinLevelEvent event){if(event.getEntity() instanceof Villager v&&event.getLevel() instanceof ServerLevel sl){ResidenceData data=ResidenceData.get(sl);data.applyPendingNameRestoration(v);if(data.reconcileCapturedResident(sl,v))data.applyResidentName(v);}}
-    @SubscribeEvent public void onStartTracking(PlayerEvent.StartTracking event){if(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player&&event.getTarget() instanceof Villager villager&&player.level instanceof ServerLevel level&&level.dimension().equals(villager.level.dimension())){ResidenceData data=ResidenceData.get(level);if(data.owner(villager.getUUID())!=null)br.com.residenciasaldeoes.network.ModNetwork.sendOpacity(player,villager.getUUID(),data.residentOpacity(villager.getUUID()));ResidenceData.ResidentSkin skin=data.residentSkin(villager.getUUID());if(skin!=null)br.com.residenciasaldeoes.network.ModNetwork.sendSkin(player,villager.getUUID(),skin);}}
+    @SubscribeEvent public void onStartTracking(PlayerEvent.StartTracking event){if(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player&&event.getTarget() instanceof Villager villager&&player.level instanceof ServerLevel level&&level.dimension().equals(villager.level.dimension())){ResidenceData data=ResidenceData.get(level);if(data.owner(villager.getUUID())!=null){br.com.residenciasaldeoes.network.ModNetwork.sendOpacity(player,villager.getUUID(),data.residentOpacity(villager.getUUID()));br.com.residenciasaldeoes.network.ModNetwork.sendResidentModel(player,villager.getUUID(),data.residentModel(villager.getUUID()));}ResidenceData.ResidentSkin skin=data.residentSkin(villager.getUUID());if(skin!=null)br.com.residenciasaldeoes.network.ModNetwork.sendSkin(player,villager.getUUID(),skin);}}
     @SubscribeEvent public void onVillageCatSpawn(LivingSpawnEvent.CheckSpawn event) {
         if (!(event.getEntity() instanceof net.minecraft.world.entity.animal.Cat cat) || event.getSpawner()!=null || !(cat.level instanceof ServerLevel level)) return;
         ResidenceData data=ResidenceData.get(level);BlockPos spawn=cat.blockPosition();
@@ -737,8 +753,9 @@ public class VillagerResidenceEvents {
         if(villager.getPersistentData().contains(EMERALD_TRANSFER)){tickEmeraldTransfer(level,villager);return;}
         if(villager.getPersistentData().contains(NIGHT_DOOR_TASK)){tickNightDoorClosure(level,villager);return;}
         boolean weather=level.isRaining();var entityData=villager.getPersistentData();
+        boolean doorResume=entityData.getBoolean(NIGHT_DOOR_RESUME);if(doorResume)entityData.remove(NIGHT_DOOR_RESUME);
         boolean forced=entityData.getBoolean(RETURN_FORCED);
-        if(villager.tickCount%10!=0&&!weather&&!forced)return;
+        if(villager.tickCount%10!=0&&!weather&&!forced&&!doorResume)return;
         ResidenceData data=ResidenceData.get(level);ResidenceData.Home home=data.owner(villager.getUUID());if(home==null)return;
         if(!home.dimension.equals(level.dimension())||!level.hasChunkAt(home.pos))return;
         if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity)){data.unlinkAll(level,home.dimension,home.pos);return;}
@@ -791,7 +808,7 @@ public class VillagerResidenceEvents {
                     villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
                     villager.getBrain().eraseMemory(MemoryModuleType.PATH);
                 }
-            }else if(villager.tickCount%BED_ANCHOR_INTERVAL==0&&level.getGameTime()>=entityData.getLong(BED_RETRY_AFTER)){
+            }else if((doorResume||villager.tickCount%BED_ANCHOR_INTERVAL==0)&&level.getGameTime()>=entityData.getLong(BED_RETRY_AFTER)){
                 ResidenceData.BedClaim claim=data.bedClaim(villager.getUUID());BlockPos bed=claim!=null&&claim.dimension().equals(level.dimension())&&claim.home().equals(home.pos)?claim.bed():null;
                 if(bed!=null&&!data.ownsBed(level.dimension(),bed,villager.getUUID())){
                     data.releaseBed(villager.getUUID());bed=null;
@@ -808,7 +825,10 @@ public class VillagerResidenceEvents {
                     // accessible bed in this residence can be considered.
                     data.releaseBed(villager.getUUID());bed=null;
                 }
-                if(bed==null){bed=findAvailableBed(level,data,villager,home);if(bed!=null&&!data.reserveBed(villager.getUUID(),level.dimension(),home.pos,bed))bed=null;}
+                if(bed!=null&&!claimResidentialBedPoi(level,data,villager,home,bed)){
+                    data.releaseBed(villager.getUUID());bed=null;
+                }
+                if(bed==null)bed=findAvailableBed(level,data,villager,home);
                 if(bed!=null&&level.hasChunkAt(bed)){
                     if(level.getBlockState(bed).getValue(BedBlock.OCCUPIED)){
                         // An awake resident cannot keep retrying a bed occupied by another
@@ -817,18 +837,33 @@ public class VillagerResidenceEvents {
                         bed=findAvailableBed(level,data,villager,home);
                         bedApproach=bed==null?null:findReachableBedApproach(level,villager,bed,home);
                         if(bed!=null&&bedApproach==null){data.releaseBed(villager.getUUID());bed=null;}
-                        if(bed!=null&&!data.reserveBed(villager.getUUID(),level.dimension(),home.pos,bed))bed=null;
                     }
                     if(bed!=null&&data.ownsBed(level.dimension(),bed,villager.getUUID())){
                         if(bedApproach==null)bedApproach=findReachableBedApproach(level,villager,bed,home);
-                        if(bedApproach==null){data.releaseBed(villager.getUUID());return;}
-                        if(villager.blockPosition().distSqr(bedApproach)<=4.0D){
+                        if(bedApproach==null){releaseResidentialBedPoi(level,villager,bed);data.releaseBed(villager.getUUID());return;}
+                        net.minecraft.core.GlobalPos homeMemory=villager.getBrain().getMemory(MemoryModuleType.HOME).orElse(null);
+                        if(homeMemory==null||!homeMemory.dimension().equals(level.dimension())||!homeMemory.pos().equals(bed)){
+                            villager.getBrain().setMemory(MemoryModuleType.HOME,net.minecraft.core.GlobalPos.of(level.dimension(),bed));
+                        }
+                        if(villager.blockPosition().equals(bedApproach)){
                             villager.startSleeping(bed);
                             if(villager.isSleeping())entityData.remove(BED_RETRY_AFTER);
-                            else{data.releaseBed(villager.getUUID());entityData.putLong(BED_RETRY_AFTER,level.getGameTime()+200L);}
+                            else{releaseResidentialBedPoi(level,villager,bed);data.releaseBed(villager.getUUID());entityData.putLong(BED_RETRY_AFTER,level.getGameTime()+200L);}
+                        }else{
+                            var walk=villager.getBrain().getMemory(MemoryModuleType.WALK_TARGET).orElse(null);
+                            if(walk==null||!walk.getTarget().currentBlockPosition().equals(bedApproach)){
+                                villager.getBrain().eraseMemory(MemoryModuleType.PATH);
+                                villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET,new WalkTarget(bedApproach,.85F,0));
+                            }
+                            if(villager.getNavigation().isDone()||walk==null||!walk.getTarget().currentBlockPosition().equals(bedApproach)){
+                                Path path=villager.getNavigation().createPath(bedApproach,0);
+                                if(path!=null&&path.canReach()&&pathStaysInside(path,home))villager.getNavigation().moveTo(path,.85D);
+                            }
                         }
-                        else villager.getNavigation().moveTo(bedApproach.getX()+.5D,bedApproach.getY(),bedApproach.getZ()+.5D,.85D);
                     }
+                }else if(doorResume&&!villager.isSleeping()){
+                    BlockPos wander=findRandomReachableInteriorSpot(level,villager,home);
+                    if(wander!=null){villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);villager.getBrain().eraseMemory(MemoryModuleType.PATH);villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET,new WalkTarget(wander,.48F,1));}
                 }
             }
             return;
@@ -1030,9 +1065,36 @@ public class VillagerResidenceEvents {
                     if(!(footState.getBlock() instanceof BedBlock)
                             ||footState.getValue(BedBlock.PART)!=net.minecraft.world.level.block.state.properties.BedPart.FOOT
                             ||footState.getValue(BedBlock.FACING)!=state.getValue(BedBlock.FACING))continue;
-                    if(findReachableBedApproach(level,villager,p,home)!=null)return p;
+                    if(findReachableBedApproach(level,villager,p,home)==null)continue;
+                    if(!claimResidentialBedPoi(level,data,villager,home,p))continue;
+                    if(data.reserveBed(villager.getUUID(),level.dimension(),home.pos,p))return p;
+                    releaseResidentialBedPoi(level,villager,p);
                 }
         return null;
+    }
+    /** Claim the same HOME POI vanilla sleep behaviors use, instead of relying only on the mod's reservation map. */
+    private static boolean claimResidentialBedPoi(ServerLevel level,ResidenceData data,Villager villager,ResidenceData.Home home,BlockPos bed){
+        var brain=villager.getBrain();
+        net.minecraft.core.GlobalPos current=brain.getMemory(MemoryModuleType.HOME).orElse(null);
+        if(current!=null&&current.dimension().equals(level.dimension())&&current.pos().equals(bed))return true;
+        if(current!=null){
+            // A resident previously assigned another home. Release only that villager's
+            // own old HOME ticket before acquiring this residence's new bed.
+            level.getPoiManager().release(current.pos());
+            brain.eraseMemory(MemoryModuleType.HOME);
+        }
+        var acquired=level.getPoiManager().take(type->type.is(net.minecraft.world.entity.ai.village.poi.PoiTypes.HOME),
+                (type,pos)->pos.equals(bed),bed,1);
+        if(acquired.isEmpty())return false;
+        brain.setMemory(MemoryModuleType.HOME,net.minecraft.core.GlobalPos.of(level.dimension(),bed));
+        return true;
+    }
+    private static void releaseResidentialBedPoi(ServerLevel level,Villager villager,BlockPos bed){
+        net.minecraft.core.GlobalPos current=villager.getBrain().getMemory(MemoryModuleType.HOME).orElse(null);
+        if(current!=null&&current.dimension().equals(level.dimension())&&current.pos().equals(bed)){
+            level.getPoiManager().release(bed);
+            villager.getBrain().eraseMemory(MemoryModuleType.HOME);
+        }
     }
     private BlockPos findReachableBedApproach(ServerLevel level,Villager villager,BlockPos bed,ResidenceData.Home home){
         List<BlockPos> approaches=new ArrayList<>();

@@ -3,6 +3,7 @@ package br.com.residenciasaldeoes.network;
 import br.com.residenciasaldeoes.ResidenciasDosAldeoes;
 import br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity;
 import br.com.residenciasaldeoes.data.ResidenceData;
+import br.com.residenciasaldeoes.data.ResidentModelType;
 import br.com.residenciasaldeoes.data.SkinApplicationMode;
 import br.com.residenciasaldeoes.data.WardrobePackage;
 import br.com.residenciasaldeoes.menu.AnchorMenu;
@@ -25,7 +26,7 @@ import javax.imageio.ImageIO;
 import java.util.function.Supplier;
 
 public final class ModNetwork {
- private static final String VERSION="9";
+ private static final String VERSION="10";
  public static final int MAX_SKIN_BYTES=WardrobePackage.MAX_ARCHIVE_BYTES;
  public static final SimpleChannel CHANNEL=NetworkRegistry.newSimpleChannel(new ResourceLocation(ResidenciasDosAldeoes.MODID,"main"),()->VERSION,VERSION::equals,VERSION::equals);
  private static int id; private ModNetwork(){}
@@ -36,6 +37,7 @@ public final class ModNetwork {
   CHANNEL.messageBuilder(AssignSkin.class,id++).encoder(AssignSkin::encode).decoder(AssignSkin::decode).consumerMainThread(AssignSkin::handle).add();
   CHANNEL.messageBuilder(SkinSync.class,id++).encoder(SkinSync::encode).decoder(SkinSync::decode).consumerMainThread(SkinSync::handle).add();
   CHANNEL.messageBuilder(OpacitySync.class,id++).encoder(OpacitySync::encode).decoder(OpacitySync::decode).consumerMainThread(OpacitySync::handle).add();
+  CHANNEL.messageBuilder(ResidentModelSync.class,id++).encoder(ResidentModelSync::encode).decoder(ResidentModelSync::decode).consumerMainThread(ResidentModelSync::handle).add();
  }
  public static void action(BlockPos p,int a,int v){CHANNEL.sendToServer(new Action(p,a,v,null,""));}
  public static void unlinkResident(BlockPos p,UUID id){CHANNEL.sendToServer(new Action(p,4,0,id,""));}
@@ -46,18 +48,22 @@ public final class ModNetwork {
  public static void assignSkin(BlockPos pos,UUID resident,String key,byte[] png,SkinApplicationMode mode){CHANNEL.sendToServer(new AssignSkin(pos,resident,key,png,mode));}
  public static void requestSkin(BlockPos pos,UUID resident){CHANNEL.sendToServer(new Action(pos,9,0,resident,""));}
  public static void setResidentOpacity(BlockPos pos,UUID resident,int opacity){CHANNEL.sendToServer(new Action(pos,10,opacity,resident,""));}
+ public static void setResidentModel(BlockPos pos,UUID resident,ResidentModelType type){CHANNEL.sendToServer(new Action(pos,11,type==ResidentModelType.STEVE?1:0,resident,""));}
  public static void broadcastSkin(UUID id,ResidenceData.ResidentSkin skin){if(skin==null){clearSkin(id);return;}CHANNEL.send(PacketDistributor.ALL.noArg(),new SkinSync(id,skin.key(),skin.png(),skin.mode()));}
  public static void clearSkin(UUID id){CHANNEL.send(PacketDistributor.ALL.noArg(),new SkinSync(id,"",new byte[0],SkinApplicationMode.COMPLETE));}
- public static void clearResidentAppearance(UUID id){clearSkin(id);CHANNEL.send(PacketDistributor.ALL.noArg(),new OpacitySync(id,-1));}
+ public static void clearResidentAppearance(UUID id){clearSkin(id);CHANNEL.send(PacketDistributor.ALL.noArg(),new OpacitySync(id,-1));CHANNEL.send(PacketDistributor.ALL.noArg(),new ResidentModelSync(id,-1));}
  public static void sendOpacity(ServerPlayer player,UUID id,int opacity){CHANNEL.send(PacketDistributor.PLAYER.with(()->player),new OpacitySync(id,opacity));}
  public static void broadcastOpacity(ServerLevel level,ServerPlayer sender,UUID id,int opacity){net.minecraft.world.entity.Entity entity=level.getEntity(id);if(entity!=null)CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(()->entity),new OpacitySync(id,opacity));else sendOpacity(sender,id,opacity);}
+ public static void sendResidentModel(ServerPlayer player,UUID id,ResidentModelType type){CHANNEL.send(PacketDistributor.PLAYER.with(()->player),new ResidentModelSync(id,type.ordinal()));}
+ public static void broadcastResidentModel(ServerLevel level,ServerPlayer sender,UUID id,ResidentModelType type){net.minecraft.world.entity.Entity entity=level.getEntity(id);if(entity!=null)CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(()->entity),new ResidentModelSync(id,type.ordinal()));else sendResidentModel(sender,id,type);}
  public static void sendSkin(ServerPlayer player,UUID id,ResidenceData.ResidentSkin skin){if(skin!=null)CHANNEL.send(PacketDistributor.PLAYER.with(()->player),new SkinSync(id,skin.key(),skin.png(),skin.mode()));}
  public static void sendResidents(ServerPlayer p,BlockPos pos,List<ResidentEntry> e){CHANNEL.send(PacketDistributor.PLAYER.with(()->p),new Residents(p.level.dimension().location(),pos,e,previewEnabled(p,p.level.dimension().location(),pos)));}
  public static void sendPreviews(ServerPlayer p,List<PreviewEntry> e){CHANNEL.send(PacketDistributor.PLAYER.with(()->p),new Previews(e));}
- public record ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest,boolean food,String skinKey,SkinApplicationMode skinMode,int opacity){
-  public ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest){this(id,name,bed,work,chest,false,"",SkinApplicationMode.COMPLETE,100);}
-  public ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest,String skinKey){this(id,name,bed,work,chest,false,skinKey,SkinApplicationMode.COMPLETE,100);}
-  public ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest,String skinKey,SkinApplicationMode skinMode){this(id,name,bed,work,chest,false,skinKey,skinMode,100);}
+ public record ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest,boolean food,String skinKey,SkinApplicationMode skinMode,int opacity,ResidentModelType modelType){
+  public ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest){this(id,name,bed,work,chest,false,"",SkinApplicationMode.COMPLETE,100,ResidentModelType.VILLAGER);}
+  public ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest,String skinKey){this(id,name,bed,work,chest,false,skinKey,SkinApplicationMode.COMPLETE,100,ResidentModelType.VILLAGER);}
+  public ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest,String skinKey,SkinApplicationMode skinMode){this(id,name,bed,work,chest,false,skinKey,skinMode,100,ResidentModelType.VILLAGER);}
+  public ResidentEntry(UUID id,String name,boolean bed,boolean work,boolean chest,boolean food,String skinKey,SkinApplicationMode skinMode,int opacity){this(id,name,bed,work,chest,food,skinKey,skinMode,opacity,ResidentModelType.VILLAGER);}
  }
  public record PreviewEntry(ResourceLocation dimension,BlockPos pos,int size,boolean permanent){}
  public record Action(BlockPos pos,int action,int value,UUID resident,String text){
@@ -77,13 +83,14 @@ public final class ModNetwork {
     case 8->m.sendResidentSnapshot(p);
     case 9->{if(resident!=null){ResidenceData.Home h=d.owner(resident);if(h!=null&&h.dimension.equals(sl.dimension())&&h.pos.equals(pos))sendSkin(p,resident,d.residentSkin(resident));}}
     case 10->{if(resident!=null){ResidenceData.Home h=d.owner(resident);if(h!=null&&h.dimension.equals(sl.dimension())&&h.pos.equals(pos)){int opacity=Math.max(0,Math.min(100,value));d.setResidentOpacity(resident,opacity);broadcastOpacity(sl,p,resident,opacity);m.sendResidentSnapshot(p);}}}
+    case 11->{if(resident!=null){ResidenceData.Home h=d.owner(resident);if(h!=null&&h.dimension.equals(sl.dimension())&&h.pos.equals(pos)){ResidentModelType type=ResidentModelType.byId(value);d.setResidentModel(resident,type);broadcastResidentModel(sl,p,resident,type);m.sendResidentSnapshot(p);}}}
    }
   });c.get().setPacketHandled(true);}
  }
  private static String previewKey(ResourceLocation d,BlockPos p){return "residenciasaldeoes_preview_"+d.toString().replace(':','_')+"_"+p.asLong();}
  public static boolean previewEnabled(ServerPlayer p,ResourceLocation d,BlockPos pos){return p.getPersistentData().getBoolean(previewKey(d,pos));}
  public record Previews(List<PreviewEntry> entries){void encode(FriendlyByteBuf b){b.writeVarInt(entries.size());for(var e:entries){b.writeResourceLocation(e.dimension());b.writeBlockPos(e.pos());b.writeVarInt(e.size());b.writeBoolean(e.permanent());}}static Previews decode(FriendlyByteBuf b){int n=Math.min(256,b.readVarInt());List<PreviewEntry> a=new ArrayList<>(n);for(int i=0;i<n;i++)a.add(new PreviewEntry(b.readResourceLocation(),b.readBlockPos(),b.readVarInt(),b.readBoolean()));return new Previews(List.copyOf(a));}void handle(Supplier<NetworkEvent.Context> c){c.get().enqueueWork(()->DistExecutor.unsafeRunWhenOn(Dist.CLIENT,()->()->{br.com.residenciasaldeoes.client.ResidencePreview.setEntries(entries);br.com.residenciasaldeoes.client.AnchorScreen.receivePreviewStates(entries);}));c.get().setPacketHandled(true);}}
- public record Residents(ResourceLocation dimension,BlockPos pos,List<ResidentEntry> entries,boolean preview){void encode(FriendlyByteBuf b){b.writeResourceLocation(dimension);b.writeBlockPos(pos);b.writeVarInt(entries.size());for(var e:entries){b.writeUUID(e.id());b.writeUtf(e.name(),128);b.writeBoolean(e.bed());b.writeBoolean(e.work());b.writeBoolean(e.chest());b.writeBoolean(e.food());b.writeUtf(e.skinKey(),64);b.writeBoolean(e.skinMode()==SkinApplicationMode.COMPLETE);b.writeByte(e.opacity());}b.writeBoolean(preview);}static Residents decode(FriendlyByteBuf b){ResourceLocation dimension=b.readResourceLocation();BlockPos p=b.readBlockPos();int n=Math.min(64,b.readVarInt());List<ResidentEntry> e=new ArrayList<>(n);for(int i=0;i<n;i++)e.add(new ResidentEntry(b.readUUID(),b.readUtf(128),b.readBoolean(),b.readBoolean(),b.readBoolean(),b.readBoolean(),b.readUtf(64),b.readBoolean()?SkinApplicationMode.COMPLETE:SkinApplicationMode.PARTIAL,b.readUnsignedByte()));return new Residents(dimension,p,List.copyOf(e),b.readBoolean());}void handle(Supplier<NetworkEvent.Context> c){c.get().enqueueWork(()->DistExecutor.unsafeRunWhenOn(Dist.CLIENT,()->()->br.com.residenciasaldeoes.client.AnchorScreen.receiveResidents(dimension,pos,entries,preview)));c.get().setPacketHandled(true);}}
+ public record Residents(ResourceLocation dimension,BlockPos pos,List<ResidentEntry> entries,boolean preview){void encode(FriendlyByteBuf b){b.writeResourceLocation(dimension);b.writeBlockPos(pos);b.writeVarInt(entries.size());for(var e:entries){b.writeUUID(e.id());b.writeUtf(e.name(),128);b.writeBoolean(e.bed());b.writeBoolean(e.work());b.writeBoolean(e.chest());b.writeBoolean(e.food());b.writeUtf(e.skinKey(),64);b.writeBoolean(e.skinMode()==SkinApplicationMode.COMPLETE);b.writeByte(e.opacity());b.writeByte(e.modelType().ordinal());}b.writeBoolean(preview);}static Residents decode(FriendlyByteBuf b){ResourceLocation dimension=b.readResourceLocation();BlockPos p=b.readBlockPos();int n=Math.min(64,b.readVarInt());List<ResidentEntry> e=new ArrayList<>(n);for(int i=0;i<n;i++)e.add(new ResidentEntry(b.readUUID(),b.readUtf(128),b.readBoolean(),b.readBoolean(),b.readBoolean(),b.readBoolean(),b.readUtf(64),b.readBoolean()?SkinApplicationMode.COMPLETE:SkinApplicationMode.PARTIAL,b.readUnsignedByte(),ResidentModelType.byId(b.readUnsignedByte())));return new Residents(dimension,p,List.copyOf(e),b.readBoolean());}void handle(Supplier<NetworkEvent.Context> c){c.get().enqueueWork(()->DistExecutor.unsafeRunWhenOn(Dist.CLIENT,()->()->br.com.residenciasaldeoes.client.AnchorScreen.receiveResidents(dimension,pos,entries,preview)));c.get().setPacketHandled(true);}}
  public record AssignSkin(BlockPos pos,UUID resident,String key,byte[] png,SkinApplicationMode mode){
   void encode(FriendlyByteBuf b){b.writeBlockPos(pos);b.writeUUID(resident);b.writeUtf(key,64);b.writeByteArray(png);b.writeBoolean(mode==SkinApplicationMode.COMPLETE);}
   static AssignSkin decode(FriendlyByteBuf b){BlockPos p=b.readBlockPos();UUID id=b.readUUID();String key=b.readUtf(64);byte[] png=b.readByteArray(MAX_SKIN_BYTES);return new AssignSkin(p,id,key,png,b.readBoolean()?SkinApplicationMode.COMPLETE:SkinApplicationMode.PARTIAL);}
@@ -110,6 +117,12 @@ public final class ModNetwork {
   void encode(FriendlyByteBuf b){b.writeUUID(resident);b.writeByte(opacity);}
   static OpacitySync decode(FriendlyByteBuf b){return new OpacitySync(b.readUUID(),b.readByte());}
   void handle(Supplier<NetworkEvent.Context> c){c.get().enqueueWork(()->DistExecutor.unsafeRunWhenOn(Dist.CLIENT,()->()->{if(opacity<0)br.com.residenciasaldeoes.client.ResidentOpacity.clear(resident);else br.com.residenciasaldeoes.client.ResidentOpacity.set(resident,opacity);}));c.get().setPacketHandled(true);}
+ }
+
+ public record ResidentModelSync(UUID resident,int modelId){
+  void encode(FriendlyByteBuf b){b.writeUUID(resident);b.writeByte(modelId);}
+  static ResidentModelSync decode(FriendlyByteBuf b){return new ResidentModelSync(b.readUUID(),b.readByte());}
+  void handle(Supplier<NetworkEvent.Context> c){c.get().enqueueWork(()->DistExecutor.unsafeRunWhenOn(Dist.CLIENT,()->()->{if(modelId<0)br.com.residenciasaldeoes.client.ResidentAppearanceModels.clear(resident);else br.com.residenciasaldeoes.client.ResidentAppearanceModels.set(resident,ResidentModelType.byId(modelId));}));c.get().setPacketHandled(true);}
  }
 
  public record SkinSync(UUID resident,String key,byte[] png,SkinApplicationMode mode){

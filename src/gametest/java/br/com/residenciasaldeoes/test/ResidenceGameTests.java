@@ -4,6 +4,7 @@ import br.com.residenciasaldeoes.ResidenciasDosAldeoes;
 import br.com.residenciasaldeoes.VillagerResidenceEvents;
 import br.com.residenciasaldeoes.block.*;
 import br.com.residenciasaldeoes.data.ResidenceData;
+import br.com.residenciasaldeoes.data.ResidentModelType;
 import br.com.residenciasaldeoes.data.WardrobePackage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -450,6 +451,24 @@ public final class ResidenceGameTests {
             check(leader.isSleeping()&&leader.getSleepingPos().orElse(null)!=null&&leader.getSleepingPos().orElseThrow().equals(bed),"Resident did not return to its original bed after closing the door");
         });
     }
+    @GameTest(template="empty",timeoutTicks=900,batch="doors")
+    public static void night_door_task_resumes_inside_wandering_without_bed(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos home=new BlockPos(6,2,6);h.setBlock(home,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(home)).setSize(5),"Could not configure bedless residence");
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));var data=ResidenceData.get(level);
+        check(data.link(level,h.absolutePos(home),resident).equals("ok"),"Could not link bedless door resident");
+        placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,350_000L+level.getGameTime());
+        h.succeedWhen(()->{
+            BlockPos door=h.absolutePos(new BlockPos(7,2,6));
+            check(!level.getBlockState(door).getValue(DoorBlock.OPEN),"Resident did not close the door");
+            check(!resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Door route remained active after closing");
+            var target=resident.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET).orElse(null);
+            check(target!=null,"Bedless resident did not receive an interior stroll after the route ended");
+            check((Boolean)invoke("insideResidence",new Class[]{BlockPos.class,ResidenceData.Home.class},target.getTarget().currentBlockPosition(),data.owner(resident.getUUID())),
+                    "Post-door stroll target escaped the residential bounds");
+        });
+    }
     @GameTest(template="empty",timeoutTicks=100,batch="doors")
     public static void night_door_closure_runs_during_storms(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
@@ -604,7 +623,7 @@ public final class ResidenceGameTests {
         check(data.link(level,h.absolutePos(home),third).equals("ok"),"Third resident link failed");
         var firstHome=data.owner(first.getUUID());
         check(firstHome!=null&&data.owner(second.getUUID())!=null,"Resident registration vanished before sleep checks");
-        level.setDayTime(14000L);
+        level.getServer().getCommands().performPrefixedCommand(level.getServer().createCommandSourceStack(),"time set night");
         h.succeedWhen(()->{
             check(first.isSleeping()&&second.isSleeping()&&third.isSleeping(),"Three residents did not reach and use residential beds; time="+level.getDayTime()+" first="+first.blockPosition()+" claim="+data.bedClaim(first.getUUID())+" second="+second.blockPosition()+" claim="+data.bedClaim(second.getUUID())+" third="+third.blockPosition()+" claim="+data.bedClaim(third.getUUID()));
             check(data.bedClaim(first.getUUID())!=null&&data.bedClaim(second.getUUID())!=null&&data.bedClaim(third.getUUID())!=null,"Sleeping residents have no persisted bed claims");
@@ -613,6 +632,17 @@ public final class ResidenceGameTests {
             check(first.getSleepingPos().orElse(null)!=null&&second.getSleepingPos().orElse(null)!=null&&third.getSleepingPos().orElse(null)!=null,
                     "Resident sleep positions were not recorded");
         });
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="sleep")
+    public static void steve_model_preference_round_trips_in_residence_saved_data(GameTestHelper h){
+        var level=h.getLevel();BlockPos home=new BlockPos(6,2,6);h.setBlock(home,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));var data=ResidenceData.get(level);
+        check(data.link(level,h.absolutePos(home),resident).equals("ok"),"Could not link model persistence resident");
+        check(data.residentModel(resident.getUUID())==ResidentModelType.VILLAGER,"Legacy/default model was not traditional");
+        data.setResidentModel(resident.getUUID(),ResidentModelType.STEVE);
+        ResidenceData restored=ResidenceData.load(data.save(new net.minecraft.nbt.CompoundTag()));
+        check(restored.residentModel(resident.getUUID())==ResidentModelType.STEVE,"Steve model selection did not survive SavedData serialization");
+        h.succeed();
     }
     @GameTest(template="empty",timeoutTicks=100,batch="sleep")
     public static void resident_death_notice_uses_alias_and_unregisters_once(GameTestHelper h){

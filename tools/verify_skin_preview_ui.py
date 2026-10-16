@@ -6,6 +6,7 @@ import math
 screen=Path("src/main/java/br/com/residenciasaldeoes/client/AnchorScreen.java").read_text(encoding="utf-8")
 opacity=Path("src/main/java/br/com/residenciasaldeoes/client/ResidentOpacity.java").read_text(encoding="utf-8")
 buffer_mixin=Path("src/main/java/br/com/residenciasaldeoes/mixin/BufferBuilderOpacityMixin.java").read_text(encoding="utf-8")
+preview_buffers=Path("src/main/java/br/com/residenciasaldeoes/client/OpacityPreviewBuffers.java").read_text(encoding="utf-8")
 
 assert "skinDialogLeft=leftPos+(imageWidth-220)/2;skinDialogTop=topPos+(imageHeight-190)/2;" in screen
 assert "skinOpacitySlider=new OpacitySlider(skinDialogLeft+25,skinDialogTop+134);" in screen
@@ -25,8 +26,8 @@ assert "skinPreviewPitch=Math.max(-90.0F,Math.min(90.0F" in drag
 assert "skinOpacitySlider.mouseDragged(x,y,button,dx,dy)" in drag
 
 assert "ResidentOpacity.set(skinPreviewVillager.getUUID(),pendingOpacity)" in screen
-assert "RenderSystem.setShaderColor(1.0F,1.0F,1.0F,Math.max(0,Math.min(100,pendingOpacity))/100.0F)" in screen
-assert "setShaderColor(1.0F,1.0F,1.0F,1.0F)" in screen
+assert "new OpacityPreviewBuffers(bufferSource,pendingOpacity)" in screen
+assert "adjusted=Math.max(0,Math.min(255,Math.round(alpha*(opacity/100.0F))))" in preview_buffers
 assert "isPreviewRendering()" in buffer_mixin
 assert "if(ResidentOpacity.isPreviewRendering())return alpha;" in buffer_mixin
 assert "bufferSource.endBatch()" in screen

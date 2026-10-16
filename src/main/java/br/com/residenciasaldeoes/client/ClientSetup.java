@@ -18,6 +18,7 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 public final class ClientSetup {
     private ClientSetup(){}
     @SubscribeEvent public static void setup(FMLClientSetupEvent event){event.enqueueWork(()->MenuScreens.register(ResidenciasDosAldeoes.ANCHOR_MENU.get(),AnchorScreen::new));}
+    @SubscribeEvent public static void registerModelLayers(EntityRenderersEvent.RegisterLayerDefinitions event){event.registerLayerDefinition(ResidentAppearanceModels.STEVE_LAYER,SteveVillagerModel::createLayer);}
     @SubscribeEvent public static void addVillagerSkinLayer(EntityRenderersEvent.AddLayers event){VillagerRenderer renderer=event.getRenderer(EntityType.VILLAGER);if(renderer!=null)VillagerSkinLayer.installBeforeVanillaLayers(renderer);}
     @SubscribeEvent public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event){event.registerBlockEntityRenderer(ResidenciasDosAldeoes.EMERALD_CHEST_BE.get(), EmeraldChestRenderer::new);}
     @SubscribeEvent public static void stitchChestTextures(TextureStitchEvent.Pre event){

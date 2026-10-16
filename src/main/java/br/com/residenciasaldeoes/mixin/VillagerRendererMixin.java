@@ -1,6 +1,8 @@
 package br.com.residenciasaldeoes.mixin;
 
 import br.com.residenciasaldeoes.client.VillagerSkinTextures;
+import br.com.residenciasaldeoes.client.ResidentAppearanceModels;
+import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.renderer.entity.VillagerRenderer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.npc.Villager;
@@ -15,8 +17,11 @@ public abstract class VillagerRendererMixin {
     @Inject(method = "getTextureLocation", at = @At("HEAD"), cancellable = true)
     private void residenciasaldeoes$useFullResidentSkin(Villager villager,
                                                          CallbackInfoReturnable<ResourceLocation> callback) {
-        if (!VillagerSkinTextures.isComplete(villager.getUUID())) return;
-        ResourceLocation skin = VillagerSkinTextures.get(villager.getUUID());
-        if (skin != null) callback.setReturnValue(skin);
+        if (VillagerSkinTextures.isComplete(villager.getUUID())) {
+            ResourceLocation skin = VillagerSkinTextures.get(villager.getUUID());
+            if (skin != null) callback.setReturnValue(skin);
+        } else if (ResidentAppearanceModels.usesSteve(villager)) {
+            callback.setReturnValue(DefaultPlayerSkin.getDefaultSkin(villager.getUUID()));
+        }
     }
 }
