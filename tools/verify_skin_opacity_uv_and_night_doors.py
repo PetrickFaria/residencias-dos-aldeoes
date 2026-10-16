@@ -9,16 +9,21 @@ read = lambda p: (root / p).read_text(encoding="utf-8")
 
 screen = read("src/main/java/br/com/residenciasaldeoes/client/AnchorScreen.java")
 opacity = read("src/main/java/br/com/residenciasaldeoes/client/ResidentOpacity.java")
+preview_buffers = read("src/main/java/br/com/residenciasaldeoes/client/OpacityPreviewBuffers.java")
 name_mixin = read("src/main/java/br/com/residenciasaldeoes/mixin/EntityRendererNameTagOpacityMixin.java")
 mixins = json.loads(read("src/main/resources/residencias.mixins.json"))
 textures = read("src/main/java/br/com/residenciasaldeoes/client/VillagerSkinTextures.java")
 events = read("src/main/java/br/com/residenciasaldeoes/VillagerResidenceEvents.java")
 transport = read("src/main/java/br/com/residenciasaldeoes/mixin/VillagerTransportMixin.java")
 
-assert "RenderSystem.setShaderColor(1.0F,1.0F,1.0F,previewAlpha)" in screen
-assert "finally{RenderSystem.setShaderColor(1.0F,1.0F,1.0F,1.0F);ResidentOpacity.endPreviewRender();}" in screen
+assert "new OpacityPreviewBuffers(bufferSource,pendingOpacity)" in screen
+assert "bufferSource.endBatch()" in screen
+assert "target.color(red,green,blue,adjusted)" in preview_buffers
+assert "Math.round(alpha*(opacity/100.0F))" in preview_buffers
+assert "renderingNameTag()" in preview_buffers
+assert "hasPreviewAlphaOverride()" in read("src/main/java/br/com/residenciasaldeoes/mixin/BufferBuilderOpacityMixin.java")
 assert "beginPreviewRender(skinPreviewVillager)" in screen
-assert "if (NAME_TAG_DEPTH.get() > 0) return 100;" in opacity
+assert "if (renderingNameTag()) return 100;" in opacity
 assert "renderNameTag" in name_mixin and "beginNameTag" in name_mixin and "endNameTag" in name_mixin
 assert "EntityRendererNameTagOpacityMixin" in mixins["client"]
 assert "Set.of(64, 128, 256, 512, 1024)" in textures
@@ -41,6 +46,11 @@ assert png_info(skin_docs / "villager_uv_guide_1024.png")[:2] == (1024, 1024)
 assert png_info(skin_docs / "aldeao_creeper_256_corrigido.png") == (256, 256, 8, 6)
 
 assert "crossedNightfall" in events and "beginNightDoorClosure" in events
+assert "onResidentialDoorChanged" in events and "beginWeatherDoorClosure" in events
+assert "chooseReachableDoorResident" in events and "DOOR_REOPEN_COOLDOWN" in events
+assert "DOOR_OPEN_STABILITY_TICKS" in events and "residentUsingDoorway(level,data,pos)" in events
+assert "home.residents.contains(villager.getUUID())" in events
+assert "phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining()" in events
 assert "level.hasChunkAt(pos)" in events and "state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)" in events
 assert "door.setOpen(villager,level,state,doorPos,false)" in events
 assert "findApproach(level,doorPos,villager)" in events and "NIGHT_DOOR_WALK_SPEED" in events

@@ -389,6 +389,61 @@ public final class ResidenceGameTests {
             h.succeed();
         });
     }
+    @GameTest(template="empty",timeoutTicks=100,batch="doors")
+    public static void open_door_task_uses_awake_resident_before_waking_sleeping_leader(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not configure home");
+        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));Villager awake=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,8));
+        ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
+        check(data.link(level,absoluteHome,leader).equals("ok")&&data.link(level,absoluteHome,awake).equals("ok"),"Could not link residents");
+        BlockPos bed=h.absolutePos(new BlockPos(4,2,8));h.setBlock(bed,Blocks.WHITE_BED.defaultBlockState().setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD));
+        leader.startSleeping(bed);check(leader.isSleeping(),"Leader did not enter the fixture sleeping state");
+        placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,200_000L+level.getGameTime());
+        check(leader.isSleeping(),"Sleeping registration leader was woken despite another awake resident");
+        check(!leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Sleeping leader received the door route");
+        check(awake.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Awake resident did not receive the reachable door route");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="doors")
+    public static void unlink_sleeping_resident_restores_standing_pose_and_cancels_route(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager villager=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
+        check(data.link(level,absoluteHome,villager).equals("ok"),"Could not link fixture resident");
+        BlockPos bed=h.absolutePos(new BlockPos(5,2,7));h.setBlock(bed,Blocks.WHITE_BED.defaultBlockState().setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD));
+        check(data.reserveBed(villager.getUUID(),level.dimension(),absoluteHome,bed),"Could not reserve fixture bed");
+        villager.startSleeping(bed);check(villager.isSleeping(),"Resident did not enter the fixture sleeping state");
+        villager.getPersistentData().putBoolean("residenciasaldeoes_home_return_active",true);
+        villager.getPersistentData().put("residenciasaldeoes_night_door_task",new net.minecraft.nbt.CompoundTag());
+        data.unlink(level,villager.getUUID());
+        check(!villager.isSleeping(),"Unlinked resident remained in the sleeping pose");
+        check(!villager.getPersistentData().contains("residenciasaldeoes_home_return_active")
+                &&!villager.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Residential navigation state survived unlink");
+        check(data.owner(villager.getUUID())==null&&data.bedClaim(villager.getUUID())==null,"Unlink retained residential registration or bed claim");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="doors")
+    public static void night_door_task_wakes_leader_only_when_every_resident_sleeps(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
+        check(data.link(level,absoluteHome,leader).equals("ok"),"Could not link sleeping leader");
+        BlockPos bed=h.absolutePos(new BlockPos(4,2,7));h.setBlock(bed,Blocks.WHITE_BED.defaultBlockState().setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD));
+        leader.startSleeping(bed);placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,300_000L+level.getGameTime());
+        check(!leader.isSleeping(),"Sleeping leader was not woken when no other resident was available");
+        check(leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Woken leader did not receive the bounded door task");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="doors")
+    public static void rain_transition_schedules_open_door_closure(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));ResidenceData data=ResidenceData.get(level);
+        check(data.link(level,h.absolutePos(homePos),resident).equals("ok"),"Could not link rain resident");
+        placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);level.setDayTime(6_000L);level.setWeatherParameters(0,12_000, true, false);
+        invoke("beginWeatherDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class},level);
+        check(resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Rain-time open door was not assigned to an awake resident");
+        h.succeed();
+    }
     @GameTest(template="empty",timeoutTicks=2600,batch="physical")
     public static void physical_transport_after_payment(GameTestHelper h){
         floor(h);

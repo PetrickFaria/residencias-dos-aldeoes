@@ -12,6 +12,7 @@ public abstract class BufferBuilderOpacityMixin {
     @ModifyVariable(method = "color(IIII)Lcom/mojang/blaze3d/vertex/VertexConsumer;",
             at = @At("HEAD"), argsOnly = true, ordinal = 3)
     private int residenciasaldeoes$applyResidentAlpha(int alpha) {
+        if(ResidentOpacity.hasPreviewAlphaOverride())return alpha;
         return Math.max(0, Math.min(255, Math.round(alpha * (ResidentOpacity.renderingPercent() / 100.0F))));
     }
 }

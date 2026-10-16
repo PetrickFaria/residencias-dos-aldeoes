@@ -10,6 +10,7 @@ public final class ResidentOpacity {
     private static final ThreadLocal<Integer> RENDERING = new ThreadLocal<>();
     private static final ThreadLocal<Integer> PREVIEW_RENDERING = new ThreadLocal<>();
     private static final ThreadLocal<Integer> NAME_TAG_DEPTH = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<Boolean> PREVIEW_ALPHA_OVERRIDE = ThreadLocal.withInitial(() -> false);
 
     private ResidentOpacity() {}
 
@@ -18,7 +19,7 @@ public final class ResidentOpacity {
         if (id != null) VALUES.put(id, Math.max(0, Math.min(100, value)));
     }
     public static void clear(UUID id) { if (id != null) VALUES.remove(id); }
-    public static void clearAll() { VALUES.clear(); RENDERING.remove(); PREVIEW_RENDERING.remove(); NAME_TAG_DEPTH.remove(); }
+    public static void clearAll() { VALUES.clear(); RENDERING.remove(); PREVIEW_RENDERING.remove(); NAME_TAG_DEPTH.remove(); PREVIEW_ALPHA_OVERRIDE.remove(); }
 
     public static void beginRender(net.minecraft.world.entity.Entity entity) {
         RENDERING.remove();
@@ -39,8 +40,12 @@ public final class ResidentOpacity {
         int depth = NAME_TAG_DEPTH.get() - 1;
         if (depth <= 0) NAME_TAG_DEPTH.remove(); else NAME_TAG_DEPTH.set(depth);
     }
+    public static boolean renderingNameTag(){return NAME_TAG_DEPTH.get()>0;}
+    public static void beginPreviewAlphaOverride(){PREVIEW_ALPHA_OVERRIDE.set(true);}
+    public static void endPreviewAlphaOverride(){PREVIEW_ALPHA_OVERRIDE.remove();}
+    public static boolean hasPreviewAlphaOverride(){return PREVIEW_ALPHA_OVERRIDE.get();}
     public static int renderingPercent() {
-        if (NAME_TAG_DEPTH.get() > 0) return 100;
+        if (renderingNameTag()) return 100;
         Integer preview = PREVIEW_RENDERING.get();
         if (preview != null) return preview;
         Integer value = RENDERING.get();

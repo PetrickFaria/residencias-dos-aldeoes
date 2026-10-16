@@ -139,6 +139,30 @@ public class ResidenceData extends SavedData {
         unlink(level,original.getUUID(),replacement);
     }
     private void unlink(ServerLevel level,UUID id,LivingEntity entity) {
+        if(entity instanceof Villager villager){
+            var tag=villager.getPersistentData();
+            boolean hasResidentialRoute=tag.contains("residenciasaldeoes_night_door_task")
+                    ||tag.getBoolean("residenciasaldeoes_home_return_active")
+                    ||tag.getBoolean("residenciasaldeoes_home_return_forced");
+            boolean wasSleeping=villager.isSleeping();
+            if(wasSleeping)villager.stopSleeping();
+            if(hasResidentialRoute||wasSleeping){
+                villager.getNavigation().stop();
+                villager.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
+                villager.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.PATH);
+            }
+            tag.remove("residenciasaldeoes_night_door_task");
+            tag.remove("residenciasaldeoes_home_return_active");
+            tag.remove("residenciasaldeoes_home_return_forced");
+            tag.remove("residenciasaldeoes_home_return_started");
+            tag.remove("residenciasaldeoes_home_return_last_attempt");
+            tag.remove("residenciasaldeoes_home_return_last_search");
+            tag.remove("residenciasaldeoes_home_return_home");
+            tag.remove("residenciasaldeoes_home_return_target");
+            tag.remove("residenciasaldeoes_home_return_target_x");
+            tag.remove("residenciasaldeoes_home_return_target_y");
+            tag.remove("residenciasaldeoes_home_return_target_z");
+        }
         ResidentNameState state=residentNameStates.get(id);
         if(state!=null){if(entity!=null)restoreName(entity,state);else pendingNameRestorations.put(id,state);}
         else if(pendingDefaultNameRemoval.remove(id)){
