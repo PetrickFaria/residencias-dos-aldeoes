@@ -436,11 +436,13 @@ public final class ResidenceGameTests {
                 .setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD)
                 .setValue(net.minecraft.world.level.block.BedBlock.FACING,Direction.NORTH);
         h.setBlock(bed.relative(Direction.SOUTH),bedHead.setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT));h.setBlock(bed,bedHead);
+        check((Boolean)invoke("bedInsideHome",new Class[]{net.minecraft.server.level.ServerLevel.class,BlockPos.class,ResidenceData.Home.class},level,bed,data.owner(leader.getUUID())),"Fixture bed is outside the registered residential volume");
+        check(data.reserveBed(leader.getUUID(),level.dimension(),absoluteHome,bed),"Could not reserve leader's current bed");
         leader.startSleeping(bed);placeOpenDoor(h,new BlockPos(7,3,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
         invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,300_000L+level.getGameTime());
         check(!leader.isSleeping(),"Sleeping leader was not woken when no other resident was available");
         check(leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Woken leader did not receive the bounded door task");
-        check(data.bedClaim(leader.getUUID())!=null&&data.bedClaim(leader.getUUID()).bed().equals(bed),"The original bed claim was not preserved while waking the leader");
+        check(data.bedClaim(leader.getUUID())!=null&&data.bedClaim(leader.getUUID()).bed().equals(bed),"The original bed claim was not preserved while waking the leader; sleeping="+leader.isSleeping()+" position="+leader.getSleepingPos()+" owner="+data.owner(leader.getUUID())+" state="+level.getBlockState(bed));
         h.succeedWhen(()->{
             check(!level.getBlockState(h.absolutePos(new BlockPos(7,3,6))).getValue(DoorBlock.OPEN),"Resident did not physically close the nighttime door");
             check(leader.isSleeping()&&leader.getSleepingPos().orElse(null)!=null&&leader.getSleepingPos().orElseThrow().equals(bed),"Resident did not return to its original bed after closing the door");
