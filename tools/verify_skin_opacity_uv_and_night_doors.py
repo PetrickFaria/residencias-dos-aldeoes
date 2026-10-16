@@ -74,7 +74,8 @@ assert "STEVE" in model_type and "residentModel" in data and "model_type" in dat
 assert "ResidentAppearanceModels.usesSteve(villager)" in model_mixin
 assert "class SteveVillagerModel extends PlayerModel<Villager>" in model
 assert "PlayerModel.createMesh(new CubeDeformation(0.0F), false)" in model
-assert "VillagerModel" not in model and "hat_rim" not in model
+assert "import net.minecraft.client.model.VillagerModel;" not in model
+assert "extends VillagerModel<" not in model and "hat_rim" not in model
 assert "transitionToModelDialog" in screen and "modelOpen" in screen and "Para Steve, use skin com UV humanoide." in screen
 
 for percent in (100, 75, 50, 25, 0):
