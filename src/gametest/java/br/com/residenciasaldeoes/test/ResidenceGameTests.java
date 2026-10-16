@@ -368,7 +368,7 @@ public final class ResidenceGameTests {
         check("ok".equals(data.link(level,absoluteHome,first)),"First resident registration failed");
         check("ok".equals(data.link(level,absoluteHome,second)),"Second resident registration failed");
 
-        BlockPos inside=new BlockPos(7,2,7),oneBeyond=new BlockPos(9,2,7),twoBeyond=new BlockPos(10,2,7),iron=new BlockPos(6,2,8);
+        BlockPos inside=new BlockPos(7,2,7),oneBeyond=new BlockPos(9,2,8),twoBeyond=new BlockPos(10,2,7),iron=new BlockPos(6,2,8);
         placeOpenDoor(h,inside,Blocks.OAK_DOOR);placeOpenDoor(h,oneBeyond,Blocks.SPRUCE_DOOR);
         placeOpenDoor(h,twoBeyond,Blocks.OAK_DOOR);placeOpenDoor(h,iron,Blocks.IRON_DOOR);
         level.setDayTime(13_001L);
