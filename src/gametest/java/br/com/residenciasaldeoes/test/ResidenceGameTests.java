@@ -429,19 +429,20 @@ public final class ResidenceGameTests {
     public static void night_door_task_wakes_leader_then_returns_to_same_bed(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
         check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not expand sleeping residence");
-        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
+        for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
+        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(4,3,6));ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
         check(data.link(level,absoluteHome,leader).equals("ok"),"Could not link sleeping leader");
-        BlockPos bed=h.absolutePos(new BlockPos(4,2,7));var bedHead=Blocks.WHITE_BED.defaultBlockState()
+        BlockPos bed=h.absolutePos(new BlockPos(4,3,7));var bedHead=Blocks.WHITE_BED.defaultBlockState()
                 .setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD)
                 .setValue(net.minecraft.world.level.block.BedBlock.FACING,Direction.NORTH);
         h.setBlock(bed.relative(Direction.SOUTH),bedHead.setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT));h.setBlock(bed,bedHead);
-        leader.startSleeping(bed);placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
+        leader.startSleeping(bed);placeOpenDoor(h,new BlockPos(7,3,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
         invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,300_000L+level.getGameTime());
         check(!leader.isSleeping(),"Sleeping leader was not woken when no other resident was available");
         check(leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Woken leader did not receive the bounded door task");
         check(data.bedClaim(leader.getUUID())!=null&&data.bedClaim(leader.getUUID()).bed().equals(bed),"The original bed claim was not preserved while waking the leader");
         h.succeedWhen(()->{
-            check(!level.getBlockState(h.absolutePos(new BlockPos(7,2,6))).getValue(DoorBlock.OPEN),"Resident did not physically close the nighttime door");
+            check(!level.getBlockState(h.absolutePos(new BlockPos(7,3,6))).getValue(DoorBlock.OPEN),"Resident did not physically close the nighttime door");
             check(leader.isSleeping()&&leader.getSleepingPos().orElse(null)!=null&&leader.getSleepingPos().orElseThrow().equals(bed),"Resident did not return to its original bed after closing the door");
         });
     }
