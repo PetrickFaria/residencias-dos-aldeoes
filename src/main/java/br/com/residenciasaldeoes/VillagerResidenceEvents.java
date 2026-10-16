@@ -293,7 +293,11 @@ public class VillagerResidenceEvents {
         }
         Villager taskOwner=chosen;
         candidates=new ArrayList<>(candidates);
-        candidates.sort(Comparator.comparingDouble(taskOwner.blockPosition()::distSqr).thenComparing(Comparator.naturalOrder()));
+        // Start with the farthest door so the resident closes doors behind itself
+        // after passing through them, instead of reopening a nearer door to reach
+        // the next assignment.
+        candidates.sort(Comparator.<BlockPos>comparingDouble(taskOwner.blockPosition()::distSqr).reversed()
+                .thenComparing(Comparator.naturalOrder()));
         ListTag doors=new ListTag();for(BlockPos door:candidates)doors.add(net.minecraft.nbt.LongTag.valueOf(door.asLong()));
         CompoundTag task=new CompoundTag();task.putLong("home",home.pos.asLong());task.putString("dimension",home.dimension.location().toString());
         task.putLong("night",period);task.putLong("started",now);task.putLong("last_progress",now);task.putLong("last_pos",chosen.blockPosition().asLong());
