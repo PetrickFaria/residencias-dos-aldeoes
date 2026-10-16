@@ -365,21 +365,33 @@ public class VillagerResidenceEvents {
 
         net.minecraft.nbt.ListTag doors=task.getList("doors",net.minecraft.nbt.Tag.TAG_LONG);
         int index=task.getInt("index");
-        // If navigation reaches another assigned doorway while crossing the house,
-        // close it when the resident is physically beside it. This closes doors passed
-        // en route without issuing a second navigation task or stopping at the wrong door.
+        // A target door is closed on arrival. Other assigned doors are only closed
+        // after the resident has crossed and moved away, so vanilla DoorInteractGoal
+        // does not immediately reopen the doorway while completing the passage.
+        ListTag visitedDoors=task.getList("visited_doors",Tag.TAG_LONG);
+        Set<Long> visited=new HashSet<>();for(int i=0;i<visitedDoors.size();i++)visited.add(((net.minecraft.nbt.LongTag)visitedDoors.get(i)).getAsLong());
         for(int i=0;i<doors.size();i++){
             BlockPos nearby=BlockPos.of(((net.minecraft.nbt.LongTag)doors.get(i)).getAsLong());
             if(!withinDoorBounds(nearby,home)||!level.hasChunkAt(nearby)
-                    ||villager.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(nearby))>4.0D)continue;
+                    )continue;
             BlockState nearbyState=level.getBlockState(nearby);
-            if(nearbyState.getBlock() instanceof net.minecraft.world.level.block.DoorBlock nearbyDoor
-                    &&nearbyState.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
-                    &&nearbyState.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
-                    &&nearbyState.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
+            if(!(nearbyState.getBlock() instanceof net.minecraft.world.level.block.DoorBlock nearbyDoor)
+                    ||!nearbyState.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
+                    ||nearbyState.getValue(net.minecraft.world.level.block.DoorBlock.HALF)!=net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
+                    ||!nearbyState.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))continue;
+            long doorKey=nearby.asLong();double distance=villager.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(nearby));
+            boolean currentTarget=i==index;
+            boolean close=currentTarget&&distance<=4.0D;
+            if(!currentTarget&&distance<=4.0D){
+                if(visited.add(doorKey))visitedDoors.add(net.minecraft.nbt.LongTag.valueOf(doorKey));
+            }else if(!currentTarget&&visited.remove(doorKey)){
+                for(int j=visitedDoors.size()-1;j>=0;j--)if(((net.minecraft.nbt.LongTag)visitedDoors.get(j)).getAsLong()==doorKey)visitedDoors.remove(j);
+                close=true;
+            }
+            if(close){
                 nearbyDoor.setOpen(villager,level,nearbyState,nearby,false);
                 RESIDENTIAL_DOOR_COOLDOWNS.computeIfAbsent(level,ignored->new HashMap<>())
-                        .put(nearby.asLong(),now+DOOR_REOPEN_COOLDOWN);
+                        .put(doorKey,now+DOOR_REOPEN_COOLDOWN);
             }
         }
         while(index<doors.size()){
