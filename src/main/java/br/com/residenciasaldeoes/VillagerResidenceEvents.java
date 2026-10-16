@@ -762,6 +762,10 @@ public class VillagerResidenceEvents {
 
         long time=level.getDayTime()%24000L;boolean night=time>=13000L&&time<23000L;
         boolean inside=insideResidence(villager.getX(),villager.getY(),villager.getZ(),home);
+        // A door can be just outside the inner residence bounds. Keep the one-shot
+        // resume marker while the normal home-return path brings the resident back;
+        // its next in-bounds tick can then resume a bed or interior stroll.
+        if(doorResume&&!inside)entityData.putBoolean(NIGHT_DOOR_RESUME,true);
         BlockPos sleepingAt=villager.getSleepingPos().orElse(null);
         if(villager.isSleeping()&&sleepingAt!=null){
             UUID bedOwner=data.bedOwner(level.dimension(),sleepingAt);
