@@ -308,6 +308,15 @@ public class VillagerResidenceEvents {
             double distance=villager.blockPosition().distSqr(approach);
             if(distance<bestDistance){best=villager;bestDistance=distance;}
         }
+        if(best!=null)return best;
+        // Path creation can temporarily return no route while a villager is sleeping,
+        // recovering from a Brain update, or when a GameTest/world section is settling.
+        // Keep a bounded task for the nearest available resident; the task retries a few
+        // times and abandons unreachable doors without teleporting or holding navigation.
+        for(Villager villager:candidates)for(BlockPos door:doors){
+            double distance=villager.blockPosition().distSqr(door);
+            if(distance<bestDistance){best=villager;bestDistance=distance;}
+        }
         return best;
     }
 
