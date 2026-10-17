@@ -66,6 +66,7 @@ public class VillagerResidenceEvents {
     private static final String EMERALD_TRANSFER="residenciasaldeoes_emerald_transfer";
     private static final String NIGHT_DOOR_TASK="residenciasaldeoes_night_door_task";
     private static final String NIGHT_DOOR_RESUME="residenciasaldeoes_night_door_resume";
+    private static final String NIGHT_DOOR_BED_RETURN="residenciasaldeoes_night_door_bed_return";
     private static final String NIGHT_WANDER="residenciasaldeoes_night_wander";
     private static final String BED_RETRY_AFTER="residenciasaldeoes_bed_retry_after";
     private static final String TRANSFER_OPEN_DOORS="open_doors";
@@ -671,6 +672,9 @@ public class VillagerResidenceEvents {
             villager.getNavigation().moveTo(path,NIGHT_DOOR_WALK_SPEED);
             return true;
         }
+        long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
+        if(!opening&&phase>=NIGHT_START&&phase<NIGHT_END)
+            entityData.putBoolean(NIGHT_DOOR_BED_RETURN,true);
         finishNightDoorClosure(villager);
         return true;
     }
@@ -1034,11 +1038,13 @@ public class VillagerResidenceEvents {
         boolean forced=entityData.getBoolean(RETURN_FORCED);
         boolean wandering=entityData.contains(NIGHT_WANDER);
         if(villager.tickCount%10!=0&&!weather&&!forced&&!doorResume&&!wandering)return;
-        ResidenceData data=ResidenceData.get(level);ResidenceData.Home home=data.owner(villager.getUUID());if(home==null){clearNightWander(villager,true);return;}
+        ResidenceData data=ResidenceData.get(level);ResidenceData.Home home=data.owner(villager.getUUID());if(home==null){entityData.remove(NIGHT_DOOR_BED_RETURN);clearNightWander(villager,true);return;}
         if(!home.dimension.equals(level.dimension())||!level.hasChunkAt(home.pos))return;
-        if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity)){clearNightWander(villager,true);data.unlinkAll(level,home.dimension,home.pos);return;}
+        if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity)){entityData.remove(NIGHT_DOOR_BED_RETURN);clearNightWander(villager,true);data.unlinkAll(level,home.dimension,home.pos);return;}
 
         long time=level.getDayTime()%24000L;boolean night=time>=13000L&&time<23000L;
+        boolean returningFromNightDoor=entityData.getBoolean(NIGHT_DOOR_BED_RETURN);
+        if(!night&&returningFromNightDoor){entityData.remove(NIGHT_DOOR_BED_RETURN);returningFromNightDoor=false;}
         if(weather)weather=isRainingAtResidentialArea(level,home);
         boolean inside=insideResidence(villager.getX(),villager.getY(),villager.getZ(),home);
         // A door can be just outside the inner residence bounds. Keep the one-shot
@@ -1047,6 +1053,7 @@ public class VillagerResidenceEvents {
         if(doorResume&&!inside)entityData.putBoolean(NIGHT_DOOR_RESUME,true);
         BlockPos sleepingAt=villager.getSleepingPos().orElse(null);
         if(villager.isSleeping()&&sleepingAt!=null){
+            if(returningFromNightDoor){entityData.remove(NIGHT_DOOR_BED_RETURN);returningFromNightDoor=false;}
             UUID bedOwner=data.bedOwner(level.dimension(),sleepingAt);
             if(bedOwner!=null&&!bedOwner.equals(villager.getUUID())){
                 // A stale or pre-existing collision must not steal the reserved bed.
@@ -1078,13 +1085,15 @@ public class VillagerResidenceEvents {
         if(!night&&!weather&&!forced){
             clearHomeReturn(entityData);
             clearNightWander(villager,true);
+            entityData.remove(NIGHT_DOOR_BED_RETURN);
             if(villager.tickCount%10==0)data.releaseBed(villager.getUUID());
             return;
         }
         if(!forced&&!weather&&time>=12000L&&time<13000L){
             if(!villager.isSleeping()&&villager.tickCount%40==0){
                 BlockPos approach=findSafeSpot(level,villager,home.pos,home.size);
-                if(approach!=null)villager.getNavigation().moveTo(approach.getX()+0.5,approach.getY(),approach.getZ()+0.5,0.85D);
+                if(approach!=null)villager.getNavigation().moveTo(approach.getX()+0.5,approach.getY(),approach.getZ()+0.5,
+                        returningFromNightDoor?NIGHT_DOOR_WALK_SPEED:0.85D);
             }
             return;
         }
@@ -1127,6 +1136,7 @@ public class VillagerResidenceEvents {
                     data.releaseBed(villager.getUUID());bed=null;
                 }
                 if(bed==null)bed=findAvailableBed(level,data,villager,home);
+                if(bed==null&&returningFromNightDoor){entityData.remove(NIGHT_DOOR_BED_RETURN);returningFromNightDoor=false;}
                 if(bed!=null&&level.hasChunkAt(bed)){
                     if(level.getBlockState(bed).getValue(BedBlock.OCCUPIED)){
                         // An awake resident cannot keep retrying a bed occupied by another
@@ -1146,17 +1156,22 @@ public class VillagerResidenceEvents {
                         }
                         if(villager.blockPosition().equals(bedApproach)){
                             villager.startSleeping(bed);
-                            if(villager.isSleeping())entityData.remove(BED_RETRY_AFTER);
+                            if(villager.isSleeping()){
+                                entityData.remove(BED_RETRY_AFTER);
+                                entityData.remove(NIGHT_DOOR_BED_RETURN);
+                            }
                             else{releaseResidentialBedPoi(level,villager,bed);data.releaseBed(villager.getUUID());entityData.putLong(BED_RETRY_AFTER,level.getGameTime()+200L);}
                         }else{
                             var walk=villager.getBrain().getMemory(MemoryModuleType.WALK_TARGET).orElse(null);
+                            float bedWalkSpeed=(float)(returningFromNightDoor?NIGHT_DOOR_WALK_SPEED:0.85D);
                             if(walk==null||!walk.getTarget().currentBlockPosition().equals(bedApproach)){
                                 villager.getBrain().eraseMemory(MemoryModuleType.PATH);
-                                villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET,new WalkTarget(bedApproach,.85F,0));
+                                villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET,new WalkTarget(bedApproach,bedWalkSpeed,0));
                             }
                             if(villager.getNavigation().isDone()||walk==null||!walk.getTarget().currentBlockPosition().equals(bedApproach)){
                                 Path path=villager.getNavigation().createPath(bedApproach,0);
-                                if(path!=null&&path.canReach()&&pathStaysInside(path,home))villager.getNavigation().moveTo(path,.85D);
+                                if(path!=null&&path.canReach()&&pathStaysInside(path,home))
+                                    villager.getNavigation().moveTo(path,returningFromNightDoor?NIGHT_DOOR_WALK_SPEED:0.85D);
                             }
                         }
                     }
@@ -1170,7 +1185,7 @@ public class VillagerResidenceEvents {
 
         if(night||forced||weather){
             clearNightWander(villager,true);
-            returnResidentToHome(level,data,villager,home,weather);
+            returnResidentToHome(level,data,villager,home,weather,returningFromNightDoor);
             return;
         }
     }
@@ -1198,7 +1213,8 @@ public class VillagerResidenceEvents {
         if(forced)tag.putBoolean(RETURN_FORCED,true);
     }
 
-    private void returnResidentToHome(ServerLevel level,ResidenceData data,Villager villager,ResidenceData.Home home,boolean preserveBedReservation){
+    private void returnResidentToHome(ServerLevel level,ResidenceData data,Villager villager,ResidenceData.Home home,
+                                      boolean preserveBedReservation,boolean returningFromNightDoor){
         beginHomeReturn(villager,level,home,false);var tag=villager.getPersistentData();
         if(villager.isSleeping())villager.stopSleeping();
         if(!preserveBedReservation)data.releaseBed(villager.getUUID());
@@ -1211,7 +1227,7 @@ public class VillagerResidenceEvents {
         }
 
         long returnTimeout=hasNearbyPerceivedThreat(villager)?THREAT_RETURN_TIMEOUT_TICKS:RETURN_TIMEOUT_TICKS;
-        if(elapsed>=returnTimeout&&target!=null&&isSafeDestination(level,villager,target,home)){
+        if(!returningFromNightDoor&&elapsed>=returnTimeout&&target!=null&&isSafeDestination(level,villager,target,home)){
             villager.getNavigation().stop();villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
             villager.teleportTo(target.getX()+0.5D,target.getY(),target.getZ()+0.5D);
             clearHomeReturn(tag);return;
@@ -1231,9 +1247,10 @@ public class VillagerResidenceEvents {
             tag.putLong(RETURN_LAST_ATTEMPT,now);
             villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
             Path destinationPath=villager.getNavigation().createPath(target,0);
-            if(destinationPath!=null)villager.getNavigation().moveTo(destinationPath,0.85D);
-            else villager.getNavigation().moveTo(target.getX()+0.5D,target.getY(),target.getZ()+0.5D,0.85D);
-            villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET,new WalkTarget(target,0.85F,0));
+            double speed=returningFromNightDoor?NIGHT_DOOR_WALK_SPEED:0.85D;
+            if(destinationPath!=null)villager.getNavigation().moveTo(destinationPath,speed);
+            else villager.getNavigation().moveTo(target.getX()+0.5D,target.getY(),target.getZ()+0.5D,speed);
+            villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET,new WalkTarget(target,(float)speed,0));
         }
     }
 

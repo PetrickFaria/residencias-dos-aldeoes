@@ -532,9 +532,20 @@ public final class ResidenceGameTests {
         check(!leader.isSleeping(),"Sleeping leader was not woken when no other resident was available");
         check(leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Woken leader did not receive the bounded door task");
         check(data.bedClaim(leader.getUUID())!=null&&data.bedClaim(leader.getUUID()).bed().equals(bed),"The original bed claim was not preserved while waking the leader; sleeping="+leader.isSleeping()+" position="+leader.getSleepingPos()+" owner="+data.owner(leader.getUUID())+" state="+level.getBlockState(bed));
+        boolean[] walkedAtDoorSpeed={false,false};
         h.succeedWhen(()->{
+            if(leader.getNavigation().getPath()!=null&&!leader.getNavigation().isDone()){
+                if(leader.getPersistentData().contains("residenciasaldeoes_night_door_task")){
+                    check(Math.abs(navigationSpeed(leader)-.48D)<.0001D,"Resident did not walk to the door at the configured pace");
+                    walkedAtDoorSpeed[0]=true;
+                }else if(leader.getPersistentData().getBoolean("residenciasaldeoes_night_door_bed_return")){
+                    check(Math.abs(navigationSpeed(leader)-.48D)<.0001D,"Resident ran while returning to bed");
+                    walkedAtDoorSpeed[1]=true;
+                }
+            }
             check(!level.getBlockState(h.absolutePos(new BlockPos(7,3,6))).getValue(DoorBlock.OPEN),"Resident did not physically close the nighttime door");
             check(leader.isSleeping()&&leader.getSleepingPos().orElse(null)!=null&&leader.getSleepingPos().orElseThrow().equals(bed),"Resident did not return to its original bed after closing the door");
+            check(walkedAtDoorSpeed[0]&&walkedAtDoorSpeed[1],"The physical trip to the door and the return-to-bed route were not both observed at walking speed");
         });
     }
     @GameTest(template="empty",timeoutTicks=900,batch="doors")
@@ -636,13 +647,24 @@ public final class ResidenceGameTests {
         check(!leader.isSleeping(),"The selected resident did not wake to perform the door task");
         check(second.isSleeping(),"A second resident was woken unnecessarily");
         check(data.ownsBed(level.dimension(),firstBed,leader.getUUID())&&data.ownsBed(level.dimension(),secondBed,second.getUUID()),"Waking discarded a bed reservation");
+        boolean[] walkedAtDoorSpeed={false,false};
         h.succeedWhen(()->{
+            if(leader.getNavigation().getPath()!=null&&!leader.getNavigation().isDone()){
+                if(leader.getPersistentData().contains("residenciasaldeoes_night_door_task")){
+                    check(Math.abs(navigationSpeed(leader)-.48D)<.0001D,"Rainy-night door route changed from its walking speed");
+                    walkedAtDoorSpeed[0]=true;
+                }else if(leader.getPersistentData().getBoolean("residenciasaldeoes_night_door_bed_return")){
+                    check(Math.abs(navigationSpeed(leader)-.48D)<.0001D,"Resident ran while returning to bed during rain");
+                    walkedAtDoorSpeed[1]=true;
+                }
+            }
             check(!level.getBlockState(h.absolutePos(new BlockPos(7,3,6))).getValue(DoorBlock.OPEN),"Resident did not physically close the rainy-night door");
             ResidenceData.BedClaim leaderClaim=data.bedClaim(leader.getUUID()),secondClaim=data.bedClaim(second.getUUID());
             check(leader.isSleeping()&&leaderClaim!=null&&leaderClaim.bed().equals(firstBed)
                     &&level.getBlockState(firstBed).getValue(BedBlock.OCCUPIED),"Selected resident did not return to its original reserved bed");
             check(second.isSleeping()&&secondClaim!=null&&secondClaim.bed().equals(secondBed)
                     &&level.getBlockState(secondBed).getValue(BedBlock.OCCUPIED),"Other resident stopped sleeping during the task");
+            check(walkedAtDoorSpeed[0]&&walkedAtDoorSpeed[1],"The rainy-night door route and return-to-bed route were not both observed at walking speed");
         });
     }
     @GameTest(template="empty",timeoutTicks=700,batch="rain-doors")
