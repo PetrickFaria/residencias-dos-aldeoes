@@ -24,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           current="$(sed -n 's/^mod_version=//p' gradle.properties)"
-          if [[ ! "$current" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
+          if [[ ! "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid mod_version: $current" >&2
             exit 1
           fi
@@ -41,9 +41,9 @@ jobs:
 
           previous="$(git show 'HEAD^:gradle.properties' | sed -n 's/^mod_version=//p')"
           subject="$(git log -1 --format=%s)"
-          if [[ "$subject" =~ ^chore\\(release\\):[[:space:]]prepare[[:space:]]([0-9]+\\.[0-9]+\\.[0-9]+)$ ]]; then
+          if [[ "$subject" =~ ^chore\(release\):[[:space:]]prepare[[:space:]]([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
             prepared="${BASH_REMATCH[1]}"
-            if [[ "$previous" =~ ^([0-9]+)\\.([0-9]+)\\.([0-9]+)$ ]]; then
+            if [[ "$previous" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
               expected="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
             else
               echo "Invalid previous mod_version: $previous" >&2
