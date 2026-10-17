@@ -88,6 +88,17 @@ public final class ResidenceGameTests {
         try{var field=net.minecraft.world.entity.ai.navigation.PathNavigation.class.getDeclaredField("speedModifier");field.setAccessible(true);return field.getDouble(v.getNavigation());}
         catch(Exception e){throw new RuntimeException(e);}
     }
+    private static void observeNightDoorWalkSpeeds(GameTestHelper h,Villager resident,boolean[] observed){
+        for(int tick=1;tick<=300;tick++)h.runAtTickTime(tick,()->{
+            if(resident.getNavigation().getPath()==null||resident.getNavigation().isDone())return;
+            var data=resident.getPersistentData();
+            if(data.contains("residenciasaldeoes_night_door_task")){
+                check(Math.abs(navigationSpeed(resident)-.48D)<.0001D,"Night door route did not use walking speed");observed[0]=true;
+            }else if(data.getBoolean("residenciasaldeoes_night_door_bed_return")){
+                check(Math.abs(navigationSpeed(resident)-.48D)<.0001D,"Night bed-return route did not use walking speed");observed[1]=true;
+            }
+        });
+    }
     @GameTest(template="empty",timeoutTicks=100,batch="index")
     public static void indexed_chest_range_and_invalidation(GameTestHelper h){
         var level=h.getLevel();BlockPos center=h.absolutePos(new BlockPos(6,2,6));
@@ -533,6 +544,7 @@ public final class ResidenceGameTests {
         check(leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Woken leader did not receive the bounded door task");
         check(data.bedClaim(leader.getUUID())!=null&&data.bedClaim(leader.getUUID()).bed().equals(bed),"The original bed claim was not preserved while waking the leader; sleeping="+leader.isSleeping()+" position="+leader.getSleepingPos()+" owner="+data.owner(leader.getUUID())+" state="+level.getBlockState(bed));
         boolean[] walkedAtDoorSpeed={false,false};
+        observeNightDoorWalkSpeeds(h,leader,walkedAtDoorSpeed);
         h.succeedWhen(()->{
             if(leader.getNavigation().getPath()!=null&&!leader.getNavigation().isDone()){
                 if(leader.getPersistentData().contains("residenciasaldeoes_night_door_task")){
@@ -545,7 +557,7 @@ public final class ResidenceGameTests {
             }
             check(!level.getBlockState(h.absolutePos(new BlockPos(7,3,6))).getValue(DoorBlock.OPEN),"Resident did not physically close the nighttime door");
             check(leader.isSleeping()&&leader.getSleepingPos().orElse(null)!=null&&leader.getSleepingPos().orElseThrow().equals(bed),"Resident did not return to its original bed after closing the door");
-            check(walkedAtDoorSpeed[0]&&walkedAtDoorSpeed[1],"The physical trip to the door and the return-to-bed route were not both observed at walking speed");
+            check(walkedAtDoorSpeed[0]&&walkedAtDoorSpeed[1],"The physical trip to the door and the return-to-bed route were not both observed at walking speed; observed="+java.util.Arrays.toString(walkedAtDoorSpeed));
         });
     }
     @GameTest(template="empty",timeoutTicks=900,batch="doors")
@@ -648,6 +660,7 @@ public final class ResidenceGameTests {
         check(second.isSleeping(),"A second resident was woken unnecessarily");
         check(data.ownsBed(level.dimension(),firstBed,leader.getUUID())&&data.ownsBed(level.dimension(),secondBed,second.getUUID()),"Waking discarded a bed reservation");
         boolean[] walkedAtDoorSpeed={false,false};
+        observeNightDoorWalkSpeeds(h,leader,walkedAtDoorSpeed);
         h.succeedWhen(()->{
             if(leader.getNavigation().getPath()!=null&&!leader.getNavigation().isDone()){
                 if(leader.getPersistentData().contains("residenciasaldeoes_night_door_task")){
@@ -664,7 +677,7 @@ public final class ResidenceGameTests {
                     &&level.getBlockState(firstBed).getValue(BedBlock.OCCUPIED),"Selected resident did not return to its original reserved bed");
             check(second.isSleeping()&&secondClaim!=null&&secondClaim.bed().equals(secondBed)
                     &&level.getBlockState(secondBed).getValue(BedBlock.OCCUPIED),"Other resident stopped sleeping during the task");
-            check(walkedAtDoorSpeed[0]&&walkedAtDoorSpeed[1],"The rainy-night door route and return-to-bed route were not both observed at walking speed");
+            check(walkedAtDoorSpeed[0]&&walkedAtDoorSpeed[1],"The rainy-night door route and return-to-bed route were not both observed at walking speed; observed="+java.util.Arrays.toString(walkedAtDoorSpeed));
         });
     }
     @GameTest(template="empty",timeoutTicks=700,batch="rain-doors")
