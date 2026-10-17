@@ -1,8 +1,8 @@
 package br.com.residenciasaldeoes.mixin;
 
 import br.com.residenciasaldeoes.client.ResidentAppearanceModels;
-import br.com.residenciasaldeoes.client.SteveVillagerModel;
 import br.com.residenciasaldeoes.client.VillagerSkinLayer;
+import br.com.residenciasaldeoes.client.render.ResidentSteveRenderState;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
@@ -31,7 +31,7 @@ public abstract class ResidentSteveModelMixin {
     @Shadow @Final @Mutable protected EntityModel model;
     @Shadow @Final @Mutable protected List<RenderLayer> layers;
 
-    @Unique private static final ThreadLocal<Deque<RenderState>> RESIDENCIAS$renderStates =
+    @Unique private static final ThreadLocal<Deque<ResidentSteveRenderState>> RESIDENCIAS$renderStates =
             ThreadLocal.withInitial(ArrayDeque::new);
 
     @Inject(method = "render", at = @At("HEAD"))
@@ -40,7 +40,7 @@ public abstract class ResidentSteveModelMixin {
             int packedLight, CallbackInfo ci) {
         if (!(entity instanceof Villager villager) || !ResidentAppearanceModels.usesSteve(villager)) return;
 
-        RESIDENCIAS$renderStates.get().push(new RenderState(model, layers));
+        RESIDENCIAS$renderStates.get().push(new ResidentSteveRenderState(model, layers));
         model = ResidentAppearanceModels.steveModel();
 
         // PlayerModel renders the player's hat/jacket/sleeve/pants skin layers itself.
@@ -59,25 +59,14 @@ public abstract class ResidentSteveModelMixin {
             int packedLight, CallbackInfo ci) {
         if (!(entity instanceof Villager villager) || !ResidentAppearanceModels.usesSteve(villager)) return;
 
-        Deque<RenderState> states = RESIDENCIAS$renderStates.get();
+        Deque<ResidentSteveRenderState> states = RESIDENCIAS$renderStates.get();
         if (states.isEmpty()) {
             RESIDENCIAS$renderStates.remove();
             return;
         }
-        RenderState previous = states.pop();
-        model = previous.model;
-        layers = previous.layers;
+        ResidentSteveRenderState previous = states.pop();
+        model = previous.model();
+        layers = previous.layers();
         if (states.isEmpty()) RESIDENCIAS$renderStates.remove();
-    }
-
-    @Unique
-    private static final class RenderState {
-        private final EntityModel model;
-        private final List<RenderLayer> layers;
-
-        private RenderState(EntityModel model, List<RenderLayer> layers) {
-            this.model = model;
-            this.layers = layers;
-        }
     }
 }
