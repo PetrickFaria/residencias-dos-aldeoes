@@ -6,7 +6,7 @@ import net.minecraft.client.renderer.RenderType;
 
 /** Applies the selected alpha to every model pass, including the vanilla skin. */
 public final class OpacityPreviewBuffers implements MultiBufferSource {
-    private final MultiBufferSource.BufferSource delegate;
+    private final MultiBufferSource delegate;
     private final int opacity;
 
     public OpacityPreviewBuffers(MultiBufferSource delegate,int opacity){
