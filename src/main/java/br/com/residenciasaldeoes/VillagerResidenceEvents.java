@@ -5,6 +5,7 @@ import br.com.residenciasaldeoes.data.ResidenceData;
 import br.com.residenciasaldeoes.menu.AnchorMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.npc.Villager;
