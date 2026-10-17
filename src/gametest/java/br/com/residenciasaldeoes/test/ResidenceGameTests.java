@@ -430,7 +430,8 @@ public final class ResidenceGameTests {
         invoke("tickEmeraldTransfer",new Class[]{net.minecraft.server.level.ServerLevel.class,Villager.class},level,courier);
         check(level.getBlockState(door).getValue(DoorBlock.OPEN),"Courier's active route could not open the protected residential door");
         check(!level.getBlockState(h.absolutePos(unrelatedLocal)).getValue(DoorBlock.OPEN),"Courier exception opened a door outside the active route");
-        check(java.util.Arrays.stream(job.getLongArray("open_doors")).anyMatch(value->value==door.asLong()),"Opened residential door was not tracked for post-passage closure");
+        check(java.util.Arrays.stream(courier.getPersistentData().getCompound(JOB).getLongArray("open_doors"))
+                .anyMatch(value->value==door.asLong()),"Opened residential door was not tracked for post-passage closure");
         check(VillagerResidenceEvents.shouldBlockResidentDoorOpening(level,courier,door),"Scoped passage exception leaked beyond the setOpen call");
         h.succeedWhen(()->{
             check(courier.blockPosition().getX()>=door.getX()+1,"Courier did not physically cross the residential doorway");
@@ -612,10 +613,12 @@ public final class ResidenceGameTests {
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
         check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not expand rainy sleep residence");
         for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
-        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,7));Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(7,3,7));
+        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,7));Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(8,3,7));
         ResidenceData data=ResidenceData.get(level);BlockPos home=h.absolutePos(homePos);
         check(data.link(level,home,leader).equals("ok")&&data.link(level,home,second).equals("ok"),"Could not link sleeping residents");
-        BlockPos firstBedLocal=new BlockPos(5,3,5),secondBedLocal=new BlockPos(7,3,5);
+        // Keep the second bed's foot clear of the doorway; the previous fixture
+        // placed the open door on that half and made its sleeping state ambiguous.
+        BlockPos firstBedLocal=new BlockPos(5,3,5),secondBedLocal=new BlockPos(7,3,7);
         for(BlockPos bedLocal:List.of(firstBedLocal,secondBedLocal)){
             var head=Blocks.WHITE_BED.defaultBlockState().setValue(BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD).setValue(BedBlock.FACING,Direction.NORTH);
             h.setBlock(bedLocal.relative(Direction.SOUTH),head.setValue(BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT));h.setBlock(bedLocal,head);
@@ -631,8 +634,11 @@ public final class ResidenceGameTests {
         check(data.ownsBed(level.dimension(),firstBed,leader.getUUID())&&data.ownsBed(level.dimension(),secondBed,second.getUUID()),"Waking discarded a bed reservation");
         h.succeedWhen(()->{
             check(!level.getBlockState(h.absolutePos(new BlockPos(7,3,6))).getValue(DoorBlock.OPEN),"Resident did not physically close the rainy-night door");
-            check(leader.isSleeping()&&leader.getSleepingPos().orElse(null)!=null&&leader.getSleepingPos().orElseThrow().equals(firstBed),"Selected resident did not walk back to its original bed");
-            check(second.isSleeping()&&second.getSleepingPos().orElse(null)!=null&&second.getSleepingPos().orElseThrow().equals(secondBed),"Other resident stopped sleeping during the task");
+            ResidenceData.BedClaim leaderClaim=data.bedClaim(leader.getUUID()),secondClaim=data.bedClaim(second.getUUID());
+            check(leader.isSleeping()&&leaderClaim!=null&&leaderClaim.bed().equals(firstBed)
+                    &&level.getBlockState(firstBed).getValue(BedBlock.OCCUPIED),"Selected resident did not return to its original reserved bed");
+            check(second.isSleeping()&&secondClaim!=null&&secondClaim.bed().equals(secondBed)
+                    &&level.getBlockState(secondBed).getValue(BedBlock.OCCUPIED),"Other resident stopped sleeping during the task");
         });
     }
     @GameTest(template="empty",timeoutTicks=700,batch="rain-doors")
