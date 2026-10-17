@@ -159,6 +159,11 @@ public final class VisualClientCheck {
             var server=mc.getSingleplayerServer();var uuid=mc.player.getUUID();
             server.execute(()->{
                 var level=server.overworld();var player=server.getPlayerList().getPlayer(uuid);
+                // Isolate alpha captures from mobs left by earlier visual checks.
+                level.getEntitiesOfClass(net.minecraft.world.entity.Mob.class,
+                        new net.minecraft.world.phys.AABB(-2,-64,0,13,-44,14))
+                        .forEach(net.minecraft.world.entity.Entity::discard);
+                level.setWeatherParameters(6000,0,false,false);
                 BlockPos pos=new BlockPos(1,-58,8);
                 player.teleportTo(level,1.5,-58,10.5,180F,20F);
                 var anchor=(br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity)level.getBlockEntity(pos);
@@ -189,7 +194,7 @@ public final class VisualClientCheck {
                 }
                 var resident=net.minecraft.world.entity.EntityType.VILLAGER.create(level);
                 if(resident==null)throw new IllegalStateException("Could not create Steve opacity visual test resident");
-                resident.setNoAi(true);resident.moveTo(5.5,-58,5.5,0F,0F);level.addFreshEntity(resident);
+                resident.setNoAi(true);resident.setInvulnerable(true);resident.moveTo(5.5,-58,5.5,0F,0F);level.addFreshEntity(resident);
                 var data=br.com.residenciasaldeoes.data.ResidenceData.get(level);BlockPos home=new BlockPos(1,-58,8);
                 if(!"ok".equals(data.link(level,home,resident)))throw new IllegalStateException("Could not register Steve opacity visual test resident");
                 data.setResidentOpacity(resident.getUUID(),50);
