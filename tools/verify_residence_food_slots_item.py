@@ -8,7 +8,10 @@ screen=(root/"src/main/java/br/com/residenciasaldeoes/client/AnchorScreen.java")
 network=(root/"src/main/java/br/com/residenciasaldeoes/network/ModNetwork.java").read_text()
 main=(root/"src/main/java/br/com/residenciasaldeoes/ResidenciasDosAldeoes.java").read_text()
 lang=json.loads((root/"src/main/resources/assets/residenciasaldeoes/lang/pt_br.json").read_text())
-assert "if(b==Blocks.CAKE)cakes++" in menu and "idx<resources[3]*2" in menu
+assert "if(b==Blocks.CAKE)cakes++" in menu
+assert "int chests=Math.max(0,resources[2]),food=Math.max(0,resources[3])*2" in events
+assert "boolean hasFood=food>0" in events and "benefits.food()" in menu
+assert "idx<resources[3]*2" not in menu, "Food indicators now use the shared age-aware allocation"
 assert "drawStatus(p,\"Comida\",e.food()" in screen and "boolean food" in network
 assert "for(int slot=0;slot<ResidentialAnchorBlockEntity.OUTPUT_SLOTS;slot++)" in menu and "mayPlace(ItemStack stack){return false;}" in menu
 assert "implements Container" in be and "ContainerHelper.saveAllItems(tag,outputItems)" in be and "ContainerHelper.loadAllItems(tag,outputItems)" in be
