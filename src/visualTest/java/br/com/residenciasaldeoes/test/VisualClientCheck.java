@@ -21,6 +21,8 @@ import java.io.File;
 public final class VisualClientCheck {
     private static final int[] OPACITY_PERCENTAGES={0,10,25,50,75,90,100};
     private static boolean requested,scene,depositCaptured,overlapVerified,closedCaptured,courierStarted,opacityScenePrepared,opacitySceneCaptured,multiOpacityCaptured;
+    private static volatile boolean graphicalDeliveryVerified;
+    private static int lastCourierIntegrityCheckTick;
     private static volatile int opacityVillagerEntityId=-1;
     private static volatile int[] multiOpacityVillagerIds=new int[0];
     private static final int[] MULTI_OPACITY_PERCENTAGES={0,25,75,100};
@@ -118,16 +120,36 @@ public final class VisualClientCheck {
                         new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(pos),Direction.UP,pos,false));
                 });
             }
-            if(depositCaptured&&!overlapVerified&&delivery.getCourierOpeners()==0&&delivery.getCombinedOpeners()>0&&delivery.getOpenNess(0)>.8F){
+            // The configured trip limit is 15, so a 17-fragment collection is
+            // intentionally delivered in two physical trips. Validate total
+            // conservation only after the anchor and courier have both finished.
+            if(depositCaptured&&!graphicalDeliveryVerified&&ticks-lastCourierIntegrityCheckTick>=10){
+                lastCourierIntegrityCheckTick=ticks;
+                var server=mc.getSingleplayerServer();
+                server.execute(()->{
+                    var level=server.overworld();BlockPos anchorPos=new BlockPos(1,-58,8),chestPos=new BlockPos(4,-58,8);
+                    if(!(level.getBlockEntity(anchorPos) instanceof br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity anchor)
+                            ||!(level.getBlockEntity(chestPos) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity chest))return;
+                    int deposited=0;for(int i=0;i<27;i++)deposited+=chest.getItem(i).getCount();
+                    var home=br.com.residenciasaldeoes.data.ResidenceData.get(level).home(level,anchorPos);
+                    boolean courierInFlight=false;
+                    for(var id:home.residents)if(level.getEntity(id) instanceof net.minecraft.world.entity.npc.Villager resident
+                            &&resident.getPersistentData().contains("residenciasaldeoes_emerald_transfer"))courierInFlight=true;
+                    if(!courierInFlight&&anchor.isEmpty()&&anchor.getPendingFragments()==0){
+                        long loose=level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                                new net.minecraft.world.phys.AABB(anchorPos).inflate(48.0D),item->item.getItem().is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get()))
+                                .stream().mapToLong(item->item.getItem().getCount()).sum();
+                        if(deposited!=17||loose!=0L)throw new IllegalStateException(
+                                "Graphical courier delivery lost/duplicated fragments: expected chest=17 loose=0, got chest="+deposited+" loose="+loose);
+                        graphicalDeliveryVerified=true;
+                        System.out.println("COURIER_GRAPHICAL_DEPOSIT_PASSED fragments="+deposited);
+                    }
+                });
+            }
+            if(depositCaptured&&!overlapVerified&&graphicalDeliveryVerified&&delivery.getCourierOpeners()==0&&delivery.getCombinedOpeners()>0&&delivery.getOpenNess(0)>.8F){
                 overlapVerified=true;System.out.println("COURIER_PLAYER_OVERLAP_PASSED");
                 var server=mc.getSingleplayerServer();var uuid=mc.player.getUUID();
-                server.execute(()->{
-                    var chest=(br.com.residenciasaldeoes.block.EmeraldChestBlockEntity)server.overworld().getBlockEntity(new BlockPos(4,-58,8));
-                    int deposited=0;for(int i=0;i<27;i++)deposited+=chest.getItem(i).getCount();
-                    if(deposited!=17)throw new IllegalStateException("Graphical courier delivery lost/duplicated fragments");
-                    System.out.println("COURIER_GRAPHICAL_DEPOSIT_PASSED fragments="+deposited);
-                    server.getPlayerList().getPlayer(uuid).closeContainer();
-                });
+                server.execute(()->server.getPlayerList().getPlayer(uuid).closeContainer());
             }
             if(overlapVerified&&!closedCaptured&&delivery.getCombinedOpeners()==0&&delivery.getOpenNess(0)<.05F){
                 closedCaptured=true;System.out.println("COURIER_CLIENT_OPEN_CLOSE_PASSED");

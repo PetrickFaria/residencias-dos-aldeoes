@@ -33,7 +33,6 @@ import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.CommandEvent;
 import net.minecraftforge.event.entity.living.LivingConversionEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
-import net.minecraftforge.event.entity.living.LivingSpawnEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -873,15 +872,6 @@ public class VillagerResidenceEvents {
     }
     @SubscribeEvent public void onVillagerJoin(EntityJoinLevelEvent event){if(event.getEntity() instanceof Villager v&&event.getLevel() instanceof ServerLevel sl){ResidenceData data=ResidenceData.get(sl);data.applyPendingNameRestoration(v);if(data.reconcileCapturedResident(sl,v))data.applyResidentName(v);}}
     @SubscribeEvent public void onStartTracking(PlayerEvent.StartTracking event){if(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player&&event.getTarget() instanceof Villager villager&&player.level instanceof ServerLevel level&&level.dimension().equals(villager.level.dimension())){ResidenceData data=ResidenceData.get(level);if(data.owner(villager.getUUID())!=null){br.com.residenciasaldeoes.network.ModNetwork.sendOpacity(player,villager.getUUID(),data.residentOpacity(villager.getUUID()));br.com.residenciasaldeoes.network.ModNetwork.sendResidentModel(player,villager.getUUID(),data.residentModel(villager.getUUID()));}ResidenceData.ResidentSkin skin=data.residentSkin(villager.getUUID());if(skin!=null)br.com.residenciasaldeoes.network.ModNetwork.sendSkin(player,villager.getUUID(),skin);}}
-    @SubscribeEvent public void onVillageCatSpawn(LivingSpawnEvent.CheckSpawn event) {
-        if (!(event.getEntity() instanceof net.minecraft.world.entity.animal.Cat cat) || event.getSpawner()!=null || !(cat.level instanceof ServerLevel level)) return;
-        ResidenceData data=ResidenceData.get(level);BlockPos spawn=cat.blockPosition();
-        for(ResidenceData.Home h:data.homes()) {
-            if(!h.dimension.equals(level.dimension()) || !level.hasChunkAt(h.pos) || h.pos.distSqr(spawn)>48.0D*48.0D) continue;
-            int villagers=level.getEntitiesOfClass(Villager.class,new AABB(h.pos).inflate(48.0D),v->true).size();
-            if(villagers>=5){event.setCanceled(true);return;}
-        }
-    }
     @SubscribeEvent public void syncPlayerPreviews(TickEvent.PlayerTickEvent event) {
         if(event.phase!=TickEvent.Phase.END || !(event.player instanceof net.minecraft.server.level.ServerPlayer player) || player.tickCount%20!=0) return;
         syncPreviews(player);

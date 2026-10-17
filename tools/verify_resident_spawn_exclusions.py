@@ -5,6 +5,8 @@ villager_mixin=(root/'mixin/VillagerTransportMixin.java').read_text()
 cat_mixin=(root/'mixin/CatSpawnerMixin.java').read_text()
 config=Path('src/main/resources/residencias.mixins.json').read_text()
 rules=(root/'data/ResidentSpawnRules.java').read_text()
+events=(root/'VillagerResidenceEvents.java').read_text()
+visual=Path('src/visualTest/java/br/com/residenciasaldeoes/test/VisualClientCheck.java').read_text()
 tests=Path('src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java').read_text()
 
 assert '@Mixin(Villager.class)' in villager_mixin
@@ -26,6 +28,9 @@ assert 'residential_door_reopened_during_rain_is_closed_again' in tests
 assert 'daytime_residential_doors_reopen_after_rain_ends' in tests
 assert 'residential_rain_is_detected_at_exposed_perimeter_under_roofed_anchor' in tests
 assert 'CatSpawnerMixin' in config
+assert 'onVillageCatSpawn' not in events and 'LivingSpawnEvent' not in events
+assert 'courierInFlight' in visual and 'getPendingFragments()==0' in visual
+assert 'maximoPorViagem' not in visual
 assert 'LivingSpawnEvent' not in villager_mixin+cat_mixin
 
 print('Linked residents are filtered from vanilla golem and village-cat population checks; cat threshold edge cases and rain door regressions are covered.')
