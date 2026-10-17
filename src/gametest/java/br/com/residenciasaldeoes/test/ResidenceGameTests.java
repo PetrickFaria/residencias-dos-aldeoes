@@ -409,7 +409,7 @@ public final class ResidenceGameTests {
     }
     @GameTest(template="empty",timeoutTicks=1000,batch="courier-door")
     public static void courier_opens_only_a_residential_door_on_its_active_path(GameTestHelper h){
-        floor(h);var level=h.getLevel();level.setDayTime(13_001L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
+        floor(h);var level=h.getLevel();level.setDayTime(13_001L);level.setWeatherParameters(0,12_000,true,false);level.setRainLevel(1.0F);
         BlockPos homeLocal=new BlockPos(6,2,8);h.setBlock(homeLocal,ResidenciasDosAldeoes.ANCHOR.get());
         check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homeLocal)).setSize(5),"Could not expand courier-door residence");
         Villager courier=h.spawn(EntityType.VILLAGER,new BlockPos(6,2,6));
@@ -418,25 +418,19 @@ public final class ResidenceGameTests {
         BlockPos doorLocal=new BlockPos(7,2,6),unrelatedLocal=new BlockPos(7,2,9);
         placeDoor(h,doorLocal,Blocks.OAK_DOOR,false);placeDoor(h,unrelatedLocal,Blocks.SPRUCE_DOOR,false);
         for(int x=6;x<=8;x++)for(int z:new int[]{5,7})for(int y=2;y<=3;y++)h.setBlock(new BlockPos(x,y,z),Blocks.STONE);
-        BlockPos door=h.absolutePos(doorLocal),destination=h.absolutePos(new BlockPos(8,2,6));
-        var job=new net.minecraft.nbt.CompoundTag();job.putLong("anchor",home.asLong());job.putLong("chest",h.absolutePos(new BlockPos(12,2,6)).asLong());
-        job.putInt("stage",1);job.putLong("chest_approach",destination.asLong());job.putLong("started",level.getGameTime());
+        BlockPos door=h.absolutePos(doorLocal),destination=h.absolutePos(new BlockPos(9,2,6));
+        BlockPos chest=h.absolutePos(new BlockPos(10,2,6));h.setBlock(new BlockPos(10,2,6),ResidenciasDosAldeoes.EMERALD_CHEST.get());
+        var job=new net.minecraft.nbt.CompoundTag();job.putLong("anchor",home.asLong());job.putLong("chest",chest.asLong());
+        job.putInt("stage",1);job.putLong("chest_approach",destination.asLong());job.putLong("home_approach",h.absolutePos(new BlockPos(6,2,6)).asLong());job.putLong("started",level.getGameTime());
         courier.getPersistentData().put(JOB,job);
         check(VillagerResidenceEvents.shouldBlockResidentDoorOpening(level,courier,door),"Night-rain closure protection was not active before the scoped courier exception");
-        var path=courier.getNavigation().createPath(destination,0);
-        check(path!=null&&path.getNodeCount()>1,"Courier had no normal navigation path across the closed-door route");
-        boolean routeContainsDoor=false;
-        for(int i=0;i<path.getNodeCount();i++){
-            BlockPos node=path.getNode(i).asBlockPos();
-            if(node.getX()==door.getX()&&node.getZ()==door.getZ()&&(node.getY()==door.getY()||node.getY()==door.getY()+1)){routeContainsDoor=true;break;}
-        }
-        check(routeContainsDoor,"Pathfinder did not route the courier through the required wooden door");
-        courier.getNavigation().moveTo(path,.5D);
-        invoke("openTransferDoors",new Class[]{net.minecraft.server.level.ServerLevel.class,Villager.class},level,courier);
+        // Start the real bounded transfer tick. A pathfinder cannot return a complete
+        // path through a closed door, so this test exercises the courier's nearby
+        // residential-door exception and then lets vanilla navigation replan.
+        invoke("tickEmeraldTransfer",new Class[]{net.minecraft.server.level.ServerLevel.class,Villager.class},level,courier);
         check(level.getBlockState(door).getValue(DoorBlock.OPEN),"Courier's active route could not open the protected residential door");
         check(!level.getBlockState(h.absolutePos(unrelatedLocal)).getValue(DoorBlock.OPEN),"Courier exception opened a door outside the active route");
-        var opened=job.getLongArray("open_doors");
-        check(java.util.Arrays.stream(opened).anyMatch(value->value==door.asLong()),"Opened residential door was not tracked for post-passage closure");
+        check(java.util.Arrays.stream(job.getLongArray("open_doors")).anyMatch(value->value==door.asLong()),"Opened residential door was not tracked for post-passage closure");
         check(VillagerResidenceEvents.shouldBlockResidentDoorOpening(level,courier,door),"Scoped passage exception leaked beyond the setOpen call");
         h.succeedWhen(()->{
             check(courier.blockPosition().getX()>=door.getX()+1,"Courier did not physically cross the residential doorway");
@@ -604,7 +598,7 @@ public final class ResidenceGameTests {
         check(data.reserveBed(resident.getUUID(),level.dimension(),home,bed),"Could not reserve the resident's bed");
         level.setDayTime(13_001L);resident.startSleeping(bed);
         check(resident.isSleeping(),"Resident did not enter sleep before the rain transition");
-        level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
+        level.setWeatherParameters(0,12_000,true,false);level.setRainLevel(1.0F);
         check(level.isRaining(),"Rain fixture did not activate");
         h.runAtTickTime(100,()->{
             check(resident.isSleeping(),"Rain alone woke a resident who had a bed and no door task");
@@ -629,7 +623,7 @@ public final class ResidenceGameTests {
         BlockPos firstBed=h.absolutePos(firstBedLocal),secondBed=h.absolutePos(secondBedLocal);
         check(data.reserveBed(leader.getUUID(),level.dimension(),home,firstBed)&&data.reserveBed(second.getUUID(),level.dimension(),home,secondBed),"Could not reserve both beds");
         leader.startSleeping(firstBed);second.startSleeping(secondBed);check(leader.isSleeping()&&second.isSleeping(),"Residents did not begin asleep");
-        placeOpenDoor(h,new BlockPos(7,3,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
+        placeOpenDoor(h,new BlockPos(7,3,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);level.setWeatherParameters(0,12_000,true,false);level.setRainLevel(1.0F);
         invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,500_000L+level.getGameTime());
         check(leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"A resident was not assigned to close the open door");
         check(!leader.isSleeping(),"The selected resident did not wake to perform the door task");
@@ -1091,6 +1085,7 @@ public final class ResidenceGameTests {
     @GameTest(template="empty",timeoutTicks=40,batch="dawn")
     public static void resident_fragment_balances_cap_at_twenty_and_persist(GameTestHelper h){
         BlockPos localHome=new BlockPos(5,2,5);h.setBlock(localHome,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(localHome)).setSize(5),"Could not expand storage test residence for two residents");
         Villager adult=h.spawn(EntityType.VILLAGER,new BlockPos(6,2,6));adult.setAge(0);
         Villager baby=h.spawn(EntityType.VILLAGER,new BlockPos(7,2,6));baby.setAge(-24000);
         ResidenceData data=ResidenceData.get(h.getLevel());BlockPos home=h.absolutePos(localHome);

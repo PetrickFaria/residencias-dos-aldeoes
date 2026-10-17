@@ -860,14 +860,25 @@ public class VillagerResidenceEvents {
     }
     private static void openTransferDoors(ServerLevel level,Villager villager){
         net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().getPath();
-        if(path==null)return;
         ResidenceData data=ResidenceData.get(level);
         ResidenceData.Home home=data.owner(villager.getUUID());
         if(home==null||!home.dimension.equals(level.dimension())||!home.residents.contains(villager.getUUID()))return;
         CompoundTag job=villager.getPersistentData().getCompound(EMERALD_TRANSFER);
-        for(int index=Math.max(0,path.getNextNodeIndex()-1);index<Math.min(path.getNodeCount(),path.getNextNodeIndex()+2);index++){
-            BlockPos pos=path.getNode(index).asBlockPos();
-            if(villager.blockPosition().distSqr(pos)>4D)continue;
+        BlockPos target=BlockPos.of(job.getLong(job.getInt("stage")==1?"chest_approach":"home_approach"));
+        Set<Long> routeDoors=new LinkedHashSet<>();
+        if(path!=null)for(int index=Math.max(0,path.getNextNodeIndex()-1);index<Math.min(path.getNodeCount(),path.getNextNodeIndex()+2);index++){
+            BlockPos node=path.getNode(index).asBlockPos();
+            if(villager.blockPosition().distSqr(node)<=4D)routeDoors.add(node.asLong());
+        }
+        String residenceKey=homeKey(home);
+        if(!RESIDENTIAL_DOOR_WATCHES.getOrDefault(level,Map.of()).containsKey(residenceKey))rememberResidentialDoors(level,home);
+        for(long encoded:RESIDENTIAL_DOOR_WATCHES.getOrDefault(level,Map.of()).getOrDefault(residenceKey,Set.of())){
+            BlockPos door=BlockPos.of(encoded);
+            if(villager.blockPosition().distSqr(door)<=4D&&transferHeadingCrossesDoor(villager,target,door))routeDoors.add(encoded);
+        }
+        for(long encoded:routeDoors){
+            BlockPos pos=BlockPos.of(encoded);
+            if(villager.blockPosition().distSqr(pos)>4D||!level.hasChunkAt(pos))continue;
             var state=level.getBlockState(pos);
             if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
                     &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER){pos=pos.below();state=level.getBlockState(pos);}
@@ -877,7 +888,8 @@ public class VillagerResidenceEvents {
                     ==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
                     &&withinDoorBounds(pos,home)&&level.hasChunkAt(pos)){
                 recordTransferDoor(job,pos);
-                if(!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
+                if(!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)
+                        &&villager.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(pos))<=2.25D){
                     TransferDoorPermission previous=TRANSFER_DOOR_PERMISSION.get();
                     TRANSFER_DOOR_PERMISSION.set(new TransferDoorPermission(villager.getUUID(),level.dimension(),pos.immutable()));
                     try{door.setOpen(villager,level,state,pos,true);}
@@ -891,6 +903,17 @@ public class VillagerResidenceEvents {
             }
         }
         villager.getPersistentData().put(EMERALD_TRANSFER,job);
+    }
+    /** A nearby residential door may truncate a ground path; let the courier open it before replanning. */
+    private static boolean transferHeadingCrossesDoor(Villager villager,BlockPos target,BlockPos door){
+        net.minecraft.world.phys.Vec3 start=villager.position().add(0.0D,villager.getBbHeight()*0.5D,0.0D);
+        net.minecraft.world.phys.Vec3 end=net.minecraft.world.phys.Vec3.atCenterOf(target);
+        net.minecraft.world.phys.Vec3 segment=end.subtract(start);double lengthSquared=segment.lengthSqr();
+        if(lengthSquared<1.0E-6D)return false;
+        net.minecraft.world.phys.Vec3 doorCenter=net.minecraft.world.phys.Vec3.atCenterOf(door);
+        double progress=Math.max(0.0D,Math.min(1.0D,doorCenter.subtract(start).dot(segment)/lengthSquared));
+        net.minecraft.world.phys.Vec3 closest=start.add(segment.scale(progress));
+        return progress>0.0D&&progress<1.0D&&closest.distanceToSqr(doorCenter)<=0.64D;
     }
     private static int countFragments(List<ItemStack> stacks){return stacks.stream().filter(s->!s.isEmpty()).mapToInt(ItemStack::getCount).sum();}
     private static List<ResidenceData.ResidentFragmentSource> readTransferSources(CompoundTag job){
