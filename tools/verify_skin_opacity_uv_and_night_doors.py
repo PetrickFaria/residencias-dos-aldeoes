@@ -11,6 +11,7 @@ screen = read("src/main/java/br/com/residenciasaldeoes/client/AnchorScreen.java"
 opacity = read("src/main/java/br/com/residenciasaldeoes/client/ResidentOpacity.java")
 buffer_mixin = read("src/main/java/br/com/residenciasaldeoes/mixin/BufferBuilderOpacityMixin.java")
 name_mixin = read("src/main/java/br/com/residenciasaldeoes/mixin/EntityRendererNameTagOpacityMixin.java")
+render_opacity_mixin = read("src/main/java/br/com/residenciasaldeoes/mixin/LivingEntityRendererOpacityMixin.java")
 mixins = json.loads(read("src/main/resources/residencias.mixins.json"))
 textures = read("src/main/java/br/com/residenciasaldeoes/client/VillagerSkinTextures.java")
 events = read("src/main/java/br/com/residenciasaldeoes/VillagerResidenceEvents.java")
@@ -26,6 +27,10 @@ assert "dispatcher.render(skinPreviewVillager,0,0,0,0,1.0F,poses,previewBuffers,
 assert "bufferSource.endBatch()" in screen
 assert "isPreviewRendering()" in buffer_mixin
 assert "if(ResidentOpacity.isPreviewRendering())return alpha;" in buffer_mixin
+assert 'method = "getRenderType"' in render_opacity_mixin
+assert "ResidentAppearanceModels.usesSteve(villager)" in render_opacity_mixin
+assert "ResidentOpacity.renderingPercent() < 100" in render_opacity_mixin
+assert "RenderType.entityTranslucent(getTextureLocation(entity))" in render_opacity_mixin
 assert "beginPreviewRender(skinPreviewVillager)" in screen
 assert "if (renderingNameTag()) return 100;" in opacity
 assert "renderNameTag" in name_mixin and "beginNameTag" in name_mixin and "endNameTag" in name_mixin
@@ -66,6 +71,9 @@ assert "findApproach(level,doorPos,villager)" in events and "NIGHT_DOOR_WALK_SPE
 assert "villager.getNavigation().stop();" in events and "door.setOpen(villager,level,state,doorPos,false)" in events
 assert "now-task.getLong(\"last_progress\")>=200L" in events and "attempts>=3" in events
 assert "NIGHT_DOOR_RESUME" in events and "putBoolean(NIGHT_DOOR_RESUME,true)" in events
+assert "residenciasaldeoes_night_wander" in events and "tickNightWander(level,villager,home)" in events
+assert "60L+villager.getRandom().nextInt(81)" in events
+assert "pathAvoidsWoodenDoors(level,path)" in events
 assert "level.getPoiManager().take" in events and "type.is(net.minecraft.world.entity.ai.village.poi.PoiTypes.HOME)" in events
 assert "MemoryModuleType.WALK_TARGET,new WalkTarget(bedApproach,.85F,0)" in events
 assert "villager.blockPosition().equals(bedApproach)" in events
@@ -84,4 +92,5 @@ for percent in (100, 75, 50, 25, 0):
 gametests = read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "three_residents_reach_and_use_three_distinct_residential_beds" in gametests
 assert "night_door_task_wakes_leader_then_returns_to_same_bed" in gametests
+assert "bedless_night_stroll_does_not_reopen_completed_door" in gametests
 print("Continuous preview shader alpha, name-tag separation, 64–1024 templates, UV accessory transparency, 300-tick night scans, resident priorities, and bed recovery verified.")

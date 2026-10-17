@@ -472,6 +472,25 @@ public final class ResidenceGameTests {
                     "Post-door stroll target escaped the residential bounds");
         });
     }
+    @GameTest(template="empty",timeoutTicks=950,batch="doors")
+    public static void bedless_night_stroll_does_not_reopen_completed_door(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos home=new BlockPos(6,2,6);h.setBlock(home,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(home)).setSize(5),"Could not configure bedless residence");
+        for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,6));ResidenceData data=ResidenceData.get(level);
+        check(data.link(level,h.absolutePos(home),resident).equals("ok"),"Could not link bedless resident");
+        BlockPos doorLocal=new BlockPos(7,3,6);placeOpenDoor(h,doorLocal,Blocks.OAK_DOOR);level.setDayTime(13_001L);
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,450_000L+level.getGameTime());
+        h.runAtTickTime(850,()->{
+            check(!level.getBlockState(h.absolutePos(doorLocal)).getValue(DoorBlock.OPEN),
+                    "Bedless nighttime strolling reopened the door after the close task completed");
+            check(!resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
+                    "Completed door task was started again without a new open-door event");
+            check(resident.getPersistentData().contains("residenciasaldeoes_night_wander"),
+                    "Bedless resident did not enter the bounded night-wander state");
+            h.succeed();
+        });
+    }
     @GameTest(template="empty",timeoutTicks=100,batch="doors")
     public static void night_door_closure_runs_during_storms(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());

@@ -27,6 +27,9 @@ Minecraft Java 1.19.2 / Forge 43.5.0 / Java 17.
 - Golens: removido o bloqueio do mod ao método vanilla de elegibilidade; nenhum sistema de geração artificial foi adicionado. A presença de condições naturais precisa ser verificada no mundo de jogo.
 - Configuração: config/residenciasaldeoes-common.toml; padrões 3, 200, 300, 15 e 1000. Reinicie o jogo/servidor para reler o TOML.
 - Capture to Mob: identidade persistente para reconciliar um residente recriado com outro UUID; duplicatas com o original carregado são recusadas; sem dependência obrigatória.
+- Opacidade Steve: a passagem base do PlayerModel usa o passe translúcido do residente, e o alfa existente continua aplicado também às camadas da skin.
+- Rotina noturna sem cama: caminhadas e pausas variam entre 3 e 7 segundos; destinos permanecem dentro da residência e rejeitam rotas que cruzem portas de madeira.
+- Portas noturnas: o trajeto de fechamento continua prioritário; a caminhada sem cama evita reabrir a porta que acabou de ser fechada.
 - GameTests Forge: {game_test_result}, incluindo transporte, persistência, camas e notificações.
 - Limitação: GameTests não simulam a validação gráfica nem garantem que o mundo reúna as condições naturais de geração de golens.
 
