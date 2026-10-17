@@ -72,12 +72,14 @@ public class VillagerResidenceEvents {
     private static final Map<ServerLevel,Map<Long,Long>> RESIDENTIAL_DOOR_COOLDOWNS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<Long,Long>> PENDING_OPEN_DOORS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<String,Long>> LAST_PERIODIC_DOOR_SCAN=new WeakHashMap<>();
-    private static final Map<ServerLevel,Map<String,Boolean>> RESIDENTIAL_RAINING_STATE=new WeakHashMap<>();
+    private static final Map<ServerLevel,Map<String,Boolean>> RESIDENTIAL_CLOSURE_STATE=new WeakHashMap<>();
+    /** Doors found inside loaded residential bounds while closure is required. */
+    private static final Map<ServerLevel,Map<String,Set<Long>>> RESIDENTIAL_DOOR_WATCHES=new WeakHashMap<>();
     private static final long NIGHT_START=13_000L, NIGHT_END=23_000L;
     private static final double NIGHT_DOOR_WALK_SPEED=.48D;
     private static final double NIGHT_WANDER_SPEED=.32D;
     private static final int BED_ANCHOR_INTERVAL=100;
-    private static final long DOOR_REOPEN_COOLDOWN=200L,DOOR_OPEN_STABILITY_TICKS=40L,DOOR_SCAN_INTERVAL=300L;
+    private static final long DOOR_RETRY_COOLDOWN=200L,DOOR_OPEN_STABILITY_TICKS=5L,DOOR_SCAN_INTERVAL=300L;
     private static final long WEATHER_TRANSITION_SCAN_INTERVAL=20L;
     private static final String RESIDENT_DEATH_NOTICE="residenciasaldeoes_death_notice_sent";
     private static final String RESIDENT_WITCH_NOTICE="residenciasaldeoes_witch_notice_sent";
@@ -136,6 +138,10 @@ public class VillagerResidenceEvents {
                 ||!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))return;
         ResidenceData data=ResidenceData.get(level);
         if(!isDoorClosureRequiredAt(level,data,pos))return;
+        for(ResidenceData.Home home:data.homes())if(home.dimension.equals(level.dimension())
+                &&withinDoorBounds(pos,home)&&level.hasChunkAt(home.pos))
+            RESIDENTIAL_DOOR_WATCHES.computeIfAbsent(level,ignored->new HashMap<>())
+                    .computeIfAbsent(homeKey(home),ignored->new HashSet<>()).add(pos.asLong());
         PENDING_OPEN_DOORS.computeIfAbsent(level,ignored->new HashMap<>()).put(pos.asLong(),level.getGameTime());
     }
 
@@ -168,11 +174,11 @@ public class VillagerResidenceEvents {
     }
 
     private static boolean residentUsingDoorway(ServerLevel level,ResidenceData data,BlockPos door){
-        net.minecraft.world.phys.Vec3 center=net.minecraft.world.phys.Vec3.atCenterOf(door);
+        AABB passage=new AABB(door).inflate(0.08D,0.0D,0.08D);
         for(ResidenceData.Home home:data.homes()){
             if(!home.dimension.equals(level.dimension()))continue;
             for(UUID id:home.residents)if(level.getEntity(id) instanceof Villager resident&&resident.isAlive()
-                    &&resident.distanceToSqr(center)<=9.0D)return true;
+                    &&resident.getBoundingBox().intersects(passage))return true;
         }
         return false;
     }
@@ -229,9 +235,26 @@ public class VillagerResidenceEvents {
     private static boolean shouldCloseResidentialDoors(ServerLevel level,ResidenceData.Home home){
         long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
         boolean night=phase>=NIGHT_START&&phase<NIGHT_END;
-        // Test the airspace immediately above the residence anchor so sheltered homes
-        // do not react to rain falling elsewhere in the dimension.
-        return night||level.isRainingAt(home.pos.above());
+        return night||isRainingAtResidentialArea(level,home);
+    }
+    /** Rain at the anchor can be hidden by the house roof; sample only its exposed local perimeter. */
+    private static boolean isRainingAtResidentialArea(ServerLevel level,ResidenceData.Home home){
+        if(!level.isRaining())return false;
+        int radius=home.size/2+1;
+        int y=home.pos.getY()+1;
+        int minX=home.pos.getX()-radius,maxX=home.pos.getX()+radius;
+        int minZ=home.pos.getZ()-radius,maxZ=home.pos.getZ()+radius;
+        for(int x=minX;x<=maxX;x++){
+            BlockPos north=new BlockPos(x,y,minZ),south=new BlockPos(x,y,maxZ);
+            if(level.hasChunkAt(north)&&level.isRainingAt(north))return true;
+            if(level.hasChunkAt(south)&&level.isRainingAt(south))return true;
+        }
+        for(int z=minZ+1;z<maxZ;z++){
+            BlockPos west=new BlockPos(minX,y,z),east=new BlockPos(maxX,y,z);
+            if(level.hasChunkAt(west)&&level.isRainingAt(west))return true;
+            if(level.hasChunkAt(east)&&level.isRainingAt(east))return true;
+        }
+        return false;
     }
     private static boolean isDoorClosureRequiredAt(ServerLevel level,ResidenceData data,BlockPos pos){
         for(ResidenceData.Home home:data.homes())
@@ -239,18 +262,28 @@ public class VillagerResidenceEvents {
                     &&withinDoorBounds(pos,home)&&shouldCloseResidentialDoors(level,home))return true;
         return false;
     }
-    /** Detect rain transitions only for loaded residences, then reuse the bounded physical door worker. */
+    /** Detect closure-state transitions and watch only the doors found in each loaded home. */
     private void processResidentialWeatherTransitions(ServerLevel level){
         if(level.getGameTime()%WEATHER_TRANSITION_SCAN_INTERVAL!=0L)return;
         ResidenceData data=ResidenceData.get(level);
-        Map<String,Boolean> previous=RESIDENTIAL_RAINING_STATE.computeIfAbsent(level,ignored->new HashMap<>());
+        Map<String,Boolean> previous=RESIDENTIAL_CLOSURE_STATE.computeIfAbsent(level,ignored->new HashMap<>());
         for(ResidenceData.Home home:new ArrayList<>(data.homes())){
             if(!home.dimension.equals(level.dimension())||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
                     ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))continue;
-            String key=home.dimension.location()+"|"+home.pos.asLong();
-            boolean raining=level.isRainingAt(home.pos.above());
-            Boolean wasRaining=previous.put(key,raining);
-            if(raining&&!Boolean.TRUE.equals(wasRaining))beginWeatherDoorClosure(level,home);
+            String key=homeKey(home);
+            boolean closureRequired=shouldCloseResidentialDoors(level,home);
+            Boolean wasRequired=previous.put(key,closureRequired);
+            if(closureRequired){
+                if(!Boolean.TRUE.equals(wasRequired))beginWeatherDoorClosure(level,home);
+                watchResidentialDoors(level,home);
+            }else if(Boolean.TRUE.equals(wasRequired)){
+                beginDaytimeDoorOpening(level,home);
+            }else if(wasRequired==null){
+                // Re-establish the bounded door set after a world/chunk reload so
+                // a dry daytime residence returns to its normal open-door state.
+                rememberResidentialDoors(level,home);
+                beginDaytimeDoorOpening(level,home);
+            }
         }
     }
     /** A rain-triggered task is scoped to one loaded home and only runs while that home is wet. */
@@ -258,6 +291,7 @@ public class VillagerResidenceEvents {
         if(!home.dimension.equals(level.dimension())||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
                 ||!shouldCloseResidentialDoors(level,home)
                 ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))return;
+        rememberResidentialDoors(level,home);
         queueResidentialDoorTask(level,home,findOpenResidentialDoors(level,home),Math.floorDiv(level.getDayTime(),DAY_LENGTH));
     }
     /** One bounded scan per loaded residence at the start of each night. */
@@ -271,6 +305,7 @@ public class VillagerResidenceEvents {
             processed.put(homeKey,nightPeriod);
             if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))continue;
 
+            rememberResidentialDoors(level,home);
             List<BlockPos> openDoors=findOpenResidentialDoors(level,home);
             queueResidentialDoorTask(level,home,openDoors,nightPeriod);
             LAST_PERIODIC_DOOR_SCAN.computeIfAbsent(level,ignored->new HashMap<>()).put(homeKey,level.getGameTime());
@@ -278,6 +313,10 @@ public class VillagerResidenceEvents {
     }
 
     private void queueResidentialDoorTask(ServerLevel level,ResidenceData.Home home,List<BlockPos> candidates,long period){
+        queueResidentialDoorTask(level,home,candidates,period,false);
+    }
+
+    private void queueResidentialDoorTask(ServerLevel level,ResidenceData.Home home,List<BlockPos> candidates,long period,boolean open){
         if(candidates.isEmpty()||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
                 ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))return;
         long now=level.getGameTime();ResidenceData data=ResidenceData.get(level);
@@ -285,13 +324,15 @@ public class VillagerResidenceEvents {
         cooldowns.entrySet().removeIf(entry->entry.getValue()<=now);
         candidates=candidates.stream().filter(p->withinDoorBounds(p,home)&&level.hasChunkAt(p)
                 &&level.getBlockState(p).getBlock() instanceof net.minecraft.world.level.block.DoorBlock
-                &&level.getBlockState(p).getValue(net.minecraft.world.level.block.DoorBlock.OPEN)
-                &&cooldowns.getOrDefault(p.asLong(),Long.MIN_VALUE/2)<=now).distinct().toList();
+                &&level.getBlockState(p).getValue(net.minecraft.world.level.block.DoorBlock.OPEN)!=open
+                &&(open||cooldowns.getOrDefault(p.asLong(),Long.MIN_VALUE/2)<=now)).distinct().toList();
         if(candidates.isEmpty())return;
 
         // At most one resident owns the home's navigation task. New door events join that task.
         for(UUID id:home.residents)if(level.getEntity(id) instanceof Villager active&&active.getPersistentData().contains(NIGHT_DOOR_TASK)){
-            CompoundTag task=active.getPersistentData().getCompound(NIGHT_DOOR_TASK);ListTag doors=task.getList("doors",Tag.TAG_LONG);
+            CompoundTag task=active.getPersistentData().getCompound(NIGHT_DOOR_TASK);
+            if(task.getBoolean("open")!=open){finishNightDoorClosure(active);continue;}
+            ListTag doors=task.getList("doors",Tag.TAG_LONG);
             Set<Long> already=new HashSet<>();for(int i=0;i<doors.size();i++)already.add(((net.minecraft.nbt.LongTag)doors.get(i)).getAsLong());
             for(BlockPos pos:candidates)if(already.add(pos.asLong()))doors.add(net.minecraft.nbt.LongTag.valueOf(pos.asLong()));
             return;
@@ -380,9 +421,78 @@ public class VillagerResidenceEvents {
         ListTag doors=new ListTag();for(BlockPos door:candidates)doors.add(net.minecraft.nbt.LongTag.valueOf(door.asLong()));
         CompoundTag task=new CompoundTag();task.putLong("home",home.pos.asLong());task.putString("dimension",home.dimension.location().toString());
         task.putLong("night",period);task.putLong("started",now);task.putLong("last_progress",now);task.putLong("last_pos",chosen.blockPosition().asLong());
-        task.putLong("last_route_attempt",Long.MIN_VALUE/2);task.putInt("index",0);task.putInt("attempts",0);task.put("doors",doors);
+        task.putLong("last_route_attempt",Long.MIN_VALUE/2);task.putInt("index",0);task.putInt("attempts",0);task.putBoolean("open",open);task.put("doors",doors);
         clearNightWander(chosen,true);
         chosen.getPersistentData().put(NIGHT_DOOR_TASK,task);
+    }
+
+    private static String homeKey(ResidenceData.Home home){
+        return home.dimension.location()+"|"+home.pos.asLong();
+    }
+
+    /** One bounded scan at a weather/night transition; later checks touch only these door positions. */
+    private static void rememberResidentialDoors(ServerLevel level,ResidenceData.Home home){
+        Map<String,Set<Long>> watches=RESIDENTIAL_DOOR_WATCHES.computeIfAbsent(level,ignored->new HashMap<>());
+        String key=homeKey(home);
+        if(watches.containsKey(key))return;
+        Set<Long> doors=new HashSet<>();
+        int radius=home.size/2;
+        int minX=home.pos.getX()-radius-1,maxX=home.pos.getX()+radius+1;
+        int minY=home.pos.getY(),maxY=home.pos.getY()+home.size+1;
+        int minZ=home.pos.getZ()-radius-1,maxZ=home.pos.getZ()+radius+1;
+        for(int y=minY;y<=maxY;y++)for(int x=minX;x<=maxX;x++)for(int z=minZ;z<=maxZ;z++){
+            BlockPos pos=new BlockPos(x,y,z);
+            if(!level.hasChunkAt(pos))continue;
+            BlockState state=level.getBlockState(pos);
+            if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                    &&state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
+                    &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER)
+                doors.add(pos.asLong());
+        }
+        watches.put(key,doors);
+    }
+
+    /** Detects later AI/courier reopens every second without rescanning residential blocks. */
+    private static void watchResidentialDoors(ServerLevel level,ResidenceData.Home home){
+        rememberResidentialDoors(level,home);
+        Set<Long> doors=RESIDENTIAL_DOOR_WATCHES.getOrDefault(level,Map.of()).get(homeKey(home));
+        if(doors==null||doors.isEmpty())return;
+        Map<Long,Long> pending=PENDING_OPEN_DOORS.computeIfAbsent(level,ignored->new HashMap<>());
+        long now=level.getGameTime();
+        for(long encoded:new ArrayList<>(doors)){
+            BlockPos pos=BlockPos.of(encoded);
+            if(!level.hasChunkAt(pos))continue;
+            BlockState state=level.getBlockState(pos);
+            if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                    &&state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
+                    &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
+                    &&state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
+                long retryAfter=RESIDENTIAL_DOOR_COOLDOWNS.getOrDefault(level,Map.of())
+                        .getOrDefault(encoded,Long.MIN_VALUE/2);
+                if(retryAfter<=now)pending.putIfAbsent(encoded,now);
+            }else pending.remove(encoded);
+        }
+        if(pending.isEmpty())PENDING_OPEN_DOORS.remove(level);
+    }
+
+    /** Reopen only the same bounded wooden doors, using the residence's existing physical worker. */
+    private void beginDaytimeDoorOpening(ServerLevel level,ResidenceData.Home home){
+        if(shouldCloseResidentialDoors(level,home)||!home.dimension.equals(level.dimension())
+                ||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
+                ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))return;
+        Set<Long> watched=RESIDENTIAL_DOOR_WATCHES.getOrDefault(level,Map.of()).get(homeKey(home));
+        if(watched==null||watched.isEmpty())return;
+        List<BlockPos> closed=new ArrayList<>();
+        for(long encoded:watched){
+            BlockPos pos=BlockPos.of(encoded);
+            if(!level.hasChunkAt(pos)||isDoorClosureRequiredAt(level,ResidenceData.get(level),pos))continue;
+            BlockState state=level.getBlockState(pos);
+            if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                    &&state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
+                    &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
+                    &&!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))closed.add(pos);
+        }
+        queueResidentialDoorTask(level,home,closed,Math.floorDiv(level.getDayTime(),DAY_LENGTH),true);
     }
 
     private static boolean hasValidResidentialBed(ServerLevel level,ResidenceData data,Villager resident,ResidenceData.Home home){
@@ -431,7 +541,8 @@ public class VillagerResidenceEvents {
             finishNightDoorClosure(villager);return true;
         }
         long now=level.getGameTime();
-        if(!shouldCloseResidentialDoors(level,home)||now-task.getLong("started")>10_000L
+        boolean opening=task.getBoolean("open");
+        if(shouldCloseResidentialDoors(level,home)==opening||now-task.getLong("started")>10_000L
                 ||villager.isSleeping()||villager.isNoAi()||villager.isTrading()
                 ||entityData.contains(EMERALD_TRANSFER)){
             finishNightDoorClosure(villager);return true;
@@ -443,7 +554,7 @@ public class VillagerResidenceEvents {
         // active, vanilla DoorInteractGoal can reopen the door on the very next step.
         ListTag visitedDoors=task.getList("visited_doors",Tag.TAG_LONG);
         Set<Long> visited=new HashSet<>();for(int i=0;i<visitedDoors.size();i++)visited.add(((net.minecraft.nbt.LongTag)visitedDoors.get(i)).getAsLong());
-        for(int i=0;i<doors.size();i++){
+        for(int i=0;!opening&&i<doors.size();i++){
             BlockPos nearby=BlockPos.of(((net.minecraft.nbt.LongTag)doors.get(i)).getAsLong());
             if(!withinDoorBounds(nearby,home)||!level.hasChunkAt(nearby)
                     )continue;
@@ -463,8 +574,6 @@ public class VillagerResidenceEvents {
             }
             if(close){
                 nearbyDoor.setOpen(villager,level,nearbyState,nearby,false);
-                RESIDENTIAL_DOOR_COOLDOWNS.computeIfAbsent(level,ignored->new HashMap<>())
-                        .put(doorKey,now+DOOR_REOPEN_COOLDOWN);
             }
         }
         while(index<doors.size()){
@@ -472,21 +581,22 @@ public class VillagerResidenceEvents {
             if(!level.hasChunkAt(doorPos)){
                 index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");continue;
             }
+            if(opening&&isDoorClosureRequiredAt(level,data,doorPos)){
+                index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");continue;
+            }
             BlockState state=level.getBlockState(doorPos);
             if(!(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock door)
                     ||!state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
                     ||state.getMaterial()!=net.minecraft.world.level.material.Material.WOOD
                     ||state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)!=net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
-                    ||!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
+                    ||state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)==opening){
                 index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");continue;
             }
             if(villager.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(doorPos))<=4.0D){
                 villager.getNavigation().stop();
                 villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
                 villager.getBrain().eraseMemory(MemoryModuleType.PATH);
-                door.setOpen(villager,level,state,doorPos,false);
-                RESIDENTIAL_DOOR_COOLDOWNS.computeIfAbsent(level,ignored->new HashMap<>())
-                        .put(doorPos.asLong(),now+DOOR_REOPEN_COOLDOWN);
+                door.setOpen(villager,level,state,doorPos,opening);
                 index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");
                 task.putLong("last_progress",now);task.putLong("last_pos",villager.blockPosition().asLong());
                 continue;
@@ -499,7 +609,8 @@ public class VillagerResidenceEvents {
                 villager.getNavigation().stop();
                 int attempts=task.getInt("attempts")+1;task.putInt("attempts",attempts);
                 task.putLong("last_progress",now);task.remove("route_door");
-                if(attempts>=3){index++;task.putInt("index",index);task.putInt("attempts",0);continue;}
+                if(attempts>=3){RESIDENTIAL_DOOR_COOLDOWNS.computeIfAbsent(level,ignored->new HashMap<>())
+                        .put(doorPos.asLong(),now+DOOR_RETRY_COOLDOWN);index++;task.putInt("index",index);task.putInt("attempts",0);continue;}
             }
 
             long routeAttempt=task.getLong("last_route_attempt");
@@ -511,7 +622,8 @@ public class VillagerResidenceEvents {
             Path path=approach==null?null:villager.getNavigation().createPath(approach,0);
             if(path==null||path.getNodeCount()<=1){
                 int attempts=task.getInt("attempts")+1;task.putInt("attempts",attempts);
-                if(attempts>=3){index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");}
+                if(attempts>=3){RESIDENTIAL_DOOR_COOLDOWNS.computeIfAbsent(level,ignored->new HashMap<>())
+                        .put(doorPos.asLong(),now+DOOR_RETRY_COOLDOWN);index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");}
                 return true;
             }
             task.putLong("route_door",doorPos.asLong());
@@ -527,9 +639,11 @@ public class VillagerResidenceEvents {
 
     private static void finishNightDoorClosure(Villager villager){
         clearNightWander(villager,true);
+        boolean opening=villager.getPersistentData().getCompound(NIGHT_DOOR_TASK).getBoolean("open");
         villager.getPersistentData().remove(NIGHT_DOOR_TASK);
-        // Resume a bed anchor or an interior stroll on the next entity tick.
-        villager.getPersistentData().putBoolean(NIGHT_DOOR_RESUME,true);
+        // Closed-door routes resume a bed anchor or interior stroll. A daylight
+        // reopening route ends without scheduling night-only movement.
+        if(!opening)villager.getPersistentData().putBoolean(NIGHT_DOOR_RESUME,true);
         villager.getNavigation().stop();
         villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
         villager.getBrain().eraseMemory(MemoryModuleType.PATH);

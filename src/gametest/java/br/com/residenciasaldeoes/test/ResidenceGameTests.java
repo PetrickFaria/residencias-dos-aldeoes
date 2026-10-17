@@ -4,6 +4,7 @@ import br.com.residenciasaldeoes.ResidenciasDosAldeoes;
 import br.com.residenciasaldeoes.VillagerResidenceEvents;
 import br.com.residenciasaldeoes.block.*;
 import br.com.residenciasaldeoes.data.ResidenceData;
+import br.com.residenciasaldeoes.data.ResidentSpawnRules;
 import br.com.residenciasaldeoes.data.ResidentModelType;
 import br.com.residenciasaldeoes.data.WardrobePackage;
 import net.minecraft.core.BlockPos;
@@ -390,8 +391,11 @@ public final class ResidenceGameTests {
         h.succeed();
     }
     private static void placeOpenDoor(GameTestHelper h,BlockPos pos,net.minecraft.world.level.block.Block block){
-        var lower=block.defaultBlockState().setValue(DoorBlock.HALF,DoubleBlockHalf.LOWER).setValue(DoorBlock.OPEN,true);
-        var upper=block.defaultBlockState().setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER).setValue(DoorBlock.OPEN,true);
+        placeDoor(h,pos,block,true);
+    }
+    private static void placeDoor(GameTestHelper h,BlockPos pos,net.minecraft.world.level.block.Block block,boolean open){
+        var lower=block.defaultBlockState().setValue(DoorBlock.HALF,DoubleBlockHalf.LOWER).setValue(DoorBlock.OPEN,open);
+        var upper=block.defaultBlockState().setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER).setValue(DoorBlock.OPEN,open);
         h.setBlock(pos,lower);h.setBlock(pos.above(),upper);
     }
     @GameTest(template="empty",timeoutTicks=900,batch="physical")
@@ -587,6 +591,67 @@ public final class ResidenceGameTests {
         invoke("tickNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,Villager.class},level,resident);
         check(!resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
                 "Daytime door route continued after local rain ended");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="doors")
+    public static void residential_rain_is_detected_at_exposed_perimeter_under_roofed_anchor(GameTestHelper h){
+        floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
+        BlockPos homeLocal=new BlockPos(6,2,6);h.setBlock(homeLocal,ResidenciasDosAldeoes.ANCHOR.get());
+        h.setBlock(homeLocal.above(),Blocks.STONE);
+        BlockPos home=h.absolutePos(homeLocal);BlockPos exposedPerimeter=home.east(2).above();
+        check(!level.isRainingAt(home.above()),"Roof did not shield the anchor sample");
+        check(level.isRainingAt(exposedPerimeter),"Rain fixture is not effective at the exposed residential perimeter");
+        check((Boolean)invoke("isRainingAtResidentialArea",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},
+                level,ResidenceData.get(level).home(level,home)),"Residential weather detection ignored rain around a roofed anchor");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=900,batch="doors")
+    public static void residential_door_reopened_during_rain_is_closed_again(GameTestHelper h){
+        floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
+        BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));var data=ResidenceData.get(level);
+        check("ok".equals(data.link(level,h.absolutePos(homePos),resident)),"Could not link rain-door resident");
+        BlockPos localDoor=new BlockPos(7,2,6);placeOpenDoor(h,localDoor,Blocks.OAK_DOOR);
+        invoke("beginWeatherDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,data.owner(resident.getUUID()));
+        h.runAtTickTime(250,()->{
+            BlockPos door=h.absolutePos(localDoor);var state=level.getBlockState(door);
+            check(!state.getValue(DoorBlock.OPEN),"Initial rain route did not close the test door before reopening it");
+            ((DoorBlock)state.getBlock()).setOpen(resident,level,state,door,true);
+            invoke("watchResidentialDoors",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,data.owner(resident.getUUID()));
+        });
+        h.runAtTickTime(800,()->{
+            check(!level.getBlockState(h.absolutePos(localDoor)).getValue(DoorBlock.OPEN),
+                    "A resident/courier reopen during rain was not closed by the bounded door watcher");
+            h.succeed();
+        });
+    }
+    @GameTest(template="empty",timeoutTicks=700,batch="doors")
+    public static void daytime_residential_doors_reopen_after_rain_ends(GameTestHelper h){
+        floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
+        BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));var data=ResidenceData.get(level);
+        check("ok".equals(data.link(level,h.absolutePos(homePos),resident)),"Could not link dry-transition resident");
+        BlockPos localDoor=new BlockPos(7,2,6);placeDoor(h,localDoor,Blocks.OAK_DOOR,false);
+        invoke("beginWeatherDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,data.owner(resident.getUUID()));
+        h.runAtTickTime(20,()->{
+            level.setWeatherParameters(0,0,false,false);level.setRainLevel(0.0F);
+            invoke("beginDaytimeDoorOpening",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,data.owner(resident.getUUID()));
+        });
+        h.succeedWhen(()->check(level.getBlockState(h.absolutePos(localDoor)).getValue(DoorBlock.OPEN),
+                "A door controlled during daytime rain did not reopen in dry daytime"));
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="spawns")
+    public static void linked_residents_do_not_count_for_natural_golem_or_cat_population(GameTestHelper h){
+        floor(h);BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));
+        Villager vanilla=h.spawn(EntityType.VILLAGER,new BlockPos(7,2,6));
+        var level=h.getLevel();var data=ResidenceData.get(level);
+        check("ok".equals(data.link(level,h.absolutePos(homePos),resident)),"Could not link spawn-exclusion resident");
+        var eligible=ResidentSpawnRules.withoutResidents(level,Villager.class,java.util.List.of(resident,vanilla));
+        check(eligible.size()==1&&eligible.get(0)==vanilla,"Resident remained in the vanilla golem population");
+        check(!ResidentSpawnRules.hasEnoughNonResidentHomesForVillageCats(4),"Four common occupied beds passed the vanilla cat threshold");
+        check(!ResidentSpawnRules.hasEnoughNonResidentHomesForVillageCats(0),"Resident-only occupied beds passed the vanilla cat threshold");
+        check(ResidentSpawnRules.hasEnoughNonResidentHomesForVillageCats(5),"Five common occupied beds no longer meet the vanilla cat threshold");
         h.succeed();
     }
     @GameTest(template="empty",timeoutTicks=2600,batch="physical")

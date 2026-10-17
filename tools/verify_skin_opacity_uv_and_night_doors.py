@@ -73,10 +73,14 @@ assert "crossedNightfall" in events and "beginNightDoorClosure" in events
 assert "DOOR_SCAN_INTERVAL=300L" in events and "if(now%DOOR_SCAN_INTERVAL!=0L)return;" in events
 assert "onResidentialDoorChanged" in events and "processResidentialWeatherTransitions(level)" in events
 assert "beginWeatherDoorClosure(level,home)" in events
-assert "level.isRainingAt(home.pos.above())" in events
+assert "RESIDENTIAL_DOOR_WATCHES" in events and "watchResidentialDoors(level,home)" in events
+assert "DOOR_OPEN_STABILITY_TICKS=5L" in events
+assert "new AABB(door).inflate(0.08D,0.0D,0.08D)" in events
+assert "beginDaytimeDoorOpening(level,home)" in events
+assert "isRainingAtResidentialArea(level,home)" in events
 assert "WEATHER_TRANSITION_SCAN_INTERVAL=20L" in events
 assert "level.getGameTime()%WEATHER_TRANSITION_SCAN_INTERVAL!=0L" in events
-assert "return night||level.isRainingAt(home.pos.above())" in events
+assert "return night||isRainingAtResidentialArea(level,home)" in events
 assert "!shouldCloseResidentialDoors(level,home)" in events
 assert "awakeWithoutBed" in events and "resident.distanceToSqr(leader)" in events
 assert "active.stream().allMatch(Villager::isSleeping)" in events and "hasValidResidentialBed" in events
@@ -87,9 +91,9 @@ assert "daytime_door_task_stops_after_local_rain_ends" in read("src/gametest/jav
 assert "BED_ANCHOR_INTERVAL=100" in events and "tickCount%BED_ANCHOR_INTERVAL==0" in events
 assert "Release the stale reservation and search the remaining beds" in events
 assert "level.hasChunkAt(pos)" in events and "state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)" in events
-assert "door.setOpen(villager,level,state,doorPos,false)" in events
+assert "door.setOpen(villager,level,state,doorPos,opening)" in events
 assert "findApproach(level,doorPos,villager)" in events and "NIGHT_DOOR_WALK_SPEED" in events
-assert "villager.getNavigation().stop();" in events and "door.setOpen(villager,level,state,doorPos,false)" in events
+assert "villager.getNavigation().stop();" in events and "door.setOpen(villager,level,state,doorPos,opening)" in events
 assert "now-task.getLong(\"last_progress\")>=200L" in events and "attempts>=3" in events
 assert "NIGHT_DOOR_RESUME" in events and "putBoolean(NIGHT_DOOR_RESUME,true)" in events
 assert "residenciasaldeoes_night_wander" in events and "tickNightWander(level,villager,home)" in events
