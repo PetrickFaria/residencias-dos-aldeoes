@@ -541,7 +541,7 @@ public final class ResidenceGameTests {
         check(resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Storm-time nighttime door was not assigned to an awake resident");
         h.succeed();
     }
-    @GameTest(template="empty",timeoutTicks=700,batch="doors")
+    @GameTest(template="empty",timeoutTicks=700,batch="rain-doors")
     public static void daytime_rain_physically_closes_only_exposed_residential_doors(GameTestHelper h){
         floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
         BlockPos wetHome=new BlockPos(4,2,6),shelteredHome=new BlockPos(12,2,6);
@@ -578,7 +578,7 @@ public final class ResidenceGameTests {
                     "Sheltered residence door was modified");
         });
     }
-    @GameTest(template="empty",timeoutTicks=100,batch="doors")
+    @GameTest(template="empty",timeoutTicks=100,batch="rain-transition-a")
     public static void daytime_door_task_stops_after_local_rain_ends(GameTestHelper h){
         floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
         BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
@@ -600,7 +600,7 @@ public final class ResidenceGameTests {
         h.succeedWhen(()->check(level.getBlockState(h.absolutePos(new BlockPos(7,2,6))).getValue(DoorBlock.OPEN),
                 "The resident door did not reopen after rain ended during daytime"));
     }
-    @GameTest(template="empty",timeoutTicks=100,batch="doors")
+    @GameTest(template="empty",timeoutTicks=100,batch="rain-doors")
     public static void residential_rain_is_detected_at_exposed_perimeter_under_roofed_anchor(GameTestHelper h){
         floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
         BlockPos homeLocal=new BlockPos(6,2,6);h.setBlock(homeLocal,ResidenciasDosAldeoes.ANCHOR.get());
@@ -612,7 +612,7 @@ public final class ResidenceGameTests {
                 level,ResidenceData.get(level).home(level,home)),"Residential weather detection ignored rain around a roofed anchor");
         h.succeed();
     }
-    @GameTest(template="empty",timeoutTicks=900,batch="doors")
+    @GameTest(template="empty",timeoutTicks=900,batch="rain-doors")
     public static void residential_door_reopened_during_rain_is_closed_again(GameTestHelper h){
         floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
         BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
@@ -644,7 +644,7 @@ public final class ResidenceGameTests {
             h.succeed();
         });
     }
-    @GameTest(template="empty",timeoutTicks=700,batch="doors")
+    @GameTest(template="empty",timeoutTicks=700,batch="rain-transition-b")
     public static void daytime_residential_doors_reopen_after_rain_ends(GameTestHelper h){
         floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
         BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
