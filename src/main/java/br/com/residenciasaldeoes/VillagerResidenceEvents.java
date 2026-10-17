@@ -849,7 +849,7 @@ public class VillagerResidenceEvents {
                 ResidenceData data=ResidenceData.get(level);
                 if(level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor){anchor.restoreFragments(remainder);data.releaseResidentFragments(readTransferSources(job));}
                 else{for(ItemStack stack:remainder)if(!stack.isEmpty())villager.spawnAtLocation(stack);data.deliverResidentFragments(readTransferSources(job),countFragments(remainder));}
-                job.remove(TRANSFER_OPEN_DOORS);job.remove("resident_fragment_sources");
+                job.remove("resident_fragment_sources");
                 finishEmeraldTransfer(level,villager,job,false);
             }
         }else if(villager.getNavigation().isDone()||villager.tickCount%10==0){
@@ -956,6 +956,25 @@ public class VillagerResidenceEvents {
         }
         if(job.contains("previous_hand",Tag.TAG_COMPOUND))villager.setItemSlot(EquipmentSlot.MAINHAND,ItemStack.of(job.getCompound("previous_hand")));
         villager.getNavigation().stop();villager.getPersistentData().remove(EMERALD_TRANSFER);
+        // Doors temporarily opened for the route become a physical closing task
+        // after the courier has finished using them, while rain or night still
+        // requires them closed. Keep the same resident/navigation system in charge.
+        ResidenceData data=ResidenceData.get(level);ResidenceData.Home home=data.owner(villager.getUUID());
+        if(home!=null&&home.dimension.equals(level.dimension())&&shouldCloseResidentialDoors(level,home)){
+            List<BlockPos> doors=new ArrayList<>();ListTag opened=job.getList(TRANSFER_OPEN_DOORS,Tag.TAG_LONG);
+            for(int i=0;i<opened.size();i++){
+                BlockPos pos=BlockPos.of(((net.minecraft.nbt.LongTag)opened.get(i)).getAsLong());
+                if(!withinDoorBounds(pos,home)||!level.hasChunkAt(pos))continue;
+                BlockState state=level.getBlockState(pos);
+                if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                        &&state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
+                        &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                        ==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
+                        &&state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))doors.add(pos);
+            }
+            if(!doors.isEmpty())new VillagerResidenceEvents().queueResidentialDoorTask(level,home,doors,
+                    Math.floorDiv(level.getDayTime(),DAY_LENGTH));
+        }
     }
     public record ProductionAllocation(int fragments,boolean bed,boolean workstation,boolean chest,boolean food){}
     /** One adult base fragment plus one per available benefit; babies stay at exactly one. */
