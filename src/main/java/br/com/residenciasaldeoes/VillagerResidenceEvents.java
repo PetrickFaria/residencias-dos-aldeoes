@@ -78,6 +78,7 @@ public class VillagerResidenceEvents {
     private static final double NIGHT_WANDER_SPEED=.32D;
     private static final int BED_ANCHOR_INTERVAL=100;
     private static final long DOOR_REOPEN_COOLDOWN=200L,DOOR_OPEN_STABILITY_TICKS=40L,DOOR_SCAN_INTERVAL=300L;
+    private static final long WEATHER_TRANSITION_SCAN_INTERVAL=20L;
     private static final String RESIDENT_DEATH_NOTICE="residenciasaldeoes_death_notice_sent";
     private static final String RESIDENT_WITCH_NOTICE="residenciasaldeoes_witch_notice_sent";
     /**
@@ -240,6 +241,7 @@ public class VillagerResidenceEvents {
     }
     /** Detect rain transitions only for loaded residences, then reuse the bounded physical door worker. */
     private void processResidentialWeatherTransitions(ServerLevel level){
+        if(level.getGameTime()%WEATHER_TRANSITION_SCAN_INTERVAL!=0L)return;
         ResidenceData data=ResidenceData.get(level);
         Map<String,Boolean> previous=RESIDENTIAL_RAINING_STATE.computeIfAbsent(level,ignored->new HashMap<>());
         for(ResidenceData.Home home:new ArrayList<>(data.homes())){

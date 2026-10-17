@@ -74,6 +74,8 @@ assert "DOOR_SCAN_INTERVAL=300L" in events and "if(now%DOOR_SCAN_INTERVAL!=0L)re
 assert "onResidentialDoorChanged" in events and "processResidentialWeatherTransitions(level)" in events
 assert "beginWeatherDoorClosure(level,home)" in events
 assert "level.isRainingAt(home.pos.above())" in events
+assert "WEATHER_TRANSITION_SCAN_INTERVAL=20L" in events
+assert "level.getGameTime()%WEATHER_TRANSITION_SCAN_INTERVAL!=0L" in events
 assert "return night||level.isRainingAt(home.pos.above())" in events
 assert "!shouldCloseResidentialDoors(level,home)" in events
 assert "awakeWithoutBed" in events and "resident.distanceToSqr(leader)" in events
