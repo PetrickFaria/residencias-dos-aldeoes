@@ -79,6 +79,8 @@ public final class ResidenceGameTests {
     @BeforeBatch(batch="lid") public static void before_lid(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     @BeforeBatch(batch="doors") public static void before_doors(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     @BeforeBatch(batch="rain-sleep") public static void before_rain_sleep(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    @BeforeBatch(batch="rain-night-door") public static void before_rain_night_door(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
+    @BeforeBatch(batch="negative-y-sleep") public static void before_negative_y_sleep(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     @BeforeBatch(batch="outputs") public static void before_outputs(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     @BeforeBatch(batch="sleep") public static void before_sleep(net.minecraft.server.level.ServerLevel level){clearFixtureWorld(level);}
     private static double navigationSpeed(Villager v){
@@ -537,7 +539,7 @@ public final class ResidenceGameTests {
             h.succeed();
         });
     }
-    @GameTest(template="empty",timeoutTicks=100,batch="doors")
+    @GameTest(template="empty",timeoutTicks=100,batch="rain-night-door")
     public static void night_door_closure_runs_during_storms(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
         Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));ResidenceData data=ResidenceData.get(level);
@@ -871,7 +873,7 @@ public final class ResidenceGameTests {
         check(data.bedClaim(resident.getUUID())==null,"Resident was assigned a nonexistent bed");
         h.succeed();
     }
-    @GameTest(template="empty",timeoutTicks=800,batch="sleep")
+    @GameTest(template="empty",timeoutTicks=800,batch="negative-y-sleep")
     public static void stale_home_poi_during_negative_y_world_load_recovers_to_valid_bed(GameTestHelper h){
         var level=h.getLevel();BlockPos origin=h.absolutePos(BlockPos.ZERO);
         BlockPos home=new BlockPos(origin.getX()+6,-62,origin.getZ()+6);
