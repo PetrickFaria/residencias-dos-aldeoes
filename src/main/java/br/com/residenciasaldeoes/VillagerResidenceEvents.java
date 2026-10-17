@@ -856,25 +856,27 @@ public class VillagerResidenceEvents {
         if(job.contains("previous_hand",Tag.TAG_COMPOUND))villager.setItemSlot(EquipmentSlot.MAINHAND,ItemStack.of(job.getCompound("previous_hand")));
         villager.getNavigation().stop();villager.getPersistentData().remove(EMERALD_TRANSFER);
     }
-    /**
-     * Applies the existing roster-ordered resource allocation while excluding workbench
-     * and chest benefits from babies. Adult-only totals remain identical to the old rule.
-     */
-    public static int calculateDailyFragments(List<UUID> residents,int[] resources,
-                                              java.util.function.Predicate<UUID> isBaby){
-        int total=0;
+    public record ProductionAllocation(int fragments,boolean bed,boolean workstation,boolean chest,boolean food){}
+    /** Applies existing roster-ordered resource allocation while excluding work/chest for babies. */
+    public static List<ProductionAllocation> allocateDailyProduction(List<UUID> residents,int[] resources,
+                                                                     java.util.function.Predicate<UUID> isBaby){
+        List<ProductionAllocation> allocations=new ArrayList<>(residents.size());
         int beds=Math.max(0,resources[0]),workstations=Math.max(0,resources[1]);
         int chests=Math.max(0,resources[2]),food=Math.max(0,resources[3])*2;
-        for(int index=0;index<residents.size();index++){
-            UUID resident=residents.get(index);
+        for(UUID resident:residents){
             boolean baby=isBaby.test(resident);
-            total+=baby?1:ResidenceConfig.BASE_FRAGMENTS_PER_RESIDENT.get();
-            if(beds>0){total++;beds--;}
-            if(!baby&&workstations>0){total++;workstations--;}
-            if(!baby&&chests>0){total++;chests--;}
-            if(food>0){total++;food--;}
+            int fragments=baby?1:ResidenceConfig.BASE_FRAGMENTS_PER_RESIDENT.get();
+            boolean hasBed=beds>0;if(hasBed){fragments++;beds--;}
+            boolean hasWorkstation=!baby&&workstations>0;if(hasWorkstation){fragments++;workstations--;}
+            boolean hasChest=!baby&&chests>0;if(hasChest){fragments++;chests--;}
+            boolean hasFood=food>0;if(hasFood){fragments++;food--;}
+            allocations.add(new ProductionAllocation(fragments,hasBed,hasWorkstation,hasChest,hasFood));
         }
-        return total;
+        return List.copyOf(allocations);
+    }
+    public static int calculateDailyFragments(List<UUID> residents,int[] resources,
+                                              java.util.function.Predicate<UUID> isBaby){
+        return allocateDailyProduction(residents,resources,isBaby).stream().mapToInt(ProductionAllocation::fragments).sum();
     }
     private void playProductionBell(ServerLevel level,List<UUID> residents){
         for(UUID resident:residents)if(level.getEntity(resident) instanceof Villager villager)

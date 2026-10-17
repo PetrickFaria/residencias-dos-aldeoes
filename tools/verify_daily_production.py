@@ -44,9 +44,14 @@ assert 'dueCollection(Home home,long currentGameTime)' in data
 assert 'AnchorMenu.countResources(level,home.pos,anchor.getSize())' in events
 assert 'calculateDailyFragments(residents,resources,data::residentIsBaby)' in events
 assert 'data.updateResidentAge(resident)' in events
-assert 'public static int calculateDailyFragments(List<UUID> residents,int[] resources,' in events
-assert 'total+=baby?1:ResidenceConfig.BASE_FRAGMENTS_PER_RESIDENT.get()' in events
-assert 'if(!baby&&workstations>0)' in events and 'if(!baby&&chests>0)' in events
+assert 'public record ProductionAllocation(int fragments,boolean bed,boolean workstation,boolean chest,boolean food)' in events
+assert 'public static List<ProductionAllocation> allocateDailyProduction(List<UUID> residents,int[] resources,' in events
+assert 'int fragments=baby?1:ResidenceConfig.BASE_FRAGMENTS_PER_RESIDENT.get()' in events
+assert 'boolean hasWorkstation=!baby&&workstations>0' in events
+assert 'boolean hasChest=!baby&&chests>0' in events
+assert 'allocateDailyProduction(ids,resources,d::residentIsBaby)' in menu
+assert 'benefits.workstation(),benefits.chest()' in menu
+assert 'idx<resources[1]' not in menu and 'idx<resources[2]' not in menu
 assert 'residentBabyStates' in data and 'resident_is_baby' in data
 assert 'level.hasChunkAt(home.pos)' in events and 'pendingProduction' in events
 assert 'recorded&&fragments>0' in events

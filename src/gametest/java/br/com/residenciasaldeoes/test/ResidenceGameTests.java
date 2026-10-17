@@ -940,6 +940,11 @@ public final class ResidenceGameTests {
                 "Adult bed, workstation, chest, or food bonuses changed");
         check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(baby,adult),new int[]{2,1,1,1},onlyBaby)==10,
                 "Baby-only restrictions consumed workstation or chest benefits from the adult");
+        var allocations=VillagerResidenceEvents.allocateDailyProduction(java.util.List.of(baby,adult),new int[]{2,1,1,1},onlyBaby);
+        check(!allocations.get(0).workstation()&&!allocations.get(0).chest(),
+                "Baby resident UI allocation must not include workstation or chest benefits");
+        check(allocations.get(1).workstation()&&allocations.get(1).chest(),
+                "Baby residents consumed benefits reserved for an adult in roster order");
         check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(baby,baby),new int[]{2,0,0,1},onlyBaby)==6,
                 "Multiple babies exceeded their independent three-fragment cap");
         h.succeed();
