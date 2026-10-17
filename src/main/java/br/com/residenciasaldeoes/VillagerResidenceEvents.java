@@ -360,11 +360,14 @@ public class VillagerResidenceEvents {
         candidates=new ArrayList<>(candidates.stream().filter(pos->!assignedElsewhere.contains(pos.asLong())).toList());
         if(candidates.isEmpty())return;
 
+        // A resident already returning home may still need to close a nearby
+        // residential door. The bounded door route temporarily owns navigation;
+        // the existing return state resumes after the route completes.
         List<Villager> active=new ArrayList<>();Villager leader=null;
         for(UUID id:home.residents){
             if(!(level.getEntity(id) instanceof Villager villager)||!villager.isAlive()||villager.isBaby()||villager.isNoAi()
                     ||villager.isTrading()||villager.getPersistentData().contains(EMERALD_TRANSFER)
-                    ||villager.getPersistentData().contains(RETURN_ACTIVE)||villager.getPersistentData().contains(NIGHT_DOOR_TASK))continue;
+                    ||villager.getPersistentData().contains(NIGHT_DOOR_TASK))continue;
             if(leader==null)leader=villager;
             active.add(villager);
         }

@@ -616,6 +616,10 @@ public final class ResidenceGameTests {
         h.runAtTickTime(250,()->{
             BlockPos door=h.absolutePos(localDoor);var state=level.getBlockState(door);
             check(!state.getValue(DoorBlock.OPEN),"Initial rain route did not close the test door before reopening it");
+            // Exercise the real transition edge: a resident can already be walking
+            // home after the first route, but that must not exclude it from closing
+            // a door that reopens while local rain still requires closure.
+            resident.getPersistentData().putBoolean("residenciasaldeoes_home_return_active",true);
             ((DoorBlock)state.getBlock()).setOpen(resident,level,state,door,true);
             invoke("watchResidentialDoors",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,data.owner(resident.getUUID()));
         });
