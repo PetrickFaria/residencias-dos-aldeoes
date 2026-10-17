@@ -548,7 +548,7 @@ public final class ResidenceGameTests {
         check(!leader.isSleeping(),"Sleeping leader was not woken when no other resident was available");
         check(leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Woken leader did not receive the bounded door task");
         check(data.bedClaim(leader.getUUID())!=null&&data.bedClaim(leader.getUUID()).bed().equals(bed),"The original bed claim was not preserved while waking the leader; sleeping="+leader.isSleeping()+" position="+leader.getSleepingPos()+" owner="+data.owner(leader.getUUID())+" state="+level.getBlockState(bed));
-        assertNightDoorAndBedReturnWalkingSpeed(h,level,leader,doorLocal);
+        h.runAtTickTime(1,()->assertNightDoorAndBedReturnWalkingSpeed(h,level,leader,doorLocal));
         h.succeedWhen(()->{
             check(!level.getBlockState(h.absolutePos(doorLocal)).getValue(DoorBlock.OPEN),"Resident did not physically close the nighttime door");
             check(leader.isSleeping()&&leader.getSleepingPos().orElse(null)!=null&&leader.getSleepingPos().orElseThrow().equals(bed),"Resident did not return to its original bed after closing the door");
@@ -653,7 +653,7 @@ public final class ResidenceGameTests {
         check(!leader.isSleeping(),"The selected resident did not wake to perform the door task");
         check(second.isSleeping(),"A second resident was woken unnecessarily");
         check(data.ownsBed(level.dimension(),firstBed,leader.getUUID())&&data.ownsBed(level.dimension(),secondBed,second.getUUID()),"Waking discarded a bed reservation");
-        assertNightDoorAndBedReturnWalkingSpeed(h,level,leader,doorLocal);
+        h.runAtTickTime(1,()->assertNightDoorAndBedReturnWalkingSpeed(h,level,leader,doorLocal));
         h.succeedWhen(()->{
             check(!level.getBlockState(h.absolutePos(doorLocal)).getValue(DoorBlock.OPEN),"Resident did not physically close the rainy-night door");
             ResidenceData.BedClaim leaderClaim=data.bedClaim(leader.getUUID()),secondClaim=data.bedClaim(second.getUUID());
