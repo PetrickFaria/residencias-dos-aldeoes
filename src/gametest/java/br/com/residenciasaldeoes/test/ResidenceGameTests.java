@@ -549,6 +549,9 @@ public final class ResidenceGameTests {
         var data=ResidenceData.get(level);
         check("ok".equals(data.link(level,h.absolutePos(wetHome),wetResident)),"Could not link exposed rain resident");
         check("ok".equals(data.link(level,h.absolutePos(shelteredHome),shelteredResident)),"Could not link sheltered resident");
+        // Keep vanilla villager navigation from independently crossing and closing this door;
+        // this assertion isolates whether the residence weather route touched the sheltered home.
+        shelteredResident.setNoAi(true);
         BlockPos wetDoor=new BlockPos(5,2,6),shelteredDoor=new BlockPos(13,2,6);
         placeOpenDoor(h,wetDoor,Blocks.OAK_DOOR);placeOpenDoor(h,shelteredDoor,Blocks.OAK_DOOR);
         BlockPos absoluteWetHome=h.absolutePos(wetHome),absoluteShelteredHome=h.absolutePos(shelteredHome);
