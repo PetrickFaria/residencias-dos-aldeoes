@@ -48,6 +48,10 @@ public final class ResidenceGameTests {
         }
     }
     private static void clearFixtureWorld(net.minecraft.server.level.ServerLevel level){
+        // Weather is shared by the whole GameTest server world, not by each
+        // template. Isolate rain fixtures so later bed tests run under clear skies.
+        level.setWeatherParameters(0,0,false,false);
+        level.setRainLevel(0.0F);
         // The preceding drop test intentionally spawns a skeleton; it must not
         // follow and attack residents in subsequent navigation fixtures.
         java.util.List<net.minecraft.world.entity.Entity> stale=new java.util.ArrayList<>();
@@ -579,6 +583,7 @@ public final class ResidenceGameTests {
         floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
         BlockPos wetHome=new BlockPos(4,2,6),shelteredHome=new BlockPos(12,2,6);
         h.setBlock(wetHome,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(shelteredHome,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(wetHome)).setSize(5),"Could not expand exposed rain residence");
         // A roof over the second anchor means dimension-wide rain is not local there.
         for(int x=10;x<=14;x++)for(int z=4;z<=8;z++)h.setBlock(new BlockPos(x,5,z),Blocks.STONE);
         Villager wetResident=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));
