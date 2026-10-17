@@ -39,6 +39,11 @@ jobs:
       - name: Run actual Forge GameTest server
         timeout-minutes: 12
         run: python3 tools/run_gametest_ci.py
+      - name: Launch graphical Forge client and reopen world
+        timeout-minutes: 15
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: python3 tools/run_visual_ci.py
       - name: Prepare compiled JAR, complete source and report
         if: success()
         run: python3 tools/prepare_delivery.py
@@ -54,5 +59,6 @@ jobs:
             run-gametest/*.xml
             build/screenshots/
             client-console.log
+            client-restore-console.log
             artifact-output/
           if-no-files-found: warn

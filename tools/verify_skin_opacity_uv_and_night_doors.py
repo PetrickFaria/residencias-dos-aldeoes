@@ -30,7 +30,8 @@ assert "if(ResidentOpacity.isPreviewRendering())return alpha;" in buffer_mixin
 assert 'method = "getRenderType"' in render_opacity_mixin
 assert "ResidentAppearanceModels.usesSteve(villager)" in render_opacity_mixin
 assert "ResidentOpacity.renderingPercent() < 100" in render_opacity_mixin
-assert "RenderType.entityTranslucent(getTextureLocation(entity))" in render_opacity_mixin
+assert "@org.spongepowered.asm.mixin.Shadow" not in render_opacity_mixin
+assert "EntityRenderer<LivingEntity>" in render_opacity_mixin and ".getTextureLocation(entity)" in render_opacity_mixin
 assert "beginPreviewRender(skinPreviewVillager)" in screen
 assert "if (renderingNameTag()) return 100;" in opacity
 assert "renderNameTag" in name_mixin and "beginNameTag" in name_mixin and "endNameTag" in name_mixin
@@ -93,4 +94,6 @@ gametests = read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGame
 assert "three_residents_reach_and_use_three_distinct_residential_beds" in gametests
 assert "night_door_task_wakes_leader_then_returns_to_same_bed" in gametests
 assert "bedless_night_stroll_does_not_reopen_completed_door" in gametests
+workflow = read(".github/workflows/build.yml")
+assert "python3 tools/run_visual_ci.py" in workflow
 print("Continuous preview shader alpha, name-tag separation, 64–1024 templates, UV accessory transparency, 300-tick night scans, resident priorities, and bed recovery verified.")
