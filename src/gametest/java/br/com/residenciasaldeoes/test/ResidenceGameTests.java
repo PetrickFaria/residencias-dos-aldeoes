@@ -433,11 +433,13 @@ public final class ResidenceGameTests {
         check((Boolean)invoke("transferJobListsDoor",new Class[]{net.minecraft.nbt.CompoundTag.class,BlockPos.class},
                 courier.getPersistentData().getCompound(JOB),door),"Opened residential door was not tracked for post-passage closure");
         check(VillagerResidenceEvents.shouldBlockResidentDoorOpening(level,courier,door),"Scoped passage exception leaked beyond the setOpen call");
-        for(int tick:new int[]{20,100,500})h.runAtTickTime(tick,()->System.out.println("COURIER-DOOR-DIAG tick="+tick+
-                " pos="+courier.position()+" navDone="+courier.getNavigation().isDone()+" path="+
-                (courier.getNavigation().getPath()==null?"null":courier.getNavigation().getPath().getTarget())+
-                " doorOpen="+level.getBlockState(door).getValue(DoorBlock.OPEN)+" job="+
-                courier.getPersistentData().getCompound(JOB)));
+        for(int tick:new int[]{20,100,500})h.runAtTickTime(tick,()->{
+            var path=courier.getNavigation().getPath();String nodes="null";
+            if(path!=null){var trace=new java.util.ArrayList<String>();for(int i=path.getNextNodeIndex();i<path.getNodeCount();i++)trace.add(path.getNode(i).asBlockPos().toString());nodes=trace.toString();}
+            System.out.println("COURIER-DOOR-DIAG tick="+tick+" pos="+courier.position()+" delta="+courier.getDeltaMovement()
+                    +" noAI="+courier.isNoAi()+" navDone="+courier.getNavigation().isDone()+" path="+nodes
+                    +" door="+level.getBlockState(door)+" job="+courier.getPersistentData().getCompound(JOB));
+        });
         h.succeedWhen(()->{
             check(courier.blockPosition().getX()>=door.getX()+1,"Courier did not physically cross the residential doorway");
             check(!courier.getPersistentData().contains(JOB),"Courier did not finish the bounded test route");
