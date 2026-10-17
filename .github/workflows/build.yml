@@ -16,6 +16,47 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+      - name: Enforce sequential release versioning
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          if [[ ! "$current" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
+            echo "Invalid mod_version: $current" >&2
+            exit 1
+          fi
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            git fetch --no-tags origin "$PR_BASE_SHA"
+            base="$(git show "$PR_BASE_SHA:gradle.properties" | sed -n 's/^mod_version=//p')"
+            if [[ "$current" != "$base" ]]; then
+              echo "PRs and test builds must not consume release numbers ($base -> $current)." >&2
+              exit 1
+            fi
+            exit 0
+          fi
+
+          previous="$(git show 'HEAD^:gradle.properties' | sed -n 's/^mod_version=//p')"
+          subject="$(git log -1 --format=%s)"
+          if [[ "$subject" =~ ^chore\\(release\\):[[:space:]]prepare[[:space:]]([0-9]+\\.[0-9]+\\.[0-9]+)$ ]]; then
+            prepared="${BASH_REMATCH[1]}"
+            if [[ "$previous" =~ ^([0-9]+)\\.([0-9]+)\\.([0-9]+)$ ]]; then
+              expected="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
+            else
+              echo "Invalid previous mod_version: $previous" >&2
+              exit 1
+            fi
+            if [[ "$current" != "$prepared" || "$current" != "$expected" ]]; then
+              echo "Release commits must advance exactly one patch version ($previous -> $expected)." >&2
+              exit 1
+            fi
+          elif [[ "$current" != "$previous" ]]; then
+            echo "Only the release workflow may change mod_version ($previous -> $current)." >&2
+            exit 1
+          fi
       - name: Read project version
         id: version
         run: echo "value=$(sed -n 's/^mod_version=//p' gradle.properties)" >> "$GITHUB_OUTPUT"
