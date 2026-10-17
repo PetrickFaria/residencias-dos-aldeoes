@@ -79,7 +79,8 @@ public class VillagerResidenceEvents {
     private static final double NIGHT_DOOR_WALK_SPEED=.48D;
     private static final double NIGHT_WANDER_SPEED=.32D;
     private static final int BED_ANCHOR_INTERVAL=100;
-    private static final long DOOR_RETRY_COOLDOWN=200L,DOOR_OPEN_STABILITY_TICKS=5L,DOOR_SCAN_INTERVAL=300L;
+    private static final long DOOR_RETRY_COOLDOWN=200L,DOOR_OPEN_STABILITY_TICKS=5L,
+            DOORWAY_OCCUPANCY_GRACE_TICKS=40L,DOOR_SCAN_INTERVAL=300L;
     private static final long WEATHER_TRANSITION_SCAN_INTERVAL=20L;
     private static final String RESIDENT_DEATH_NOTICE="residenciasaldeoes_death_notice_sent";
     private static final String RESIDENT_WITCH_NOTICE="residenciasaldeoes_witch_notice_sent";
@@ -160,7 +161,13 @@ public class VillagerResidenceEvents {
                 pending.remove(entry.getKey());continue;
             }
             if(!isDoorClosureRequiredAt(level,data,pos)){pending.remove(entry.getKey());continue;}
-            if(residentUsingDoorway(level,data,pos)){pending.put(entry.getKey(),now);continue;}
+            // Give a resident using the doorway a short passage window, but keep the
+            // original open timestamp. Resetting it on every check can postpone the
+            // close forever when a nighttime wanderer lingers in or repeatedly crosses
+            // the doorway. After the grace period the physical route takes ownership
+            // of that resident's navigation and closes the door at arm's reach.
+            if(residentUsingDoorway(level,data,pos)
+                    &&now-entry.getValue()<DOORWAY_OCCUPANCY_GRACE_TICKS)continue;
             if(RESIDENTIAL_DOOR_COOLDOWNS.getOrDefault(level,Map.of()).getOrDefault(pos.asLong(),Long.MIN_VALUE/2)>now)continue;
             if(now-entry.getValue()<DOOR_OPEN_STABILITY_TICKS)continue;
             pending.remove(entry.getKey());
