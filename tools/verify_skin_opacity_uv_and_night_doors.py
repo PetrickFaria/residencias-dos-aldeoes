@@ -14,6 +14,7 @@ name_mixin = read("src/main/java/br/com/residenciasaldeoes/mixin/EntityRendererN
 render_opacity_mixin = read("src/main/java/br/com/residenciasaldeoes/mixin/LivingEntityRendererOpacityMixin.java")
 buffer_source_opacity = read("src/main/java/br/com/residenciasaldeoes/mixin/ResidentBufferSourceOpacityMixin.java")
 preview_buffers = read("src/main/java/br/com/residenciasaldeoes/client/OpacityPreviewBuffers.java")
+model_part_opacity = read("src/main/java/br/com/residenciasaldeoes/mixin/ModelPartOpacityMixin.java")
 mixins = json.loads(read("src/main/resources/residencias.mixins.json"))
 textures = read("src/main/java/br/com/residenciasaldeoes/client/VillagerSkinTextures.java")
 events = read("src/main/java/br/com/residenciasaldeoes/VillagerResidenceEvents.java")
@@ -37,7 +38,12 @@ assert "EntityRenderer<LivingEntity>" in render_opacity_mixin and ".getTextureLo
 assert "MultiBufferSource.BufferSource" in buffer_source_opacity
 assert "OpacityPreviewBuffers.withOpacity" in buffer_source_opacity
 assert "ResidentOpacity.renderingNameTag()" in buffer_source_opacity
-assert "ResidentBufferSourceOpacityMixin" in mixins["client"]
+assert "ResidentBufferSourceOpacityMixin" not in mixins["client"]
+assert "BufferBuilderOpacityMixin" not in mixins["client"]
+assert "ModelPartOpacityMixin" in mixins["client"]
+assert 'method = "compile(Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lcom/mojang/blaze3d/vertex/VertexConsumer;IIFFFF)V"' in model_part_opacity
+assert "ResidentOpacity.renderingPercent() / 100.0F" in model_part_opacity
+assert "ResidentOpacity.isPreviewRendering()" in model_part_opacity
 assert "target.color(red,green,blue,adjusted)" in preview_buffers
 assert "sendOpacity(player,villager.getUUID(),data.residentOpacity(villager.getUUID()))" in read("src/main/java/br/com/residenciasaldeoes/VillagerResidenceEvents.java")
 assert "beginPreviewRender(skinPreviewVillager)" in screen
@@ -65,13 +71,17 @@ assert png_info(skin_docs / "aldeao_creeper_256_corrigido.png") == (256, 256, 8,
 
 assert "crossedNightfall" in events and "beginNightDoorClosure" in events
 assert "DOOR_SCAN_INTERVAL=300L" in events and "if(now%DOOR_SCAN_INTERVAL!=0L)return;" in events
-assert "onResidentialDoorChanged" in events and "beginWeatherDoorClosure(level)" in events
-assert "(phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining()" in events
+assert "onResidentialDoorChanged" in events and "processResidentialWeatherTransitions(level)" in events
+assert "beginWeatherDoorClosure(level,home)" in events
+assert "level.isRainingAt(home.pos.above())" in events
+assert "return night||level.isRainingAt(home.pos.above())" in events
+assert "!shouldCloseResidentialDoors(level,home)" in events
 assert "awakeWithoutBed" in events and "resident.distanceToSqr(leader)" in events
 assert "active.stream().allMatch(Villager::isSleeping)" in events and "hasValidResidentialBed" in events
 assert "DOOR_OPEN_STABILITY_TICKS" in events and "residentUsingDoorway(level,data,pos)" in events
 assert "home.residents.contains(villager.getUUID())" in events
-assert "if((phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining())return;" in events
+assert "daytime_rain_physically_closes_only_exposed_residential_doors" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
+assert "daytime_door_task_stops_after_local_rain_ends" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "BED_ANCHOR_INTERVAL=100" in events and "tickCount%BED_ANCHOR_INTERVAL==0" in events
 assert "Release the stale reservation and search the remaining beds" in events
 assert "level.hasChunkAt(pos)" in events and "state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)" in events

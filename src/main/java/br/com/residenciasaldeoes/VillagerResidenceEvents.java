@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 23912)
+Total output lines: 1356
+
 package br.com.residenciasaldeoes;
 
 import br.com.residenciasaldeoes.block.ResidentialAnchorBlockEntity;
@@ -72,7 +75,7 @@ public class VillagerResidenceEvents {
     private static final Map<ServerLevel,Map<Long,Long>> RESIDENTIAL_DOOR_COOLDOWNS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<Long,Long>> PENDING_OPEN_DOORS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<String,Long>> LAST_PERIODIC_DOOR_SCAN=new WeakHashMap<>();
-    private static final Map<ServerLevel,Boolean> RAINING_STATE=new WeakHashMap<>();
+    private static final Map<ServerLevel,Map<String,Boolean>> RESIDENTIAL_RAINING_STATE=new WeakHashMap<>();
     private static final long NIGHT_START=13_000L, NIGHT_END=23_000L;
     private static final double NIGHT_DOOR_WALK_SPEED=.48D;
     private static final double NIGHT_WANDER_SPEED=.32D;
@@ -118,9 +121,7 @@ public class VillagerResidenceEvents {
             processProductionDawn(level,productionGameTime);
         if(previous!=null&&crossedNightfall(previous,new DawnSample(levelGameTime,dayTime)))
             beginNightDoorClosure(level,Math.floorDiv(dayTime,DAY_LENGTH));
-        boolean raining=level.isRaining();
-        Boolean wasRaining=RAINING_STATE.put(level,raining);
-        if(raining&&!Boolean.TRUE.equals(wasRaining))beginWeatherDoorClosure(level);
+        processResidentialWeatherTransitions(level);
         scanLoadedResidentialDoors(level);
         processPendingDoorChanges(level);
         processLoadedProduction(level,productionGameTime);
@@ -135,15 +136,13 @@ public class VillagerResidenceEvents {
                 ||!state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
                 ||state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)!=net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
                 ||!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))return;
-        long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
-        if((phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining())return;
+        ResidenceData data=ResidenceData.get(level);
+        if(!isDoorClosureRequiredAt(level,data,pos))return;
         PENDING_OPEN_DOORS.computeIfAbsent(level,ignored->new HashMap<>()).put(pos.asLong(),level.getGameTime());
     }
 
     /** Wait until an open door is no longer being used as a passage before assigning a closer. */
     private void processPendingDoorChanges(ServerLevel level){
-        long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
-        if((phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining()){PENDING_OPEN_DOORS.remove(level);return;}
         Map<Long,Long> pending=PENDING_OPEN_DOORS.get(level);if(pending==null||pending.isEmpty())return;
         long now=level.getGameTime();if(now%10L!=0L)return;ResidenceData data=ResidenceData.get(level);
         for(var entry:new ArrayList<>(pending.entrySet())){
@@ -156,12 +155,14 @@ public class VillagerResidenceEvents {
                     ||!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
                 pending.remove(entry.getKey());continue;
             }
+            if(!isDoorClosureRequiredAt(level,data,pos)){pending.remove(entry.getKey());continue;}
             if(residentUsingDoorway(level,data,pos)){pending.put(entry.getKey(),now);continue;}
             if(RESIDENTIAL_DOOR_COOLDOWNS.getOrDefault(level,Map.of()).getOrDefault(pos.asLong(),Long.MIN_VALUE/2)>now)continue;
             if(now-entry.getValue()<DOOR_OPEN_STABILITY_TICKS)continue;
             pending.remove(entry.getKey());
             for(ResidenceData.Home home:new ArrayList<>(data.homes())){
-                if(!home.dimension.equals(level.dimension())||!level.hasChunkAt(home.pos)||!withinDoorBounds(pos,home))continue;
+                if(!home.dimension.equals(level.dimension())||!level.hasChunkAt(home.pos)||!withinDoorBounds(pos,home)
+                        ||!shouldCloseResidentialDoors(level,home))continue;
                 queueResidentialDoorTask(level,home,List.of(pos.immutable()),Math.floorDiv(level.getDayTime(),DAY_LENGTH));
             }
         }
@@ -180,14 +181,13 @@ public class VillagerResidenceEvents {
 
     /** A fixed 300-tick fallback catches door changes that do not emit neighbor notifications. */
     private static void scanLoadedResidentialDoors(ServerLevel level){
-        long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
-        if((phase<NIGHT_START||phase>=NIGHT_END)&&!level.isRaining())return;
         long now=level.getGameTime();
         if(now%DOOR_SCAN_INTERVAL!=0L)return;
         ResidenceData data=ResidenceData.get(level);
         Map<String,Long> scans=LAST_PERIODIC_DOOR_SCAN.computeIfAbsent(level,ignored->new HashMap<>());
         for(ResidenceData.Home home:new ArrayList<>(data.homes())){
             if(!home.dimension.equals(level.dimension())||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
+                    ||!shouldCloseResidentialDoors(level,home)
                     ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))continue;
             String key=home.dimension.location()+"|"+home.pos.asLong();
             if(now-scans.getOrDefault(key,Long.MIN_VALUE/2)<DOOR_SCAN_INTERVAL)continue;
@@ -228,14 +228,38 @@ public class VillagerResidenceEvents {
                 &&after.dayTime()-before.dayTime()!=1L;
         return naturalTick||adjustedClock;
     }
-    /** Preserve the established rain-transition behavior while sharing the bounded door worker. */
-    private void beginWeatherDoorClosure(ServerLevel level){
+    private static boolean shouldCloseResidentialDoors(ServerLevel level,ResidenceData.Home home){
+        long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH);
+        boolean night=phase>=NIGHT_START&&phase<NIGHT_END;
+        // Test the airspace immediately above the residence anchor so sheltered homes
+        // do not react to rain falling elsewhere in the dimension.
+        return night||level.isRainingAt(home.pos.above());
+    }
+    private static boolean isDoorClosureRequiredAt(ServerLevel level,ResidenceData data,BlockPos pos){
+        for(ResidenceData.Home home:data.homes())
+            if(home.dimension.equals(level.dimension())&&level.hasChunkAt(home.pos)
+                    &&withinDoorBounds(pos,home)&&shouldCloseResidentialDoors(level,home))return true;
+        return false;
+    }
+    /** Detect rain transitions only for loaded residences, then reuse the bounded physical door worker. */
+    private void processResidentialWeatherTransitions(ServerLevel level){
         ResidenceData data=ResidenceData.get(level);
+        Map<String,Boolean> previous=RESIDENTIAL_RAINING_STATE.computeIfAbsent(level,ignored->new HashMap<>());
         for(ResidenceData.Home home:new ArrayList<>(data.homes())){
             if(!home.dimension.equals(level.dimension())||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
                     ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))continue;
-            queueResidentialDoorTask(level,home,findOpenResidentialDoors(level,home),Math.floorDiv(level.getDayTime(),DAY_LENGTH));
+            String key=home.dimension.location()+"|"+home.pos.asLong();
+            boolean raining=level.isRainingAt(home.pos.above());
+            Boolean wasRaining=previous.put(key,raining);
+            if(raining&&!Boolean.TRUE.equals(wasRaining))beginWeatherDoorClosure(level,home);
         }
+    }
+    /** A rain-triggered task is scoped to one loaded home and only runs while that home is wet. */
+    private void beginWeatherDoorClosure(ServerLevel level,ResidenceData.Home home){
+        if(!home.dimension.equals(level.dimension())||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
+                ||!shouldCloseResidentialDoors(level,home)
+                ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))return;
+        queueResidentialDoorTask(level,home,findOpenResidentialDoors(level,home),Math.floorDiv(level.getDayTime(),DAY_LENGTH));
     }
     /** One bounded scan per loaded residence at the start of each night. */
     private void beginNightDoorClosure(ServerLevel level,long nightPeriod){
@@ -338,666 +362,7 @@ public class VillagerResidenceEvents {
             ResidenceData.BedClaim claim=data.bedClaim(chosen.getUUID());
             if(returnBed==null&&claim!=null&&claim.dimension().equals(level.dimension())&&claim.home().equals(home.pos))returnBed=claim.bed();
             if(returnBed!=null&&bedInsideHome(level,returnBed,home)
-                    &&(data.bedOwner(level.dimension(),returnBed)==null||data.ownsBed(level.dimension(),returnBed,chosen.getUUID())))
-                data.reserveBed(chosen.getUUID(),level.dimension(),home.pos,returnBed);
-            chosen.stopSleeping();chosen.getNavigation().stop();
-            chosen.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);chosen.getBrain().eraseMemory(MemoryModuleType.PATH);
-        }
-        if(chosen==null){
-            for(BlockPos door:candidates)cooldowns.put(door.asLong(),now+DOOR_SCAN_INTERVAL);
-            return;
-        }
-        Villager taskOwner=chosen;
-        candidates=new ArrayList<>(candidates);
-        // Start with the farthest door so the resident closes doors behind itself
-        // after passing through them, instead of reopening a nearer door to reach
-        // the next assignment.
-        candidates.sort(Comparator.<BlockPos>comparingDouble(taskOwner.blockPosition()::distSqr).reversed()
-                .thenComparing(Comparator.naturalOrder()));
-        ListTag doors=new ListTag();for(BlockPos door:candidates)doors.add(net.minecraft.nbt.LongTag.valueOf(door.asLong()));
-        CompoundTag task=new CompoundTag();task.putLong("home",home.pos.asLong());task.putString("dimension",home.dimension.location().toString());
-        task.putLong("night",period);task.putLong("started",now);task.putLong("last_progress",now);task.putLong("last_pos",chosen.blockPosition().asLong());
-        task.putLong("last_route_attempt",Long.MIN_VALUE/2);task.putInt("index",0);task.putInt("attempts",0);task.put("doors",doors);
-        clearNightWander(chosen,true);
-        chosen.getPersistentData().put(NIGHT_DOOR_TASK,task);
-    }
-
-    private static boolean hasValidResidentialBed(ServerLevel level,ResidenceData data,Villager resident,ResidenceData.Home home){
-        ResidenceData.BedClaim claim=data.bedClaim(resident.getUUID());
-        if(claim==null||!claim.dimension().equals(level.dimension())||!claim.home().equals(home.pos)
-                ||!data.ownsBed(level.dimension(),claim.bed(),resident.getUUID())||!bedInsideHome(level,claim.bed(),home))return false;
-        BlockState state=level.getBlockState(claim.bed());
-        return state.getValue(BedBlock.PART)==net.minecraft.world.level.block.state.properties.BedPart.HEAD
-                &&!state.getValue(BedBlock.OCCUPIED);
-    }
-
-    private static List<BlockPos> findOpenResidentialDoors(ServerLevel level,ResidenceData.Home home){
-        List<BlockPos> found=new ArrayList<>();
-        int radius=home.size/2;
-        // ResidencePreview bounds are [x-r,x+r+1) × [homeY+1,homeY+size+1)
-        // × [z-r,z+r+1). Expand each face by one block, without loading chunks.
-        int minX=home.pos.getX()-radius-1,maxX=home.pos.getX()+radius+1;
-        int minY=home.pos.getY(),maxY=home.pos.getY()+home.size+1;
-        int minZ=home.pos.getZ()-radius-1,maxZ=home.pos.getZ()+radius+1;
-        for(int y=minY;y<=maxY;y++)for(int x=minX;x<=maxX;x++)for(int z=minZ;z<=maxZ;z++){
-            BlockPos pos=new BlockPos(x,y,z);
-            if(!level.hasChunkAt(pos))continue;
-            BlockState state=level.getBlockState(pos);
-            if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
-                    &&state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
-                    &&state.getMaterial()==net.minecraft.world.level.material.Material.WOOD
-                    &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
-                    &&state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))found.add(pos.immutable());
-        }
-        return found;
-    }
-
-    /** Returns true while this resident's bounded door-closing task owns navigation. */
-    private boolean tickNightDoorClosure(ServerLevel level,Villager villager){
-        var entityData=villager.getPersistentData();
-        if(!entityData.contains(NIGHT_DOOR_TASK))return false;
-        net.minecraft.nbt.CompoundTag task=entityData.getCompound(NIGHT_DOOR_TASK);
-        ResidenceData data=ResidenceData.get(level);
-        ResidenceData.Home home=data.owner(villager.getUUID());
-        long homePos=task.getLong("home");
-        if(home==null||!home.dimension.equals(level.dimension())||home.pos.asLong()!=homePos
-                ||!home.residents.contains(villager.getUUID())
-                ||!task.getString("dimension").equals(level.dimension().location().toString())
-                ||!level.hasChunkAt(home.pos)
-                ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity)){
-            finishNightDoorClosure(villager);return true;
-        }
-        long phase=Math.floorMod(level.getDayTime(),DAY_LENGTH),now=level.getGameTime();
-        if((phase<NIGHT_START||phase>=NIGHT_END)||now-task.getLong("started")>10_000L
-                ||villager.isSleeping()||villager.isNoAi()||villager.isTrading()
-                ||entityData.contains(EMERALD_TRANSFER)){
-            finishNightDoorClosure(villager);return true;
-        }
-
-        net.minecraft.nbt.ListTag doors=task.getList("doors",net.minecraft.nbt.Tag.TAG_LONG);
-        int index=task.getInt("index");
-        // Stop the route before closing at arm's reach. If the navigation goal remains
-        // active, vanilla DoorInteractGoal can reopen the door on the very next step.
-        ListTag visitedDoors=task.getList("visited_doors",Tag.TAG_LONG);
-        Set<Long> visited=new HashSet<>();for(int i=0;i<visitedDoors.size();i++)visited.add(((net.minecraft.nbt.LongTag)visitedDoors.get(i)).getAsLong());
-        for(int i=0;i<doors.size();i++){
-            BlockPos nearby=BlockPos.of(((net.minecraft.nbt.LongTag)doors.get(i)).getAsLong());
-            if(!withinDoorBounds(nearby,home)||!level.hasChunkAt(nearby)
-                    )continue;
-            BlockState nearbyState=level.getBlockState(nearby);
-            if(!(nearbyState.getBlock() instanceof net.minecraft.world.level.block.DoorBlock nearbyDoor)
-                    ||!nearbyState.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
-                    ||nearbyState.getValue(net.minecraft.world.level.block.DoorBlock.HALF)!=net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
-                    ||!nearbyState.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))continue;
-            long doorKey=nearby.asLong();double distance=villager.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(nearby));
-            boolean currentTarget=i==index;
-            boolean close=false;
-            if(!currentTarget&&distance<=4.0D){
-                if(visited.add(doorKey))visitedDoors.add(net.minecraft.nbt.LongTag.valueOf(doorKey));
-            }else if(!currentTarget&&visited.remove(doorKey)){
-                for(int j=visitedDoors.size()-1;j>=0;j--)if(((net.minecraft.nbt.LongTag)visitedDoors.get(j)).getAsLong()==doorKey)visitedDoors.remove(j);
-                close=true;
-            }
-            if(close){
-                nearbyDoor.setOpen(villager,level,nearbyState,nearby,false);
-                RESIDENTIAL_DOOR_COOLDOWNS.computeIfAbsent(level,ignored->new HashMap<>())
-                        .put(doorKey,now+DOOR_REOPEN_COOLDOWN);
-            }
-        }
-        while(index<doors.size()){
-            BlockPos doorPos=BlockPos.of(((net.minecraft.nbt.LongTag)doors.get(index)).getAsLong());
-            if(!level.hasChunkAt(doorPos)){
-                index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");continue;
-            }
-            BlockState state=level.getBlockState(doorPos);
-            if(!(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock door)
-                    ||!state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
-                    ||state.getMaterial()!=net.minecraft.world.level.material.Material.WOOD
-                    ||state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)!=net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
-                    ||!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
-                index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");continue;
-            }
-            if(villager.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(doorPos))<=4.0D){
-                villager.getNavigation().stop();
-                villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-                villager.getBrain().eraseMemory(MemoryModuleType.PATH);
-                door.setOpen(villager,level,state,doorPos,false);
-                RESIDENTIAL_DOOR_COOLDOWNS.computeIfAbsent(level,ignored->new HashMap<>())
-                        .put(doorPos.asLong(),now+DOOR_REOPEN_COOLDOWN);
-                index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");
-                task.putLong("last_progress",now);task.putLong("last_pos",villager.blockPosition().asLong());
-                continue;
-            }
-
-            BlockPos currentPos=villager.blockPosition();
-            if(currentPos.asLong()!=task.getLong("last_pos")){
-                task.putLong("last_pos",currentPos.asLong());task.putLong("last_progress",now);
-            }else if(now-task.getLong("last_progress")>=200L){
-                villager.getNavigation().stop();
-                int attempts=task.getInt("attempts")+1;task.putInt("attempts",attempts);
-                task.putLong("last_progress",now);task.remove("route_door");
-                if(attempts>=3){index++;task.putInt("index",index);task.putInt("attempts",0);continue;}
-            }
-
-            long routeAttempt=task.getLong("last_route_attempt");
-            if(task.contains("route_door")&&task.getLong("route_door")==doorPos.asLong()
-                    &&!villager.getNavigation().isDone())return true;
-            if(now-routeAttempt<20L)return true;
-            task.putLong("last_route_attempt",now);
-            BlockPos approach=findApproach(level,doorPos,villager);
-            Path path=approach==null?null:villager.getNavigation().createPath(approach,0);
-            if(path==null||path.getNodeCount()<=1){
-                int attempts=task.getInt("attempts")+1;task.putInt("attempts",attempts);
-                if(attempts>=3){index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");}
-                return true;
-            }
-            task.putLong("route_door",doorPos.asLong());
-            task.putLong("last_progress",now);task.putLong("last_pos",currentPos.asLong());
-            villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-            villager.getBrain().eraseMemory(MemoryModuleType.PATH);
-            villager.getNavigation().moveTo(path,NIGHT_DOOR_WALK_SPEED);
-            return true;
-        }
-        finishNightDoorClosure(villager);
-        return true;
-    }
-
-    private static void finishNightDoorClosure(Villager villager){
-        clearNightWander(villager,true);
-        villager.getPersistentData().remove(NIGHT_DOOR_TASK);
-        // Resume a bed anchor or an interior stroll on the next entity tick.
-        villager.getPersistentData().putBoolean(NIGHT_DOOR_RESUME,true);
-        villager.getNavigation().stop();
-        villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-        villager.getBrain().eraseMemory(MemoryModuleType.PATH);
-    }
-    @SubscribeEvent public void onProductionSleepFinished(SleepFinishedTimeEvent event){
-        if(event.getLevel() instanceof ServerLevel level){
-            long levelTime=event.getNewTime();
-            PRODUCTION_CLOCKS.put(level,new DawnSample(level.getGameTime(),levelTime));
-            processProductionDawn(level,level.getServer().overworld().getGameTime());
-        }
-    }
-    private void processProductionDawn(ServerLevel level,long gameTime){
-        ResidenceData data=ResidenceData.get(level);
-        long eventId=data.nextProductionDawnEventId();
-        for(ResidenceData.Home home:new ArrayList<>(data.homes()))
-            if(home.dimension.equals(level.dimension())&&!home.residents.isEmpty())
-                data.queueProductionDawn(home,gameTime+ResidenceConfig.PAYMENT_DELAY_TICKS.get(),eventId);
-    }
-    private void processLoadedProduction(ServerLevel level,long currentGameTime){
-        ResidenceData data=ResidenceData.get(level);
-        for(ResidenceData.Home home:new ArrayList<>(data.homes())){
-            if(!home.dimension.equals(level.dimension())||!level.hasChunkAt(home.pos))continue;
-            if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor))continue;
-            anchor.flushPendingFragments();
-            for(ResidenceData.PendingProduction task:new ArrayList<>(home.pendingProduction)){
-                if(currentGameTime<task.dueGameTime())continue;
-                int[] resources=AnchorMenu.countResources(level,home.pos,anchor.getSize());
-                List<UUID> residents=new ArrayList<>(home.residents);
-                int fragments=calculateDailyFragments(residents,resources);
-                long eventId=task.period()==Long.MIN_VALUE?data.nextProductionDawnEventId():task.period();
-                boolean recorded=anchor.recordDailyProduction(eventId,fragments);
-                if(recorded&&fragments>0){
-                    playProductionBell(level,residents);
-                    data.queueCollection(home,eventId,currentGameTime+ResidenceConfig.COLLECTION_DELAY_TICKS.get());
-                }
-                data.completeProductionDawn(home,task);
-            }
-        }
-    }
-    public static final double COURIER_WALK_SPEED=.5D;
-    private static final java.util.Map<ServerLevel,java.util.Map<BlockPos,Long>> COLLECTION_SEARCH_AFTER=new java.util.WeakHashMap<>();
-    private void beginScheduledCollections(ServerLevel level,long currentGameTime){
-        ResidenceData data=ResidenceData.get(level);
-        for(ResidenceData.Home home:new ArrayList<>(data.homes())){
-            if(!home.dimension.equals(level.dimension())||home.residents.isEmpty())continue;
-            ResidenceData.PendingCollection pending=data.dueCollection(home,currentGameTime);
-            if(pending==null)continue;
-            // One courier per residence; an unloaded/busy first UUID must not block other residents.
-            boolean alreadyDelivering=false;
-            for(UUID id:home.residents)if(level.getEntity(id) instanceof Villager resident
-                    &&resident.getPersistentData().contains(EMERALD_TRANSFER)){alreadyDelivering=true;break;}
-            if(alreadyDelivering)continue;
-            if(!level.hasChunkAt(home.pos)||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity anchor))continue;
-            if(anchor.isEmpty()){data.completeCollection(home,pending);continue;}
-            var attempts=COLLECTION_SEARCH_AFTER.computeIfAbsent(level,l->new java.util.HashMap<>());
-            if(currentGameTime<attempts.getOrDefault(home.pos,Long.MIN_VALUE))continue;
-            attempts.put(home.pos,currentGameTime+40L);
-            for(UUID id:home.residents){
-                if(!(level.getEntity(id) instanceof Villager villager)||!villager.isAlive()||villager.isBaby()
-                        ||villager.isNoAi()||villager.isSleeping()||villager.isTrading()
-                        ||currentGameTime<villager.getPersistentData().getLong("residenciasaldeoes_courier_retry_after"))continue;
-                BlockPos homeApproach=findApproach(level,home.pos,villager);
-                if(homeApproach==null)continue;
-                BlockPos chest=findEmeraldChest(level,home,villager);
-                if(chest==null)continue;
-                BlockPos chestApproach=findApproach(level,chest,villager);
-                if(chestApproach==null)continue;
-                CompoundTag job=new CompoundTag();job.putLong("anchor",home.pos.asLong());job.putLong("chest",chest.asLong());job.putLong("period",pending.period());job.putLong("started",currentGameTime);job.put("previous_hand",villager.getItemBySlot(EquipmentSlot.MAINHAND).save(new CompoundTag()));job.putLong("home_approach",homeApproach.asLong());job.putLong("chest_approach",chestApproach.asLong());job.putInt("stage",0);job.putLong("last_progress",currentGameTime);job.putLong("last_progress_pos",villager.blockPosition().asLong());
-                villager.getPersistentData().put(EMERALD_TRANSFER,job);
-                break;
-            }
-
-        }
-    }
-    private static BlockPos findEmeraldChest(ServerLevel level,ResidenceData.Home home,Villager villager){
-        // Query only indexed, loaded chests; the origin remains the resident's home block.
-        for(BlockPos candidate:br.com.residenciasaldeoes.data.EmeraldChestIndex.nearby(level,home.pos)){
-            if(level.getBlockEntity(candidate) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity chest
-                    &&chest.hasFragmentSpace()&&findApproach(level,candidate,villager)!=null)return candidate;
-        }
-        return null;
-    }
-    private static BlockPos findApproach(ServerLevel level,BlockPos target,Villager villager){
-        List<BlockPos> approaches=new ArrayList<>();
-        // A floor-embedded anchor is approached one block ABOVE its own Y.
-        // Allow passable non-air blocks, while checking the villager's full body clearance.
-        for(Direction direction:Direction.Plane.HORIZONTAL)for(int dy=-1;dy<=1;dy++){
-            BlockPos candidate=target.relative(direction).offset(0,dy,0);
-            if(!level.hasChunkAt(candidate)||!level.hasChunkAt(candidate.below()))continue;
-            if(level.getBlockState(candidate.below()).getCollisionShape(level,candidate.below()).isEmpty())continue;
-            var offset=net.minecraft.world.phys.Vec3.atBottomCenterOf(candidate).subtract(villager.position());
-            if(level.noCollision(villager,villager.getBoundingBox().move(offset)))approaches.add(candidate);
-        }
-        approaches.sort(Comparator.<BlockPos>comparingDouble(p->villager.blockPosition().distSqr(p)).thenComparing(Comparator.naturalOrder()));
-        for(BlockPos candidate:approaches){net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().createPath(candidate,0);if(path!=null&&path.canReach())return candidate;}
-        // Partial routes allow physical approach toward a door or a destination outside the initial search range.
-        // Collection/deposit still require arrival; a stalled route is bounded and preserves cargo.
-        for(BlockPos candidate:approaches){net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().createPath(candidate,0);if(path!=null&&path.getNodeCount()>1)return candidate;}
-        return null;
-    }
-    private boolean tickEmeraldTransfer(ServerLevel level,Villager villager){
-
-        if(!villager.getPersistentData().contains(EMERALD_TRANSFER))return false;
-        CompoundTag job=villager.getPersistentData().getCompound(EMERALD_TRANSFER);
-        long now=level.getServer().overworld().getGameTime();
-        long position=villager.blockPosition().asLong();
-        if(!job.contains("last_progress")||position!=job.getLong("last_progress_pos")){
-            job.putLong("last_progress",now);job.putLong("last_progress_pos",position);
-        }else if(now-job.getLong("last_progress")>200L){
-            finishEmeraldTransfer(level,villager,job,true);
-            villager.getPersistentData().putLong("residenciasaldeoes_courier_retry_after",now+200L);
-            return true;
-        }
-        villager.getBrain().stopAll(level,villager);
-        villager.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
-        villager.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.PATH);
-        if(level.getGameTime()-job.getLong("started")>12_000L){finishEmeraldTransfer(level,villager,job,true);return true;}
-        ResidenceData.Home owner=ResidenceData.get(level).owner(villager.getUUID());
-        if(owner==null||!owner.dimension.equals(level.dimension())||job.getLong("anchor")!=owner.pos.asLong()){
-            finishEmeraldTransfer(level,villager,job,true);return true;
-        }
-        BlockPos anchorPos=BlockPos.of(job.getLong("anchor")),chestPos=BlockPos.of(job.getLong("chest"));
-        int stage=job.getInt("stage");
-        BlockPos target=BlockPos.of(stage==1?job.getLong("chest_approach"):job.getLong("home_approach"));
-        if(!level.hasChunkAt(target)){finishEmeraldTransfer(level,villager,job,true);return true;}
-        if(villager.blockPosition().distSqr(target)<2.25D){
-            if(job.getInt("stage")==0){
-                if(!(level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor)){finishEmeraldTransfer(level,villager,job,true);return true;}
-                List<ItemStack> cargo=anchor.takeAvailableFragments(ResidenceConfig.MAX_FRAGMENTS_PER_TRIP.get());
-                if(cargo.isEmpty()){
-                    ResidenceData data=ResidenceData.get(level);
-                    ResidenceData.PendingCollection pending=data.dueCollection(owner,level.getServer().overworld().getGameTime());
-                    if(pending!=null&&pending.period()==job.getLong("period"))data.completeCollection(owner,pending);
-                    finishEmeraldTransfer(level,villager,job,false);return true;}
-                ListTag items=new ListTag();for(ItemStack stack:cargo)items.add(stack.save(new CompoundTag()));job.put("cargo",items);job.putInt("stage",1);villager.getPersistentData().put(EMERALD_TRANSFER,job);
-
-            }else if(stage==1){
-                if(!(level.getBlockEntity(chestPos) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity chest)){finishEmeraldTransfer(level,villager,job,true);return true;}
-                if(!job.contains("deposit_started")||!chest.isCourierDepositing(villager.getUUID())){
-                    chest.beginCourierDeposit(villager.getUUID());job.putLong("deposit_started",now);
-                    villager.getNavigation().stop();return true;
-                }
-                chest.refreshCourierDeposit(villager.getUUID());
-                if(now-job.getLong("deposit_started")<10L)return true;
-                List<ItemStack> cargo=readTransferCargo(job);List<ItemStack> remainder=new ArrayList<>();
-                for(ItemStack stack:cargo){chest.insertFragments(stack);if(!stack.isEmpty())remainder.add(stack);}
-                chest.finishCourierDeposit(villager.getUUID());job.remove("deposit_started");
-                if(remainder.isEmpty()){job.remove("cargo");job.putInt("stage",0);villager.getPersistentData().put(EMERALD_TRANSFER,job);}
-                else{ListTag items=new ListTag();for(ItemStack stack:remainder)items.add(stack.save(new CompoundTag()));job.put("cargo",items);job.putInt("stage",2);villager.getPersistentData().put(EMERALD_TRANSFER,job);}
-            }else{
-                List<ItemStack> remainder=readTransferCargo(job);
-                if(level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor)anchor.restoreFragments(remainder);
-                else for(ItemStack stack:remainder)if(!stack.isEmpty())villager.spawnAtLocation(stack);
-                finishEmeraldTransfer(level,villager,job,false);
-            }
-        }else if(villager.getNavigation().isDone()||villager.tickCount%10==0){
-            villager.getNavigation().moveTo(target.getX()+.5D,target.getY(),target.getZ()+.5D,COURIER_WALK_SPEED);
-        }
-        openTransferDoors(level,villager);
-        return true;
-    }
-    private static void openTransferDoors(ServerLevel level,Villager villager){
-        net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().getPath();
-        if(path==null)return;
-        for(int index=Math.max(0,path.getNextNodeIndex()-1);index<Math.min(path.getNodeCount(),path.getNextNodeIndex()+2);index++){
-            BlockPos pos=path.getNode(index).asBlockPos();
-            if(villager.blockPosition().distSqr(pos)>4D)continue;
-            var state=level.getBlockState(pos);
-            if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock door
-                    &&state.getMaterial()==net.minecraft.world.level.material.Material.WOOD
-                    &&!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
-                door.setOpen(villager,level,state,pos,true);
-                java.util.Set<net.minecraft.core.GlobalPos> doors=villager.getBrain()
-                        .getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.DOORS_TO_CLOSE)
-                        .orElseGet(java.util.HashSet::new);
-                doors.add(net.minecraft.core.GlobalPos.of(level.dimension(),pos));
-                villager.getBrain().setMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.DOORS_TO_CLOSE,doors);
-            }
-        }
-    }
-    private static List<ItemStack> readTransferCargo(CompoundTag job){
-        List<ItemStack> items=new ArrayList<>();ListTag list=job.getList("cargo",Tag.TAG_COMPOUND);
-        for(int i=0;i<list.size();i++){ItemStack stack=ItemStack.of(list.getCompound(i));if(!stack.isEmpty())items.add(stack);}
-        return items;
-    }
-    /** Stop stale brain/navigation movement after vanilla has processed a sleeping resident. */
-    public static void stabilizeSleepingResident(Villager villager){
-        villager.getNavigation().stop();
-        villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-        villager.getBrain().eraseMemory(MemoryModuleType.PATH);
-        villager.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
-    }
-    private static void finishEmeraldTransfer(ServerLevel level,Villager villager,CompoundTag job,boolean returnCargo){
-        BlockPos depositChest=BlockPos.of(job.getLong("chest"));
-        if(level.hasChunkAt(depositChest)&&level.getBlockEntity(depositChest) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity chest)chest.finishCourierDeposit(villager.getUUID());
-        if(returnCargo){List<ItemStack> cargo=readTransferCargo(job);BlockPos anchorPos=BlockPos.of(job.getLong("anchor"));
-            if(level.hasChunkAt(anchorPos)&&level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor)anchor.restoreFragments(cargo);
-            else for(ItemStack stack:cargo)if(!stack.isEmpty())villager.spawnAtLocation(stack);
-        }
-        if(job.contains("previous_hand",Tag.TAG_COMPOUND))villager.setItemSlot(EquipmentSlot.MAINHAND,ItemStack.of(job.getCompound("previous_hand")));
-        villager.getNavigation().stop();villager.getPersistentData().remove(EMERALD_TRANSFER);
-    }
-    private int calculateDailyFragments(List<UUID> residents,int[] resources){
-        int total=0;
-        for(int index=0;index<residents.size();index++){
-            total+=ResidenceConfig.BASE_FRAGMENTS_PER_RESIDENT.get();
-            if(index<resources[0])total++;
-            if(index<resources[1])total++;
-            if(index<resources[2])total++;
-            if(index<resources[3]*2)total++;
-        }
-        return total;
-    }
-    private void playProductionBell(ServerLevel level,List<UUID> residents){
-        for(UUID resident:residents)if(level.getEntity(resident) instanceof Villager villager)
-            level.playSound(null,villager.blockPosition(),SoundEvents.VILLAGER_NO,SoundSource.NEUTRAL,0.75F,1.0F);
-    }
-    @SubscribeEvent public void onVillagerJoin(EntityJoinLevelEvent event){if(event.getEntity() instanceof Villager v&&event.getLevel() instanceof ServerLevel sl){ResidenceData data=ResidenceData.get(sl);data.applyPendingNameRestoration(v);if(data.reconcileCapturedResident(sl,v))data.applyResidentName(v);}}
-    @SubscribeEvent public void onStartTracking(PlayerEvent.StartTracking event){if(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player&&event.getTarget() instanceof Villager villager&&player.level instanceof ServerLevel level&&level.dimension().equals(villager.level.dimension())){ResidenceData data=ResidenceData.get(level);if(data.owner(villager.getUUID())!=null){br.com.residenciasaldeoes.network.ModNetwork.sendOpacity(player,villager.getUUID(),data.residentOpacity(villager.getUUID()));br.com.residenciasaldeoes.network.ModNetwork.sendResidentModel(player,villager.getUUID(),data.residentModel(villager.getUUID()));}ResidenceData.ResidentSkin skin=data.residentSkin(villager.getUUID());if(skin!=null)br.com.residenciasaldeoes.network.ModNetwork.sendSkin(player,villager.getUUID(),skin);}}
-    @SubscribeEvent public void onVillageCatSpawn(LivingSpawnEvent.CheckSpawn event) {
-        if (!(event.getEntity() instanceof net.minecraft.world.entity.animal.Cat cat) || event.getSpawner()!=null || !(cat.level instanceof ServerLevel level)) return;
-        ResidenceData data=ResidenceData.get(level);BlockPos spawn=cat.blockPosition();
-        for(ResidenceData.Home h:data.homes()) {
-            if(!h.dimension.equals(level.dimension()) || !level.hasChunkAt(h.pos) || h.pos.distSqr(spawn)>48.0D*48.0D) continue;
-            int villagers=level.getEntitiesOfClass(Villager.class,new AABB(h.pos).inflate(48.0D),v->true).size();
-            if(villagers>=5){event.setCanceled(true);return;}
-        }
-    }
-    @SubscribeEvent public void syncPlayerPreviews(TickEvent.PlayerTickEvent event) {
-        if(event.phase!=TickEvent.Phase.END || !(event.player instanceof net.minecraft.server.level.ServerPlayer player) || player.tickCount%20!=0) return;
-        syncPreviews(player);
-    }
-    public static void syncPreviews(net.minecraft.server.level.ServerPlayer player) {
-        if(!(player.level instanceof ServerLevel level))return;
-        ResidenceData data=ResidenceData.get(level);List<br.com.residenciasaldeoes.network.ModNetwork.PreviewEntry> entries=new ArrayList<>();
-        int radius=player.server.getPlayerList().getViewDistance()*16;double radiusSq=(double)radius*radius;
-        for(ResidenceData.Home h:data.homes()) {
-            if(!h.dimension.equals(level.dimension()) || !level.hasChunkAt(h.pos) || player.distanceToSqr(h.pos.getX()+.5,h.pos.getY()+.5,h.pos.getZ()+.5)>radiusSq) continue;
-            boolean permanent=br.com.residenciasaldeoes.network.ModNetwork.previewEnabled(player,h.dimension.location(),h.pos);
-            // Send nearby anchor bounds regardless of current location. The client
-            // decides automatic in-volume visibility every frame, without a timeout.
-            entries.add(new br.com.residenciasaldeoes.network.ModNetwork.PreviewEntry(h.dimension.location(),h.pos,h.size,permanent));
-        }
-        br.com.residenciasaldeoes.network.ModNetwork.sendPreviews(player,entries);
-    }
-    @SubscribeEvent public void onVillagerTick(LivingEvent.LivingTickEvent event){
-        if(!(event.getEntity() instanceof Villager villager)||!(villager.level instanceof ServerLevel level))return;
-        if(villager.getPersistentData().contains(EMERALD_TRANSFER)){tickEmeraldTransfer(level,villager);return;}
-        if(villager.getPersistentData().contains(NIGHT_DOOR_TASK)){tickNightDoorClosure(level,villager);return;}
-        boolean weather=level.isRaining();var entityData=villager.getPersistentData();
-        boolean doorResume=entityData.getBoolean(NIGHT_DOOR_RESUME);if(doorResume)entityData.remove(NIGHT_DOOR_RESUME);
-        boolean forced=entityData.getBoolean(RETURN_FORCED);
-        boolean wandering=entityData.contains(NIGHT_WANDER);
-        if(villager.tickCount%10!=0&&!weather&&!forced&&!doorResume&&!wandering)return;
-        ResidenceData data=ResidenceData.get(level);ResidenceData.Home home=data.owner(villager.getUUID());if(home==null){clearNightWander(villager,true);return;}
-        if(!home.dimension.equals(level.dimension())||!level.hasChunkAt(home.pos))return;
-        if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity)){clearNightWander(villager,true);data.unlinkAll(level,home.dimension,home.pos);return;}
-
-        long time=level.getDayTime()%24000L;boolean night=time>=13000L&&time<23000L;
-        boolean inside=insideResidence(villager.getX(),villager.getY(),villager.getZ(),home);
-        // A door can be just outside the inner residence bounds. Keep the one-shot
-        // resume marker while the normal home-return path brings the resident back;
-        // its next in-bounds tick can then resume a bed or interior stroll.
-        if(doorResume&&!inside)entityData.putBoolean(NIGHT_DOOR_RESUME,true);
-        BlockPos sleepingAt=villager.getSleepingPos().orElse(null);
-        if(villager.isSleeping()&&sleepingAt!=null){
-            UUID bedOwner=data.bedOwner(level.dimension(),sleepingAt);
-            if(bedOwner!=null&&!bedOwner.equals(villager.getUUID())){
-                // A stale or pre-existing collision must not steal the reserved bed.
-                villager.stopSleeping();villager.getNavigation().stop();
-                villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-                villager.getBrain().eraseMemory(MemoryModuleType.PATH);
-                ResidenceData.BedClaim ownClaim=data.bedClaim(villager.getUUID());
-                if(ownClaim==null||ownClaim.bed().equals(sleepingAt))data.releaseBed(villager.getUUID());
-                sleepingAt=null;
-            }
-        }
-        if(villager.isSleeping()&&sleepingAt!=null&&!bedInsideHome(level,sleepingAt,home)){
-            // The home bounds may have changed while this villager or its saved bed claim was unloaded.
-            villager.stopSleeping();villager.getNavigation().stop();
-            villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);data.releaseBed(villager.getUUID());
-            beginHomeReturn(villager,level,home,true);forced=true;inside=insideResidence(villager.getX(),villager.getY(),villager.getZ(),home);
-        }
-
-        if(!night&&!weather&&!forced){
-            clearHomeReturn(entityData);
-            clearNightWander(villager,true);
-            if(villager.tickCount%10==0)data.releaseBed(villager.getUUID());
-            return;
-        }
-        if(!forced&&!weather&&time>=12000L&&time<13000L){
-            if(!villager.isSleeping()&&villager.tickCount%40==0){
-                BlockPos approach=findSafeSpot(level,villager,home.pos,home.size);
-                if(approach!=null)villager.getNavigation().moveTo(approach.getX()+0.5,approach.getY(),approach.getZ()+0.5,0.85D);
-            }
-            return;
-        }
-
-        if(inside){
-            clearHomeReturn(entityData);
-            if(weather)keepResidentInsideDuringRain(level,data,villager,home,true,!night);
-            if(!night){if(villager.isSleeping())villager.stopSleeping();return;}
-            if(villager.isSleeping()){
-                clearNightWander(villager,true);
-                ResidenceData.BedClaim claim=data.bedClaim(villager.getUUID());
-                if(sleepingAt!=null&&level.getBlockState(sleepingAt).getBlock() instanceof BedBlock
-                        &&(claim==null||!sleepingAt.equals(claim.bed()))
-                        &&!data.reserveBed(villager.getUUID(),level.dimension(),home.pos,sleepingAt)){
-                    villager.stopSleeping();villager.getNavigation().stop();
-                    villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-                    villager.getBrain().eraseMemory(MemoryModuleType.PATH);
-                }
-            }else if((doorResume||villager.tickCount%BED_ANCHOR_INTERVAL==0)&&level.getGameTime()>=entityData.getLong(BED_RETRY_AFTER)){
-                ResidenceData.BedClaim claim=data.bedClaim(villager.getUUID());BlockPos bed=claim!=null&&claim.dimension().equals(level.dimension())&&claim.home().equals(home.pos)?claim.bed():null;
-                if(bed!=null&&!data.ownsBed(level.dimension(),bed,villager.getUUID())){
-                    data.releaseBed(villager.getUUID());bed=null;
-                }
-                if(bed!=null&&!level.hasChunkAt(bed))return;
-                if(bed!=null&&(!(level.getBlockState(bed).getBlock() instanceof BedBlock)
-                        ||level.getBlockState(bed).getValue(BedBlock.PART)!=net.minecraft.world.level.block.state.properties.BedPart.HEAD
-                        ||!bedInsideHome(level,bed,home))){
-                    data.releaseBed(villager.getUUID());bed=null;
-                }
-                BlockPos bedApproach=bed==null?null:findReachableBedApproach(level,villager,bed,home);
-                if(bed!=null&&bedApproach==null){
-                    // A saved claim can outlive a blocked route. Release it so another
-                    // accessible bed in this residence can be considered.
-                    data.releaseBed(villager.getUUID());bed=null;
-                }
-                if(bed!=null&&!claimResidentialBedPoi(level,data,villager,home,bed)){
-                    data.releaseBed(villager.getUUID());bed=null;
-                }
-                if(bed==null)bed=findAvailableBed(level,data,villager,home);
-                if(bed!=null&&level.hasChunkAt(bed)){
-                    if(level.getBlockState(bed).getValue(BedBlock.OCCUPIED)){
-                        // An awake resident cannot keep retrying a bed occupied by another
-                        // entity. Release the stale reservation and search the remaining beds.
-                        data.releaseBed(villager.getUUID());
-                        bed=findAvailableBed(level,data,villager,home);
-                        bedApproach=bed==null?null:findReachableBedApproach(level,villager,bed,home);
-                        if(bed!=null&&bedApproach==null){data.releaseBed(villager.getUUID());bed=null;}
-                    }
-                    if(bed!=null&&data.ownsBed(level.dimension(),bed,villager.getUUID())){
-                        clearNightWander(villager,true);
-                        if(bedApproach==null)bedApproach=findReachableBedApproach(level,villager,bed,home);
-                        if(bedApproach==null){releaseResidentialBedPoi(level,villager,bed);data.releaseBed(villager.getUUID());return;}
-                        net.minecraft.core.GlobalPos homeMemory=villager.getBrain().getMemory(MemoryModuleType.HOME).orElse(null);
-                        if(homeMemory==null||!homeMemory.dimension().equals(level.dimension())||!homeMemory.pos().equals(bed)){
-                            villager.getBrain().setMemory(MemoryModuleType.HOME,net.minecraft.core.GlobalPos.of(level.dimension(),bed));
-                        }
-                        if(villager.blockPosition().equals(bedApproach)){
-                            villager.startSleeping(bed);
-                            if(villager.isSleeping())entityData.remove(BED_RETRY_AFTER);
-                            else{releaseResidentialBedPoi(level,villager,bed);data.releaseBed(villager.getUUID());entityData.putLong(BED_RETRY_AFTER,level.getGameTime()+200L);}
-                        }else{
-                            var walk=villager.getBrain().getMemory(MemoryModuleType.WALK_TARGET).orElse(null);
-                            if(walk==null||!walk.getTarget().currentBlockPosition().equals(bedApproach)){
-                                villager.getBrain().eraseMemory(MemoryModuleType.PATH);
-                                villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET,new WalkTarget(bedApproach,.85F,0));
-                            }
-                            if(villager.getNavigation().isDone()||walk==null||!walk.getTarget().currentBlockPosition().equals(bedApproach)){
-                                Path path=villager.getNavigation().createPath(bedApproach,0);
-                                if(path!=null&&path.canReach()&&pathStaysInside(path,home))villager.getNavigation().moveTo(path,.85D);
-                            }
-                        }
-                    }
-                }
-            }
-            if(night&&!villager.isSleeping()&&!hasValidResidentialBed(level,data,villager,home))
-                tickNightWander(level,villager,home);
-            else if(villager.getPersistentData().contains(NIGHT_WANDER))clearNightWander(villager,true);
-            return;
-        }
-
-        if(night||forced||weather){
-            clearNightWander(villager,true);
-            returnResidentToHome(level,data,villager,home);
-            return;
-        }
-    }
-
-    /** Called immediately after the anchor's configured size and persisted bounds change. */
-    public static void onResidenceSizeChanged(ServerLevel level,ResidenceData.Home home,ResidenceData data){
-        for(UUID id:data.residents(home.dimension,home.pos)){
-            if(!(level.getEntity(id) instanceof Villager villager)||!villager.isSleeping())continue;
-            BlockPos bed=villager.getSleepingPos().orElse(null);
-            if(bed==null||bedInsideHome(level,bed,home))continue;
-            villager.stopSleeping();villager.getNavigation().stop();villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-            data.releaseBed(id);beginHomeReturn(villager,level,home,true);
-        }
-    }
-
-    private static void beginHomeReturn(Villager villager,ServerLevel level,ResidenceData.Home home,boolean forced){
-        var tag=villager.getPersistentData();String key=home.dimension.location()+"|"+home.pos.asLong();
-        if(!tag.getBoolean(RETURN_ACTIVE)||!key.equals(tag.getString(RETURN_HOME))){
-            tag.putBoolean(RETURN_ACTIVE,true);tag.putLong(RETURN_STARTED,level.getGameTime());
-            tag.putLong(RETURN_LAST_ATTEMPT,level.getGameTime()-RETURN_RETRY_TICKS);
-            tag.putLong(RETURN_LAST_SEARCH,level.getGameTime()-RETURN_RETRY_TICKS);tag.putString(RETURN_HOME,key);
-            tag.remove(RETURN_TARGET);tag.remove(RETURN_TARGET_X);tag.remove(RETURN_TARGET_Y);tag.remove(RETURN_TARGET_Z);
-            tag.remove(RETURN_FORCED);
-        }
-        if(forced)tag.putBoolean(RETURN_FORCED,true);
-    }
-
-    private void returnResidentToHome(ServerLevel level,ResidenceData data,Villager villager,ResidenceData.Home home){
-        beginHomeReturn(villager,level,home,false);var tag=villager.getPersistentData();
-        if(villager.isSleeping())villager.stopSleeping();data.releaseBed(villager.getUUID());
-        long now=level.getGameTime(),elapsed=Math.max(0L,now-tag.getLong(RETURN_STARTED));
-        BlockPos target=readReturnTarget(tag);
-        if((target==null||!isSafeDestination(level,villager,target,home))&&now-tag.getLong(RETURN_LAST_SEARCH)>=RETURN_RETRY_TICKS){
-            tag.putLong(RETURN_LAST_SEARCH,now);
-            target=findSafeSpot(level,villager,home.pos,home.size);
-            if(target!=null)writeReturnTarget(tag,target);
-        }
-
-        long returnTimeout=hasNearbyPerceivedThreat(villager)?THREAT_RETURN_TIMEOUT_TICKS:RETURN_TIMEOUT_TICKS;
-        if(elapsed>=returnTimeout&&target!=null&&isSafeDestination(level,villager,target,home)){
-            villager.getNavigation().stop();villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-            villager.teleportTo(target.getX()+0.5D,target.getY(),target.getZ()+0.5D);
-            clearHomeReturn(tag);return;
-        }
-
-        long last=tag.getLong(RETURN_LAST_ATTEMPT);Path path=villager.getNavigation().getPath();
-        BlockPos navTarget=villager.getNavigation().getTargetPos();
-        boolean alreadyHeadingHome=path!=null&&!villager.getNavigation().isDone()&&navTarget!=null&&insideResidence(navTarget,home);
-        boolean competingPath=path!=null&&!villager.getNavigation().isDone()&&navTarget!=null&&!insideResidence(navTarget,home);
-        boolean competingWalkTarget=villager.getBrain().getMemory(MemoryModuleType.WALK_TARGET)
-                .filter(walk->!insideResidence(walk.getTarget().currentBlockPosition(),home)).isPresent();
-        if(competingPath||competingWalkTarget){
-            villager.getNavigation().stop();villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-            alreadyHeadingHome=false;
-        }
-        if(target!=null&&!alreadyHeadingHome&&(competingPath||competingWalkTarget||now-last>=RETURN_RETRY_TICKS)){
-            tag.putLong(RETURN_LAST_ATTEMPT,now);
-            villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-            Path destinationPath=villager.getNavigation().createPath(target,0);
-            if(destinationPath!=null)villager.getNavigation().moveTo(destinationPath,0.85D);
-            else villager.getNavigation().moveTo(target.getX()+0.5D,target.getY(),target.getZ()+0.5D,0.85D);
-            villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET,new WalkTarget(target,0.85F,0));
-        }
-    }
-
-    /** Uses the villager's existing nearest-hostile perception, then filters to close, visible undead threats. */
-    private static boolean hasNearbyPerceivedThreat(Villager villager){
-        return villager.getBrain().getMemory(MemoryModuleType.NEAREST_HOSTILE).filter(entity->
-                entity.isAlive()&&(entity instanceof Zombie||entity instanceof AbstractSkeleton)
-                        &&villager.distanceToSqr(entity)<=64.0D&&villager.hasLineOfSight(entity)).isPresent();
-    }
-
-    private static BlockPos readReturnTarget(net.minecraft.nbt.CompoundTag tag){
-        return tag.getBoolean(RETURN_TARGET)?new BlockPos(tag.getInt(RETURN_TARGET_X),tag.getInt(RETURN_TARGET_Y),tag.getInt(RETURN_TARGET_Z)):null;
-    }
-    private static void writeReturnTarget(net.minecraft.nbt.CompoundTag tag,BlockPos target){
-        tag.putBoolean(RETURN_TARGET,true);tag.putInt(RETURN_TARGET_X,target.getX());tag.putInt(RETURN_TARGET_Y,target.getY());tag.putInt(RETURN_TARGET_Z,target.getZ());
-    }
-    private static void clearHomeReturn(net.minecraft.nbt.CompoundTag tag){
-        tag.remove(RETURN_ACTIVE);tag.remove(RETURN_FORCED);tag.remove(RETURN_STARTED);tag.remove(RETURN_LAST_ATTEMPT);tag.remove(RETURN_LAST_SEARCH);tag.remove(RETURN_HOME);
-        tag.remove(RETURN_TARGET);tag.remove(RETURN_TARGET_X);tag.remove(RETURN_TARGET_Y);tag.remove(RETURN_TARGET_Z);
-    }
-    private void tickNightWander(ServerLevel level,Villager villager,ResidenceData.Home home){
-        CompoundTag persistent=villager.getPersistentData();
-        long now=level.getGameTime();
-        if(villager.isSleeping()||villager.isNoAi()||villager.isTrading()||villager.isPassenger()
-                ||!insideResidence(villager.getX(),villager.getY(),villager.getZ(),home)){
-            clearNightWander(villager,true);return;
-        }
-        net.minecraft.world.entity.LivingEntity attacker=villager.getLastHurtByMob();
-        if(attacker!=null&&attacker.isAlive()&&villager.getLastHurtByMobTimestamp()>=villager.tickCount-100
-                &&villager.distanceToSqr(attacker)<256.0D){
-            // Let vanilla panic/flee and combat behavior own navigation while danger is nearby.
-            clearNightWander(villager,false);return;
-        }
-
-        CompoundTag state=persistent.getCompound(NIGHT_WANDER);
-        if(!persistent.contains(NIGHT_WANDER)){
-            villager.getNavigation().stop();
-            villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-            villager.getBrain().eraseMemory(MemoryModuleType.PATH);
-            state.putInt("phase",1); // Begin with a short pause before the first stroll.
-            state.putLong("until",now+randomWanderDuration(villager));
-            state.putLong("next_look",now+randomLookInterval(villager));
-            state.putFloat("look_yaw",villager.getYHeadRot());
-            persistent.put(NIGHT_WANDER,state);
-        }
-
-        if(now>=state.getLong("next_look")){
-            float offset=(villager.getRandom().nextFloat()*110.0F)-55.0F;
-            state.putFloat("look_yaw",net.minecraft.util.Mth.wrapDegrees(villager.yBodyRot+offset));
-            state.putLong("next_look",now+randomLookInterval(villager));
-        }
-        float current=villager.getYHeadRot(),target=state.getFloat("look_yaw");
+                    &&(data.bedOwner(level.dimension(),returnBed)==null||data.own…11912 tokens truncated…"look_yaw");
         float delta=net.minecraft.util.Mth.wrapDegrees(target-current);
         villager.setYHeadRot(current+net.minecraft.util.Mth.clamp(delta,-2.0F,2.0F));
 

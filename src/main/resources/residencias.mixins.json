@@ -10,8 +10,7 @@
     "LivingEntityRendererOpacityMixin",
     "ResidentSteveModelMixin",
     "RenderTypeOpacityMixin",
-    "ResidentBufferSourceOpacityMixin",
-    "BufferBuilderOpacityMixin"
+    "ModelPartOpacityMixin"
   ],
   "injectors": {
     "defaultRequire": 1
