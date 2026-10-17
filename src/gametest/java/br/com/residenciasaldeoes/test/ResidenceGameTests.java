@@ -416,7 +416,11 @@ public final class ResidenceGameTests {
         ResidenceData data=ResidenceData.get(level);BlockPos home=h.absolutePos(homeLocal);
         check("ok".equals(data.link(level,home,courier)),"Could not link courier-door resident");
         BlockPos doorLocal=new BlockPos(7,2,6),unrelatedLocal=new BlockPos(7,2,9);
-        placeDoor(h,doorLocal,Blocks.OAK_DOOR,false);placeDoor(h,unrelatedLocal,Blocks.SPRUCE_DOOR,false);
+        var courierLower=Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING,Direction.EAST)
+                .setValue(DoorBlock.HALF,DoubleBlockHalf.LOWER).setValue(DoorBlock.OPEN,false);
+        var courierUpper=courierLower.setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER);
+        h.setBlock(doorLocal,courierLower);h.setBlock(doorLocal.above(),courierUpper);
+        placeDoor(h,unrelatedLocal,Blocks.SPRUCE_DOOR,false);
         for(int x=6;x<=8;x++)for(int z:new int[]{5,7})for(int y=2;y<=3;y++)h.setBlock(new BlockPos(x,y,z),Blocks.STONE);
         BlockPos door=h.absolutePos(doorLocal),destination=h.absolutePos(new BlockPos(9,2,6));
         BlockPos chest=h.absolutePos(new BlockPos(10,2,6));h.setBlock(new BlockPos(10,2,6),ResidenciasDosAldeoes.EMERALD_CHEST.get());
