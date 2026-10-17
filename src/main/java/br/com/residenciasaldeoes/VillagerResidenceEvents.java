@@ -67,6 +67,9 @@ public class VillagerResidenceEvents {
     private static final String NIGHT_DOOR_RESUME="residenciasaldeoes_night_door_resume";
     private static final String NIGHT_WANDER="residenciasaldeoes_night_wander";
     private static final String BED_RETRY_AFTER="residenciasaldeoes_bed_retry_after";
+    private static final String TRANSFER_OPEN_DOORS="open_doors";
+    private record TransferDoorPermission(UUID resident,ResourceKey<Level> dimension,BlockPos door){}
+    private static final ThreadLocal<TransferDoorPermission> TRANSFER_DOOR_PERMISSION=new ThreadLocal<>();
     private static final Map<ServerLevel,Map<String,Long>> NIGHT_DOOR_NIGHTS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<Long,Long>> RESIDENTIAL_DOOR_COOLDOWNS=new WeakHashMap<>();
     private static final Map<ServerLevel,Map<Long,Long>> PENDING_OPEN_DOORS=new WeakHashMap<>();
@@ -165,8 +168,8 @@ public class VillagerResidenceEvents {
             // close forever when a nighttime wanderer lingers in or repeatedly crosses
             // the doorway. After the grace period the physical route takes ownership
             // of that resident's navigation and closes the door at arm's reach.
-            if(residentUsingDoorway(level,data,pos)
-                    &&now-entry.getValue()<DOORWAY_OCCUPANCY_GRACE_TICKS)continue;
+            if(transferRouteUsesDoor(level,data,pos)||residentUsingDoorwayDuringTransfer(level,data,pos))continue;
+            if(residentUsingDoorway(level,data,pos)&&now-entry.getValue()<DOORWAY_OCCUPANCY_GRACE_TICKS)continue;
             if(RESIDENTIAL_DOOR_COOLDOWNS.getOrDefault(level,Map.of()).getOrDefault(pos.asLong(),Long.MIN_VALUE/2)>now)continue;
             if(now-entry.getValue()<DOOR_OPEN_STABILITY_TICKS)continue;
             pending.remove(entry.getKey());
@@ -187,6 +190,52 @@ public class VillagerResidenceEvents {
                     &&resident.getBoundingBox().intersects(passage))return true;
         }
         return false;
+    }
+    private static boolean residentUsingDoorwayDuringTransfer(ServerLevel level,ResidenceData data,BlockPos door){
+        AABB passage=new AABB(door).inflate(0.08D,0.0D,0.08D);
+        for(ResidenceData.Home home:data.homes())if(home.dimension.equals(level.dimension()))
+            for(UUID id:home.residents)if(level.getEntity(id) instanceof Villager resident
+                    &&resident.getPersistentData().contains(EMERALD_TRANSFER)
+                    &&transferJobListsDoor(resident.getPersistentData().getCompound(EMERALD_TRANSFER),door)
+                    &&resident.getBoundingBox().intersects(passage))return true;
+        return false;
+    }
+    /** True only while a live courier path is approaching/crossing this exact residential door. */
+    private static boolean transferRouteUsesDoor(ServerLevel level,ResidenceData data,BlockPos door){
+        for(ResidenceData.Home home:data.homes())if(home.dimension.equals(level.dimension())&&withinDoorBounds(door,home))
+            for(UUID id:home.residents)if(level.getEntity(id) instanceof Villager resident
+                    &&resident.getPersistentData().contains(EMERALD_TRANSFER)){
+                CompoundTag job=resident.getPersistentData().getCompound(EMERALD_TRANSFER);
+                if(pathUsesDoor(resident,door)||(transferJobListsDoor(job,door)
+                        &&resident.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(door))<=4.0D))return true;
+            }
+        return false;
+    }
+    private static boolean pathUsesDoor(Villager villager,BlockPos door){
+        Path path=villager.getNavigation().getPath();if(path==null)return false;
+        int start=Math.max(0,path.getNextNodeIndex()-1),end=Math.min(path.getNodeCount(),path.getNextNodeIndex()+4);
+        for(int i=start;i<end;i++)if(sameDoorNode(path.getNode(i).asBlockPos(),door))return true;
+        return false;
+    }
+    private static boolean sameDoorNode(BlockPos node,BlockPos door){
+        return node.getX()==door.getX()&&node.getZ()==door.getZ()
+                &&(node.getY()==door.getY()||node.getY()==door.getY()+1);
+    }
+    private static boolean transferJobListsDoor(CompoundTag job,BlockPos door){
+        ListTag list=job.getList(TRANSFER_OPEN_DOORS,Tag.TAG_LONG);
+        for(int i=0;i<list.size();i++)if(((net.minecraft.nbt.LongTag)list.get(i)).getAsLong()==door.asLong())return true;
+        return false;
+    }
+    private static void recordTransferDoor(CompoundTag job,BlockPos door){
+        ListTag list=job.getList(TRANSFER_OPEN_DOORS,Tag.TAG_LONG);
+        if(!transferJobListsDoor(job,door))list.add(net.minecraft.nbt.LongTag.valueOf(door.asLong()));
+        job.put(TRANSFER_OPEN_DOORS,list);
+    }
+    private static boolean isAuthorizedTransferDoorOpening(ServerLevel level,Villager villager,BlockPos pos){
+        TransferDoorPermission permission=TRANSFER_DOOR_PERMISSION.get();
+        return permission!=null&&permission.resident().equals(villager.getUUID())
+                &&permission.dimension().equals(level.dimension())&&permission.door().equals(pos)
+                &&villager.getPersistentData().contains(EMERALD_TRANSFER);
     }
 
     /** Recheck only the cached residential door positions every five seconds. */
@@ -268,6 +317,7 @@ public class VillagerResidenceEvents {
     }
     /** Gate only the vanilla resident's request to open a controlled door while its home must stay closed. */
     public static boolean shouldBlockResidentDoorOpening(ServerLevel level,Villager villager,BlockPos requestedPos){
+        if(isAuthorizedTransferDoorOpening(level,villager,requestedPos))return false;
         if(villager.level!=level||!villager.isAlive()||!level.hasChunkAt(requestedPos))return false;
         ResidenceData data=ResidenceData.get(level);
         ResidenceData.Home home=data.owner(villager.getUUID());
@@ -358,6 +408,7 @@ public class VillagerResidenceEvents {
         candidates=candidates.stream().filter(p->withinDoorBounds(p,home)&&level.hasChunkAt(p)
                 &&level.getBlockState(p).getBlock() instanceof net.minecraft.world.level.block.DoorBlock
                 &&level.getBlockState(p).getValue(net.minecraft.world.level.block.DoorBlock.OPEN)!=open
+                &&!transferRouteUsesDoor(level,data,p)
                 &&(open||cooldowns.getOrDefault(p.asLong(),Long.MIN_VALUE/2)<=now)).distinct().toList();
         if(candidates.isEmpty())return;
 
@@ -578,6 +629,7 @@ public class VillagerResidenceEvents {
                 index++;task.putInt("index",index);task.putInt("attempts",0);task.remove("route_door");continue;
             }
             if(villager.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(doorPos))<=2.25D){
+                if(!opening&&transferRouteUsesDoor(level,data,doorPos))return true;
                 villager.getNavigation().stop();
                 villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
                 villager.getBrain().eraseMemory(MemoryModuleType.PATH);
@@ -658,10 +710,17 @@ public class VillagerResidenceEvents {
                 int[] resources=AnchorMenu.countResources(level,home.pos,anchor.getSize());
                 List<UUID> residents=new ArrayList<>(home.residents);
                 for(UUID id:residents)if(level.getEntity(id) instanceof Villager resident)data.updateResidentAge(resident);
-                int fragments=calculateDailyFragments(residents,resources,data::residentIsBaby);
+                List<ProductionAllocation> allocations=allocateDailyProduction(residents,resources,data::residentIsBaby);
+                int[] credited=new int[residents.size()];int fragments=0;
+                for(int i=0;i<residents.size();i++){
+                    credited[i]=data.previewResidentFragmentCredit(residents.get(i),allocations.get(i).fragments());
+                    fragments+=credited[i];
+                }
                 long eventId=task.period()==Long.MIN_VALUE?data.nextProductionDawnEventId():task.period();
                 boolean recorded=anchor.recordDailyProduction(eventId,fragments);
                 if(recorded&&fragments>0){
+                    for(int i=0;i<residents.size();i++)if(credited[i]>0)
+                        data.creditResidentFragments(residents.get(i),credited[i]);
                     playProductionBell(level,residents);
                     data.queueCollection(home,eventId,currentGameTime+ResidenceConfig.COLLECTION_DELAY_TICKS.get());
                 }
@@ -764,7 +823,10 @@ public class VillagerResidenceEvents {
                     ResidenceData.PendingCollection pending=data.dueCollection(owner,level.getServer().overworld().getGameTime());
                     if(pending!=null&&pending.period()==job.getLong("period"))data.completeCollection(owner,pending);
                     finishEmeraldTransfer(level,villager,job,false);return true;}
-                ListTag items=new ListTag();for(ItemStack stack:cargo)items.add(stack.save(new CompoundTag()));job.put("cargo",items);job.putInt("stage",1);villager.getPersistentData().put(EMERALD_TRANSFER,job);
+                ListTag items=new ListTag();for(ItemStack stack:cargo)items.add(stack.save(new CompoundTag()));job.put("cargo",items);
+                ResidenceData data=ResidenceData.get(level);
+                writeTransferSources(job,data.reserveResidentFragments(level.dimension(),anchorPos,countFragments(cargo)));
+                job.putInt("stage",1);villager.getPersistentData().put(EMERALD_TRANSFER,job);
 
             }else if(stage==1){
                 if(!(level.getBlockEntity(chestPos) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity chest)){finishEmeraldTransfer(level,villager,job,true);return true;}
@@ -774,15 +836,19 @@ public class VillagerResidenceEvents {
                 }
                 chest.refreshCourierDeposit(villager.getUUID());
                 if(now-job.getLong("deposit_started")<10L)return true;
-                List<ItemStack> cargo=readTransferCargo(job);List<ItemStack> remainder=new ArrayList<>();
-                for(ItemStack stack:cargo){chest.insertFragments(stack);if(!stack.isEmpty())remainder.add(stack);}
+                List<ItemStack> cargo=readTransferCargo(job);List<ItemStack> remainder=new ArrayList<>();int delivered=0;
+                for(ItemStack stack:cargo){int before=stack.getCount();chest.insertFragments(stack);delivered+=before-stack.getCount();if(!stack.isEmpty())remainder.add(stack);}
+                ResidenceData data=ResidenceData.get(level);
+                writeTransferSources(job,data.deliverResidentFragments(readTransferSources(job),delivered));
                 chest.finishCourierDeposit(villager.getUUID());job.remove("deposit_started");
                 if(remainder.isEmpty()){job.remove("cargo");job.putInt("stage",0);villager.getPersistentData().put(EMERALD_TRANSFER,job);}
                 else{ListTag items=new ListTag();for(ItemStack stack:remainder)items.add(stack.save(new CompoundTag()));job.put("cargo",items);job.putInt("stage",2);villager.getPersistentData().put(EMERALD_TRANSFER,job);}
             }else{
                 List<ItemStack> remainder=readTransferCargo(job);
-                if(level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor)anchor.restoreFragments(remainder);
-                else for(ItemStack stack:remainder)if(!stack.isEmpty())villager.spawnAtLocation(stack);
+                ResidenceData data=ResidenceData.get(level);
+                if(level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor){anchor.restoreFragments(remainder);data.releaseResidentFragments(readTransferSources(job));}
+                else{for(ItemStack stack:remainder)if(!stack.isEmpty())villager.spawnAtLocation(stack);data.deliverResidentFragments(readTransferSources(job),countFragments(remainder));}
+                job.remove(TRANSFER_OPEN_DOORS);job.remove("resident_fragment_sources");
                 finishEmeraldTransfer(level,villager,job,false);
             }
         }else if(villager.getNavigation().isDone()||villager.tickCount%10==0){
@@ -794,14 +860,28 @@ public class VillagerResidenceEvents {
     private static void openTransferDoors(ServerLevel level,Villager villager){
         net.minecraft.world.level.pathfinder.Path path=villager.getNavigation().getPath();
         if(path==null)return;
+        ResidenceData data=ResidenceData.get(level);
+        ResidenceData.Home home=data.owner(villager.getUUID());
+        if(home==null||!home.dimension.equals(level.dimension())||!home.residents.contains(villager.getUUID()))return;
+        CompoundTag job=villager.getPersistentData().getCompound(EMERALD_TRANSFER);
         for(int index=Math.max(0,path.getNextNodeIndex()-1);index<Math.min(path.getNodeCount(),path.getNextNodeIndex()+2);index++){
             BlockPos pos=path.getNode(index).asBlockPos();
             if(villager.blockPosition().distSqr(pos)>4D)continue;
             var state=level.getBlockState(pos);
+            if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                    &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER){pos=pos.below();state=level.getBlockState(pos);}
             if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock door
-                    &&state.getMaterial()==net.minecraft.world.level.material.Material.WOOD
-                    &&!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
-                door.setOpen(villager,level,state,pos,true);
+                    &&state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
+                    &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                    ==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
+                    &&withinDoorBounds(pos,home)&&level.hasChunkAt(pos)){
+                recordTransferDoor(job,pos);
+                if(!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
+                    TransferDoorPermission previous=TRANSFER_DOOR_PERMISSION.get();
+                    TRANSFER_DOOR_PERMISSION.set(new TransferDoorPermission(villager.getUUID(),level.dimension(),pos.immutable()));
+                    try{door.setOpen(villager,level,state,pos,true);}
+                    finally{if(previous==null)TRANSFER_DOOR_PERMISSION.remove();else TRANSFER_DOOR_PERMISSION.set(previous);}
+                }
                 java.util.Set<net.minecraft.core.GlobalPos> doors=villager.getBrain()
                         .getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.DOORS_TO_CLOSE)
                         .orElseGet(java.util.HashSet::new);
@@ -809,6 +889,18 @@ public class VillagerResidenceEvents {
                 villager.getBrain().setMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.DOORS_TO_CLOSE,doors);
             }
         }
+        villager.getPersistentData().put(EMERALD_TRANSFER,job);
+    }
+    private static int countFragments(List<ItemStack> stacks){return stacks.stream().filter(s->!s.isEmpty()).mapToInt(ItemStack::getCount).sum();}
+    private static List<ResidenceData.ResidentFragmentSource> readTransferSources(CompoundTag job){
+        List<ResidenceData.ResidentFragmentSource> sources=new ArrayList<>();ListTag list=job.getList("resident_fragment_sources",Tag.TAG_COMPOUND);
+        for(int i=0;i<list.size();i++){CompoundTag entry=list.getCompound(i);if(entry.hasUUID("resident")&&entry.getInt("amount")>0)
+            sources.add(new ResidenceData.ResidentFragmentSource(entry.getUUID("resident"),entry.getInt("amount")));}
+        return sources;
+    }
+    private static void writeTransferSources(CompoundTag job,List<ResidenceData.ResidentFragmentSource> sources){
+        ListTag list=new ListTag();for(ResidenceData.ResidentFragmentSource source:sources){CompoundTag entry=new CompoundTag();entry.putUUID("resident",source.resident());entry.putInt("amount",source.amount());list.add(entry);}
+        job.put("resident_fragment_sources",list);
     }
     private static List<ItemStack> readTransferCargo(CompoundTag job){
         List<ItemStack> items=new ArrayList<>();ListTag list=job.getList("cargo",Tag.TAG_COMPOUND);
@@ -826,14 +918,15 @@ public class VillagerResidenceEvents {
         BlockPos depositChest=BlockPos.of(job.getLong("chest"));
         if(level.hasChunkAt(depositChest)&&level.getBlockEntity(depositChest) instanceof br.com.residenciasaldeoes.block.EmeraldChestBlockEntity chest)chest.finishCourierDeposit(villager.getUUID());
         if(returnCargo){List<ItemStack> cargo=readTransferCargo(job);BlockPos anchorPos=BlockPos.of(job.getLong("anchor"));
-            if(level.hasChunkAt(anchorPos)&&level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor)anchor.restoreFragments(cargo);
-            else for(ItemStack stack:cargo)if(!stack.isEmpty())villager.spawnAtLocation(stack);
+            ResidenceData data=ResidenceData.get(level);List<ResidenceData.ResidentFragmentSource> sources=readTransferSources(job);
+            if(level.hasChunkAt(anchorPos)&&level.getBlockEntity(anchorPos) instanceof ResidentialAnchorBlockEntity anchor){anchor.restoreFragments(cargo);data.releaseResidentFragments(sources);}
+            else{for(ItemStack stack:cargo)if(!stack.isEmpty())villager.spawnAtLocation(stack);data.deliverResidentFragments(sources,countFragments(cargo));}
         }
         if(job.contains("previous_hand",Tag.TAG_COMPOUND))villager.setItemSlot(EquipmentSlot.MAINHAND,ItemStack.of(job.getCompound("previous_hand")));
         villager.getNavigation().stop();villager.getPersistentData().remove(EMERALD_TRANSFER);
     }
     public record ProductionAllocation(int fragments,boolean bed,boolean workstation,boolean chest,boolean food){}
-    /** Applies existing roster-ordered resource allocation while excluding work/chest for babies. */
+    /** One adult base fragment plus one per available benefit; babies stay at exactly one. */
     public static List<ProductionAllocation> allocateDailyProduction(List<UUID> residents,int[] resources,
                                                                      java.util.function.Predicate<UUID> isBaby){
         List<ProductionAllocation> allocations=new ArrayList<>(residents.size());
@@ -841,11 +934,13 @@ public class VillagerResidenceEvents {
         int chests=Math.max(0,resources[2]),food=Math.max(0,resources[3])*2;
         for(UUID resident:residents){
             boolean baby=isBaby.test(resident);
-            int fragments=baby?1:ResidenceConfig.BASE_FRAGMENTS_PER_RESIDENT.get();
+            if(baby){allocations.add(new ProductionAllocation(1,false,false,false,false));continue;}
+            int fragments=1;
             boolean hasBed=beds>0;if(hasBed){fragments++;beds--;}
-            boolean hasWorkstation=!baby&&workstations>0;if(hasWorkstation){fragments++;workstations--;}
-            boolean hasChest=!baby&&chests>0;if(hasChest){fragments++;chests--;}
+            boolean hasWorkstation=workstations>0;if(hasWorkstation){fragments++;workstations--;}
+            boolean hasChest=chests>0;if(hasChest){fragments++;chests--;}
             boolean hasFood=food>0;if(hasFood){fragments++;food--;}
+            fragments=Math.min(5,fragments);
             allocations.add(new ProductionAllocation(fragments,hasBed,hasWorkstation,hasChest,hasFood));
         }
         return List.copyOf(allocations);
@@ -893,6 +988,7 @@ public class VillagerResidenceEvents {
         if(!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity)){clearNightWander(villager,true);data.unlinkAll(level,home.dimension,home.pos);return;}
 
         long time=level.getDayTime()%24000L;boolean night=time>=13000L&&time<23000L;
+        if(weather)weather=isRainingAtResidentialArea(level,home);
         boolean inside=insideResidence(villager.getX(),villager.getY(),villager.getZ(),home);
         // A door can be just outside the inner residence bounds. Keep the one-shot
         // resume marker while the normal home-return path brings the resident back;
@@ -918,10 +1014,10 @@ public class VillagerResidenceEvents {
             beginHomeReturn(villager,level,home,true);forced=true;inside=insideResidence(villager.getX(),villager.getY(),villager.getZ(),home);
         }
 
-        // Rain temporarily supersedes sleep, but never discards the resident's
-        // persisted bed reservation. Clearing the transient walk target prevents
-        // the vanilla sleep activity from pulling the resident straight back to bed.
-        if(weather&&villager.isSleeping()){
+        // Daytime rain sends residents back into their home, but night rain alone
+        // never wakes a bed owner. A night door task is the only temporary exception;
+        // neither path discards the resident's persisted bed reservation.
+        if(weather&&!night&&villager.isSleeping()){
             villager.stopSleeping();
             villager.getNavigation().stop();
             villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
@@ -944,7 +1040,7 @@ public class VillagerResidenceEvents {
 
         if(inside){
             clearHomeReturn(entityData);
-            if(weather){
+            if(weather&&!night){
                 keepResidentInsideDuringRain(level,data,villager,home,true,true);
                 return;
             }

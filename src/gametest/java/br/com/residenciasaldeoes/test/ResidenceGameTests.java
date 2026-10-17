@@ -26,6 +26,7 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import java.lang.reflect.Method;
+import java.util.List;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.ZipEntry;
@@ -406,6 +407,44 @@ public final class ResidenceGameTests {
         var upper=block.defaultBlockState().setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER).setValue(DoorBlock.OPEN,open);
         h.setBlock(pos,lower);h.setBlock(pos.above(),upper);
     }
+    @GameTest(template="empty",timeoutTicks=1000,batch="courier-door")
+    public static void courier_opens_only_a_residential_door_on_its_active_path(GameTestHelper h){
+        floor(h);var level=h.getLevel();level.setDayTime(13_001L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
+        BlockPos homeLocal=new BlockPos(6,2,8);h.setBlock(homeLocal,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homeLocal)).setSize(5),"Could not expand courier-door residence");
+        Villager courier=h.spawn(EntityType.VILLAGER,new BlockPos(6,2,6));
+        ResidenceData data=ResidenceData.get(level);BlockPos home=h.absolutePos(homeLocal);
+        check("ok".equals(data.link(level,home,courier)),"Could not link courier-door resident");
+        BlockPos doorLocal=new BlockPos(7,2,6),unrelatedLocal=new BlockPos(7,2,9);
+        placeDoor(h,doorLocal,Blocks.OAK_DOOR,false);placeDoor(h,unrelatedLocal,Blocks.SPRUCE_DOOR,false);
+        for(int x=6;x<=8;x++)for(int z:new int[]{5,7})for(int y=2;y<=3;y++)h.setBlock(new BlockPos(x,y,z),Blocks.STONE);
+        BlockPos door=h.absolutePos(doorLocal),destination=h.absolutePos(new BlockPos(8,2,6));
+        var job=new net.minecraft.nbt.CompoundTag();job.putLong("anchor",home.asLong());job.putLong("chest",h.absolutePos(new BlockPos(12,2,6)).asLong());
+        job.putInt("stage",1);job.putLong("chest_approach",destination.asLong());job.putLong("started",level.getGameTime());
+        courier.getPersistentData().put(JOB,job);
+        check(VillagerResidenceEvents.shouldBlockResidentDoorOpening(level,courier,door),"Night-rain closure protection was not active before the scoped courier exception");
+        var path=courier.getNavigation().createPath(destination,0);
+        check(path!=null&&path.getNodeCount()>1,"Courier had no normal navigation path across the closed-door route");
+        boolean routeContainsDoor=false;
+        for(int i=0;i<path.getNodeCount();i++){
+            BlockPos node=path.getNode(i).asBlockPos();
+            if(node.getX()==door.getX()&&node.getZ()==door.getZ()&&(node.getY()==door.getY()||node.getY()==door.getY()+1)){routeContainsDoor=true;break;}
+        }
+        check(routeContainsDoor,"Pathfinder did not route the courier through the required wooden door");
+        courier.getNavigation().moveTo(path,.5D);
+        invoke("openTransferDoors",new Class[]{net.minecraft.server.level.ServerLevel.class,Villager.class},level,courier);
+        check(level.getBlockState(door).getValue(DoorBlock.OPEN),"Courier's active route could not open the protected residential door");
+        check(!level.getBlockState(h.absolutePos(unrelatedLocal)).getValue(DoorBlock.OPEN),"Courier exception opened a door outside the active route");
+        var opened=job.getLongArray("open_doors");
+        check(java.util.Arrays.stream(opened).anyMatch(value->value==door.asLong()),"Opened residential door was not tracked for post-passage closure");
+        check(VillagerResidenceEvents.shouldBlockResidentDoorOpening(level,courier,door),"Scoped passage exception leaked beyond the setOpen call");
+        h.succeedWhen(()->{
+            check(courier.blockPosition().getX()>=door.getX()+1,"Courier did not physically cross the residential doorway");
+            check(!courier.getPersistentData().contains(JOB),"Courier did not finish the bounded test route");
+            check(!level.getBlockState(door).getValue(DoorBlock.OPEN),"Residential door did not close after the courier passed through");
+            check(!level.getBlockState(h.absolutePos(unrelatedLocal)).getValue(DoorBlock.OPEN),"Door outside the route changed during passage");
+        });
+    }
     @GameTest(template="empty",timeoutTicks=900,batch="physical")
     public static void first_resident_physically_closes_loaded_wooden_doors_in_bounded_area(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,9);
@@ -549,8 +588,8 @@ public final class ResidenceGameTests {
         check(resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Storm-time nighttime door was not assigned to an awake resident");
         h.succeed();
     }
-    @GameTest(template="empty",timeoutTicks=700,batch="rain-sleep")
-    public static void rain_wakes_bed_resident_and_resident_returns_to_bed_after_storm(GameTestHelper h){
+    @GameTest(template="empty",timeoutTicks=150,batch="rain-sleep")
+    public static void night_rain_without_open_doors_keeps_bed_residents_asleep(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
         check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not expand rainy sleep residence");
         for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
@@ -565,19 +604,41 @@ public final class ResidenceGameTests {
         check(data.reserveBed(resident.getUUID(),level.dimension(),home,bed),"Could not reserve the resident's bed");
         level.setDayTime(13_001L);resident.startSleeping(bed);
         check(resident.isSleeping(),"Resident did not enter sleep before the rain transition");
-        net.minecraft.world.phys.Vec3 rainStart=resident.position();
         level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
         check(level.isRaining(),"Rain fixture did not activate");
         h.runAtTickTime(100,()->{
-            check(!resident.isSleeping(),"Rain did not wake a bed-owning resident");
-            check(data.ownsBed(level.dimension(),bed,resident.getUUID()),"Waking for rain discarded the bed reservation");
-            check(!resident.position().equals(rainStart)||resident.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET).isPresent(),
-                    "Awake resident did not circulate inside the residence during rain");
-            level.setWeatherParameters(0,0,false,false);level.setRainLevel(0.0F);
+            check(resident.isSleeping(),"Rain alone woke a resident who had a bed and no door task");
+            check(data.ownsBed(level.dimension(),bed,resident.getUUID()),"Night rain discarded the bed reservation");
+            check(!resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Resident received a door task although no door was open");
+            h.succeed();
         });
+    }
+    @GameTest(template="empty",timeoutTicks=1000,batch="rain-sleep")
+    public static void night_rain_wakes_only_one_resident_to_close_a_door_and_return_to_bed(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not expand rainy sleep residence");
+        for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
+        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,7));Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(7,3,7));
+        ResidenceData data=ResidenceData.get(level);BlockPos home=h.absolutePos(homePos);
+        check(data.link(level,home,leader).equals("ok")&&data.link(level,home,second).equals("ok"),"Could not link sleeping residents");
+        BlockPos firstBedLocal=new BlockPos(5,3,5),secondBedLocal=new BlockPos(7,3,5);
+        for(BlockPos bedLocal:List.of(firstBedLocal,secondBedLocal)){
+            var head=Blocks.WHITE_BED.defaultBlockState().setValue(BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD).setValue(BedBlock.FACING,Direction.NORTH);
+            h.setBlock(bedLocal.relative(Direction.SOUTH),head.setValue(BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT));h.setBlock(bedLocal,head);
+        }
+        BlockPos firstBed=h.absolutePos(firstBedLocal),secondBed=h.absolutePos(secondBedLocal);
+        check(data.reserveBed(leader.getUUID(),level.dimension(),home,firstBed)&&data.reserveBed(second.getUUID(),level.dimension(),home,secondBed),"Could not reserve both beds");
+        leader.startSleeping(firstBed);second.startSleeping(secondBed);check(leader.isSleeping()&&second.isSleeping(),"Residents did not begin asleep");
+        placeOpenDoor(h,new BlockPos(7,3,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,500_000L+level.getGameTime());
+        check(leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"A resident was not assigned to close the open door");
+        check(!leader.isSleeping(),"The selected resident did not wake to perform the door task");
+        check(second.isSleeping(),"A second resident was woken unnecessarily");
+        check(data.ownsBed(level.dimension(),firstBed,leader.getUUID())&&data.ownsBed(level.dimension(),secondBed,second.getUUID()),"Waking discarded a bed reservation");
         h.succeedWhen(()->{
-            check(data.ownsBed(level.dimension(),bed,resident.getUUID()),"Dry night lost the resident's bed reservation");
-            if(resident.isSleeping())h.succeed();
+            check(!level.getBlockState(h.absolutePos(new BlockPos(7,3,6))).getValue(DoorBlock.OPEN),"Resident did not physically close the rainy-night door");
+            check(leader.isSleeping()&&leader.getSleepingPos().orElse(null)!=null&&leader.getSleepingPos().orElseThrow().equals(firstBed),"Selected resident did not walk back to its original bed");
+            check(second.isSleeping()&&second.getSleepingPos().orElse(null)!=null&&second.getSleepingPos().orElseThrow().equals(secondBed),"Other resident stopped sleeping during the task");
         });
     }
     @GameTest(template="empty",timeoutTicks=700,batch="rain-doors")
@@ -999,33 +1060,56 @@ public final class ResidenceGameTests {
         h.succeed();
     }
     @GameTest(template="empty",timeoutTicks=40,batch="dawn")
-    public static void baby_fragment_bonuses_are_capped_and_adults_keep_current_rules(GameTestHelper h){
+    public static void baby_production_is_one_and_adult_production_is_capped_at_five(GameTestHelper h){
         var baby=java.util.UUID.randomUUID();var adult=java.util.UUID.randomUUID();
         java.util.function.Predicate<java.util.UUID> onlyBaby=java.util.Set.of(baby)::contains;
         java.util.List<java.util.UUID> oneBaby=java.util.List.of(baby);
         check(VillagerResidenceEvents.calculateDailyFragments(oneBaby,new int[]{0,0,0,0},onlyBaby)==1,
                 "Baby resident base production must be exactly one fragment");
-        check(VillagerResidenceEvents.calculateDailyFragments(oneBaby,new int[]{1,0,0,0},onlyBaby)==2,
-                "A valid bed must add one baby fragment");
-        check(VillagerResidenceEvents.calculateDailyFragments(oneBaby,new int[]{0,0,0,1},onlyBaby)==2,
-                "The existing food condition must add one baby fragment");
-        check(VillagerResidenceEvents.calculateDailyFragments(oneBaby,new int[]{1,0,0,1},onlyBaby)==3,
-                "Baby maximum with a bed and food must be three fragments");
-        check(VillagerResidenceEvents.calculateDailyFragments(oneBaby,new int[]{1,4,4,1},onlyBaby)==3,
-                "Workstations and chests must not raise baby production above three");
-        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(adult),new int[]{0,0,0,0},onlyBaby)==3,
-                "Adult base production changed");
-        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(adult),new int[]{1,1,1,1},onlyBaby)==7,
-                "Adult bed, workstation, chest, or food bonuses changed");
-        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(baby,adult),new int[]{2,1,1,1},onlyBaby)==10,
-                "Baby-only restrictions consumed workstation or chest benefits from the adult");
+        check(VillagerResidenceEvents.calculateDailyFragments(oneBaby,new int[]{1,0,0,1},onlyBaby)==1,
+                "Beds and food must not increase baby production");
+        check(VillagerResidenceEvents.calculateDailyFragments(oneBaby,new int[]{1,4,4,4},onlyBaby)==1,
+                "Baby maximum must be exactly one fragment");
+        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(adult),new int[]{0,0,0,0},onlyBaby)==1,
+                "Adult base production must be one fragment");
+        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(adult),new int[]{1,1,1,1},onlyBaby)==5,
+                "Adult bed, workstation, chest, food benefits must cap at five");
+        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(baby,adult),new int[]{2,1,1,1},onlyBaby)==6,
+                "Baby-only restrictions consumed benefits reserved for an adult");
         var allocations=VillagerResidenceEvents.allocateDailyProduction(java.util.List.of(baby,adult),new int[]{2,1,1,1},onlyBaby);
         check(!allocations.get(0).workstation()&&!allocations.get(0).chest(),
                 "Baby resident UI allocation must not include workstation or chest benefits");
         check(allocations.get(1).workstation()&&allocations.get(1).chest(),
                 "Baby residents consumed benefits reserved for an adult in roster order");
-        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(baby,baby),new int[]{2,0,0,1},onlyBaby)==6,
-                "Multiple babies exceeded their independent three-fragment cap");
+        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(baby,baby),new int[]{2,0,0,1},onlyBaby)==2,
+                "Each baby must receive exactly one fragment regardless of resources");
+        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(adult,adult),new int[]{2,2,2,2},onlyBaby)==10,
+                "Adult resource benefits exceeded the five-fragment daily maximum");
+        h.succeed();
+    }
+
+    @GameTest(template="empty",timeoutTicks=40,batch="dawn")
+    public static void resident_fragment_balances_cap_at_twenty_and_persist(GameTestHelper h){
+        BlockPos localHome=new BlockPos(5,2,5);h.setBlock(localHome,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager adult=h.spawn(EntityType.VILLAGER,new BlockPos(6,2,6));adult.setAge(0);
+        Villager baby=h.spawn(EntityType.VILLAGER,new BlockPos(7,2,6));baby.setAge(-24000);
+        ResidenceData data=ResidenceData.get(h.getLevel());BlockPos home=h.absolutePos(localHome);
+        check("ok".equals(data.link(h.getLevel(),home,adult))&&"ok".equals(data.link(h.getLevel(),home,baby)),"Could not link storage test residents");
+        check(data.creditResidentFragments(adult.getUUID(),18)==18,"Adult initial balance was not credited");
+        check(data.previewResidentFragmentCredit(adult.getUUID(),5)==2&&data.creditResidentFragments(adult.getUUID(),5)==2,"Adult daily credit did not stop at twenty");
+        check(data.creditResidentFragments(baby.getUUID(),25)==20,"Baby balance exceeded or failed to reach twenty");
+        var sources=data.reserveResidentFragments(h.getLevel().dimension(),home,8);
+        check(sources.stream().mapToInt(ResidenceData.ResidentFragmentSource::amount).sum()==8,"Courier could not reserve eight stored fragments");
+        check(data.residentFragmentBalance(adult.getUUID())==20&&data.residentFragmentsInTransit(adult.getUUID())==8,"In-transit fragments were freed from the twenty-item cap");
+        var restored=ResidenceData.load(data.save(new net.minecraft.nbt.CompoundTag()));
+        check(restored.residentFragmentBalance(adult.getUUID())==20&&restored.residentFragmentsInTransit(adult.getUUID())==8,"Resident balance or courier reservation did not persist");
+        check(restored.residentFragmentBalance(baby.getUUID())==20,"Baby balance did not persist");
+        var remainder=restored.deliverResidentFragments(sources,5);
+        check(restored.residentFragmentBalance(adult.getUUID())==15&&restored.residentFragmentsInTransit(adult.getUUID())==3,"Delivered stock was not removed from the resident balance");
+        restored.releaseResidentFragments(remainder);
+        check(restored.residentFragmentsInTransit(adult.getUUID())==0,"Undelivered cargo reservation was not released");
+        check(restored.consumeAvailableResidentFragments(h.getLevel().dimension(),home,7)==7,"Withdrawals did not free resident capacity");
+        check(restored.previewResidentFragmentCredit(adult.getUUID(),20)==12,"Freed storage capacity was unavailable to later production");
         h.succeed();
     }
 
@@ -1042,7 +1126,7 @@ public final class ResidenceGameTests {
         check(reloaded.residentIsBaby(resident.getUUID()),"Baby age category was not persisted in residence data");
         resident.setAge(0);data.updateResidentAge(resident);
         check(!data.residentIsBaby(resident.getUUID()),"Resident did not switch to adult classification after growing");
-        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(resident.getUUID()),new int[]{0,0,0,0},data::residentIsBaby)==3,
+        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(resident.getUUID()),new int[]{0,0,0,0},data::residentIsBaby)==1,
                 "Grown resident did not return to the existing adult production rule");
         h.succeed();
     }

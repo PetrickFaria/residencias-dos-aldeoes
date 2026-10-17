@@ -82,6 +82,10 @@ public class ResidentialAnchorBlockEntity extends BlockEntity implements Contain
         if(!cargo.isEmpty()){setChanged();level.sendBlockUpdated(worldPosition,getBlockState(),getBlockState(),3);}
         return cargo;
     }
+    private void consumeResidentFragmentStock(int amount){
+        if(amount>0&&level instanceof ServerLevel serverLevel)
+            ResidenceData.get(serverLevel).consumeAvailableResidentFragments(serverLevel.dimension(),worldPosition,amount);
+    }
     public void restoreFragments(java.util.List<ItemStack> cargo){
         if(level==null||level.isClientSide)return;
         for(ItemStack stack:cargo)if(!stack.isEmpty()&&stack.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get()))pendingFragments=Math.min(Long.MAX_VALUE-stack.getCount(),pendingFragments)+stack.getCount();
@@ -91,15 +95,15 @@ public class ResidentialAnchorBlockEntity extends BlockEntity implements Contain
     @Override public int getContainerSize(){return OUTPUT_SLOTS;}
     @Override public boolean isEmpty(){return outputItems.stream().allMatch(ItemStack::isEmpty);}
     @Override public ItemStack getItem(int slot){return slot>=0&&slot<OUTPUT_SLOTS?outputItems.get(slot):ItemStack.EMPTY;}
-    @Override public ItemStack removeItem(int slot,int amount){if(slot<0||slot>=OUTPUT_SLOTS)return ItemStack.EMPTY;ItemStack result=ContainerHelper.removeItem(outputItems,slot,amount);if(!result.isEmpty()){setChanged();flushPendingFragments();}return result;}
-    @Override public ItemStack removeItemNoUpdate(int slot){if(slot<0||slot>=OUTPUT_SLOTS)return ItemStack.EMPTY;ItemStack result=outputItems.get(slot);outputItems.set(slot,ItemStack.EMPTY);if(!result.isEmpty())flushPendingFragments();return result;}
+    @Override public ItemStack removeItem(int slot,int amount){if(slot<0||slot>=OUTPUT_SLOTS)return ItemStack.EMPTY;ItemStack result=ContainerHelper.removeItem(outputItems,slot,amount);if(!result.isEmpty()){consumeResidentFragmentStock(result.getCount());setChanged();flushPendingFragments();}return result;}
+    @Override public ItemStack removeItemNoUpdate(int slot){if(slot<0||slot>=OUTPUT_SLOTS)return ItemStack.EMPTY;ItemStack result=outputItems.get(slot);outputItems.set(slot,ItemStack.EMPTY);if(!result.isEmpty()){consumeResidentFragmentStock(result.getCount());flushPendingFragments();}return result;}
     @Override public void setItem(int slot,ItemStack stack){
         if(slot<0||slot>=OUTPUT_SLOTS)return;
         if(stack==null||stack.isEmpty()){outputItems.set(slot,ItemStack.EMPTY);setChanged();flushPendingFragments();}
         else if(level==null||level.isClientSide)outputItems.set(slot,stack.copy());
     }
     @Override public boolean canPlaceItem(int slot,ItemStack stack){return false;}
-    @Override public void clearContent(){for(int slot=0;slot<OUTPUT_SLOTS;slot++)outputItems.set(slot,ItemStack.EMPTY);setChanged();flushPendingFragments();}
+    @Override public void clearContent(){int removed=outputItems.stream().filter(stack->!stack.isEmpty()&&stack.is(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())).mapToInt(ItemStack::getCount).sum();for(int slot=0;slot<OUTPUT_SLOTS;slot++)outputItems.set(slot,ItemStack.EMPTY);consumeResidentFragmentStock(removed);setChanged();flushPendingFragments();}
     @Override public boolean stillValid(Player player){return !isRemoved()&&player.distanceToSqr(worldPosition.getX()+.5D,worldPosition.getY()+.5D,worldPosition.getZ()+.5D)<64.0D;}
     @Override protected void saveAdditional(CompoundTag tag){super.saveAdditional(tag);tag.putInt("size",size);tag.putLong("pending_fragments",pendingFragments);tag.putLong("last_production_game_time",lastProductionGameTime);tag.putLong("last_production_event_id",lastProductionEventId);ContainerHelper.saveAllItems(tag,outputItems);}
     @Override public void load(CompoundTag tag){super.load(tag);size=tag.contains("size")?tag.getInt("size"):3;pendingFragments=tag.getLong("pending_fragments");lastProductionGameTime=tag.contains("last_production_game_time")?tag.getLong("last_production_game_time"):Long.MIN_VALUE;lastProductionEventId=tag.contains("last_production_event_id")?tag.getLong("last_production_event_id"):Long.MIN_VALUE;outputItems.clear();ContainerHelper.loadAllItems(tag,outputItems);}

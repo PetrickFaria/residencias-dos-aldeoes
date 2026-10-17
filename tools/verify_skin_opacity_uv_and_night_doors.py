@@ -93,7 +93,8 @@ assert "DOOR_OPEN_STABILITY_TICKS" in events and "residentUsingDoorway(level,dat
 assert "home.residents.contains(villager.getUUID())" in events
 assert "daytime_rain_physically_closes_only_exposed_residential_doors" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "daytime_door_task_stops_after_local_rain_ends" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
-assert "rain_wakes_bed_resident_and_resident_returns_to_bed_after_storm" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
+assert "night_rain_without_open_doors_keeps_bed_residents_asleep" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
+assert "night_rain_wakes_only_one_resident_to_close_a_door_and_return_to_bed" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "ResidentialDoorWeatherMixin" in mixins["mixins"]
 assert "Resident AI reopened a controlled residential door during rain" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "BED_ANCHOR_INTERVAL=100" in events and "tickCount%BED_ANCHOR_INTERVAL==0" in events
@@ -117,6 +118,10 @@ assert "level.getPoiManager().take" in events and "type.is(net.minecraft.world.e
 assert "MemoryModuleType.WALK_TARGET,new WalkTarget(bedApproach,.85F,0)" in events
 assert "villager.blockPosition().equals(bedApproach)" in events
 assert "residenciasaldeoes_night_door_task" in transport
+assert "TRANSFER_DOOR_PERMISSION" in events and "isAuthorizedTransferDoorOpening" in events
+assert "openTransferDoors(level,villager)" in events and "withinDoorBounds(pos,home)" in events
+assert "transferRouteUsesDoor(level,data,doorPos)" in events
+assert "courier_opens_only_a_residential_door_on_its_active_path" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "STEVE" in model_type and "residentModel" in data and "model_type" in data
 assert "ResidentAppearanceModels.usesSteve(villager)" in model_mixin
 assert "class SteveVillagerModel extends PlayerModel<Villager>" in model

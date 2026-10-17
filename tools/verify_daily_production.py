@@ -24,7 +24,7 @@ assert 'after.dayTime()-before.dayTime()==1L' in events
 assert 'DAWN_COMMAND_WINDOW_TICKS=1_200L' in events
 assert 'boolean adjustedClock=' in events
 assert 'oldTime>DAWN_COMMAND_WINDOW_TICKS&&newTime<=DAWN_COMMAND_WINDOW_TICKS' in events
-assert 'defineInRange("fragmentosBasePorResidente", 3, 0, 64)' in config
+assert 'defineInRange("fragmentosBasePorResidente", 1, 1, 1)' in config
 assert 'defineInRange("esperaPagamentoTicks", 200, 20, 12000)' in config
 assert 'defineInRange("esperaTransporteTicks", 300, 20, 12000)' in config
 assert 'defineInRange("maximoPorViagem", 15, 1, 64)' in config
@@ -42,13 +42,13 @@ assert 'next_production_dawn_event_id' in data and 'lastAcceptedDawnGameTime' in
 assert 'queueCollection(Home home,long eventId,long dueGameTime)' in data
 assert 'dueCollection(Home home,long currentGameTime)' in data
 assert 'AnchorMenu.countResources(level,home.pos,anchor.getSize())' in events
-assert 'calculateDailyFragments(residents,resources,data::residentIsBaby)' in events
 assert 'data.updateResidentAge(resident)' in events
 assert 'public record ProductionAllocation(int fragments,boolean bed,boolean workstation,boolean chest,boolean food)' in events
 assert 'public static List<ProductionAllocation> allocateDailyProduction(List<UUID> residents,int[] resources,' in events
-assert 'int fragments=baby?1:ResidenceConfig.BASE_FRAGMENTS_PER_RESIDENT.get()' in events
-assert 'boolean hasWorkstation=!baby&&workstations>0' in events
-assert 'boolean hasChest=!baby&&chests>0' in events
+assert 'if(baby){allocations.add(new ProductionAllocation(1,false,false,false,false));continue;}' in events
+assert 'int fragments=1;' in events and 'fragments=Math.min(5,fragments);' in events
+assert 'boolean hasWorkstation=workstations>0' in events
+assert 'boolean hasChest=chests>0' in events
 assert 'allocateDailyProduction(ids,resources,d::residentIsBaby)' in menu
 assert 'benefits.workstation(),benefits.chest()' in menu
 assert 'idx<resources[1]' not in menu and 'idx<resources[2]' not in menu
@@ -66,12 +66,19 @@ assert 'mayPlace(ItemStack stack){return false;}' in menu
 assert 'countResources(ServerLevel l,BlockPos a,int size)' in menu
 assert 'imageWidth=272;imageHeight=232' in screen
 
-def daily_fragments(babies, objectives, adult_base=3):
+assert 'MAX_RESIDENT_FRAGMENT_STORAGE = 20' in data
+assert 'previewResidentFragmentCredit' in events and 'data.creditResidentFragments' in events
+assert 'resident_fragments_in_transit' in data and 'deliverResidentFragments' in events
+assert 'consumeAvailableResidentFragments' in be and 'clearContent()' in be
+
+def daily_fragments(babies, objectives, adult_base=1):
     beds,work,chests,cakes=objectives
     remaining=[beds,work,chests,cakes*2]
     total=0
     for baby in babies:
         total+=1 if baby else adult_base
+        if baby:
+            continue
         if remaining[0]>0:
             total+=1;remaining[0]-=1
         if not baby and remaining[1]>0:
@@ -83,15 +90,21 @@ def daily_fragments(babies, objectives, adult_base=3):
     return total
 
 assert daily_fragments([True],(0,0,0,0))==1
-assert daily_fragments([True],(1,0,0,0))==2
-assert daily_fragments([True],(0,0,0,1))==2
-assert daily_fragments([True],(1,0,0,1))==3
-assert daily_fragments([True],(1,4,4,1))==3
-assert daily_fragments([False],(0,0,0,0))==3
-assert daily_fragments([False],(1,1,1,1))==7
-assert daily_fragments([True,False],(2,1,1,1))==10
-assert daily_fragments([True,True],(2,0,0,1))==6
-assert daily_fragments([False,False,False],(3,3,3,2))==21
+assert daily_fragments([True],(1,0,0,0))==1
+assert daily_fragments([True],(0,0,0,1))==1
+assert daily_fragments([True],(1,4,4,1))==1
+assert daily_fragments([False],(0,0,0,0))==1
+assert daily_fragments([False],(1,1,1,1))==5
+assert daily_fragments([True,False],(2,1,1,1))==6
+assert daily_fragments([True,True],(2,0,0,1))==2
+assert daily_fragments([False,False,False],(3,3,3,2))==15
+
+def accepted_credit(balance,amount,limit=20):
+    return min(max(0,amount),max(0,limit-balance))
+assert accepted_credit(18,5)==2
+assert accepted_credit(20,5)==0
+assert accepted_credit(8,20)==12
+print('Resident fragment cap scenarios passed: 18+5 accepts 2; full balance accepts 0; withdrawals restore capacity.')
 
 def crosses_natural_dawn(before_game,after_game,before_day,after_day):
     return (after_game-before_game==1 and after_day-before_day==1

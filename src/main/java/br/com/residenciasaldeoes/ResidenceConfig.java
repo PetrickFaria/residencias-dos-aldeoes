@@ -16,8 +16,8 @@ public final class ResidenceConfig {
     static {
         BUILDER.push("pagamento");
         BASE_FRAGMENTS_PER_RESIDENT = BUILDER
-                .comment("Fragmentos base por residente; indicadores podem acrescentar até 4.")
-                .defineInRange("fragmentosBasePorResidente", 3, 0, 64);
+                .comment("Fragmentos base por residente adulto; benefícios válidos acrescentam até 4. Bebês recebem apenas o fragmento base.")
+                .defineInRange("fragmentosBasePorResidente", 1, 1, 1);
         PAYMENT_DELAY_TICKS = BUILDER
                 .comment("Espera após o amanhecer antes do pagamento (20 ticks = 1 segundo).")
                 .defineInRange("esperaPagamentoTicks", 200, 20, 12000);
