@@ -72,6 +72,12 @@ public final class VisualClientCheck {
                     level.setBlock(new BlockPos(x,-59,z),Blocks.SMOOTH_STONE.defaultBlockState(),3);
                     for(int y=-58;y<=-45;y++)level.setBlock(new BlockPos(x,y,z),Blocks.AIR.defaultBlockState(),3);
                 }
+                // The copied GameTest world may contain saved residence data at
+                // this same coordinate. Remove that fixture entry before creating
+                // the visual scene, so previous residents/output cannot affect the
+                // courier conservation check.
+                br.com.residenciasaldeoes.data.ResidenceData.get(level).unlinkAll(
+                        level,level.dimension(),new BlockPos(1,-58,8));
                 level.setBlock(new BlockPos(1,-58,8),ResidenciasDosAldeoes.ANCHOR.get().defaultBlockState(),3);
                 level.setBlock(new BlockPos(4,-58,8),ResidenciasDosAldeoes.EMERALD_CHEST.get().defaultBlockState().setValue(ChestBlock.FACING,Direction.SOUTH),3);
                 BlockPos opened=new BlockPos(7,-58,8);
