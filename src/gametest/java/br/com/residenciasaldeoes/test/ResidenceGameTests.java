@@ -563,15 +563,17 @@ public final class ResidenceGameTests {
         check(!level.isRainingAt(absoluteShelteredHome.above()),"Roof did not shelter the second residence from local rain");
         invoke("beginWeatherDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},
                 level,data.home(level,absoluteWetHome));
-        check(wetResident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
-                "Daytime rain did not assign a physical door-closing route");
+        check(!level.getBlockState(h.absolutePos(wetDoor)).getValue(DoorBlock.OPEN),
+                "Daytime rain did not close the exposed residential door immediately");
+        check(!wetResident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
+                "Daytime rain unnecessarily took control of resident navigation");
         check(!shelteredResident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
                 "Dimension-wide rain incorrectly assigned a route to the sheltered residence");
         h.succeedWhen(()->{
             check(!level.getBlockState(h.absolutePos(wetDoor)).getValue(DoorBlock.OPEN),
                     "Resident failed to physically close its door during daytime rain");
             check(!wetResident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
-                    "Daytime rain door task did not finish");
+                    "Daytime rain created a resident navigation task");
             check(level.getBlockState(h.absolutePos(shelteredDoor)).getValue(DoorBlock.OPEN),
                     "Sheltered residence door was modified");
         });
@@ -586,12 +588,17 @@ public final class ResidenceGameTests {
         placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);
         invoke("beginWeatherDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},
                 level,data.home(level,home));
-        check(resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Rain did not start the daytime door route");
-        level.setWeatherParameters(0,0,false,false);level.setRainLevel(0.0F);
-        invoke("tickNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,Villager.class},level,resident);
+        check(!level.getBlockState(h.absolutePos(new BlockPos(7,2,6))).getValue(DoorBlock.OPEN),
+                "Daytime rain did not close the door immediately");
         check(!resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
-                "Daytime door route continued after local rain ended");
-        h.succeed();
+                "Daytime rain started a navigation task instead of applying the weather state");
+        level.setWeatherParameters(0,0,false,false);level.setRainLevel(0.0F);
+        check(!resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
+                "Rain closure incorrectly took control of resident navigation");
+        invoke("beginDaytimeDoorOpening",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},
+                level,data.owner(resident.getUUID()));
+        h.succeedWhen(()->check(level.getBlockState(h.absolutePos(new BlockPos(7,2,6))).getValue(DoorBlock.OPEN),
+                "The resident door did not reopen after rain ended during daytime"));
     }
     @GameTest(template="empty",timeoutTicks=100,batch="doors")
     public static void residential_rain_is_detected_at_exposed_perimeter_under_roofed_anchor(GameTestHelper h){
@@ -620,7 +627,15 @@ public final class ResidenceGameTests {
             // home after the first route, but that must not exclude it from closing
             // a door that reopens while local rain still requires closure.
             resident.getPersistentData().putBoolean("residenciasaldeoes_home_return_active",true);
-            ((DoorBlock)state.getBlock()).setOpen(resident,level,state,door,true);
+            DoorBlock doorBlock=(DoorBlock)state.getBlock();
+            for(int attempt=0;attempt<4;attempt++)doorBlock.setOpen(resident,level,state,door,true);
+            check(!level.getBlockState(door).getValue(DoorBlock.OPEN),
+                    "Resident AI reopened a controlled residential door during rain");
+            invoke("watchResidentialDoors",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,data.owner(resident.getUUID()));
+            Villager ordinary=h.spawn(EntityType.VILLAGER,new BlockPos(10,2,6));
+            doorBlock.setOpen(ordinary,level,level.getBlockState(door),door,true);
+            check(level.getBlockState(door).getValue(DoorBlock.OPEN),
+                    "Rain protection incorrectly blocked an unregistered villager");
             invoke("watchResidentialDoors",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,data.owner(resident.getUUID()));
         });
         h.runAtTickTime(800,()->{

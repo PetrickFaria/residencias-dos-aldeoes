@@ -247,20 +247,41 @@ public class VillagerResidenceEvents {
     private static boolean isRainingAtResidentialArea(ServerLevel level,ResidenceData.Home home){
         if(!level.isRaining())return false;
         int radius=home.size/2+1;
-        int y=home.pos.getY()+1;
         int minX=home.pos.getX()-radius,maxX=home.pos.getX()+radius;
         int minZ=home.pos.getZ()-radius,maxZ=home.pos.getZ()+radius;
         for(int x=minX;x<=maxX;x++){
-            BlockPos north=new BlockPos(x,y,minZ),south=new BlockPos(x,y,maxZ);
-            if(level.hasChunkAt(north)&&level.isRainingAt(north))return true;
-            if(level.hasChunkAt(south)&&level.isRainingAt(south))return true;
+            if(isRainReachingColumn(level,x,minZ)||isRainReachingColumn(level,x,maxZ))return true;
         }
         for(int z=minZ+1;z<maxZ;z++){
-            BlockPos west=new BlockPos(minX,y,z),east=new BlockPos(maxX,y,z);
-            if(level.hasChunkAt(west)&&level.isRainingAt(west))return true;
-            if(level.hasChunkAt(east)&&level.isRainingAt(east))return true;
+            if(isRainReachingColumn(level,minX,z)||isRainReachingColumn(level,maxX,z))return true;
         }
         return false;
+    }
+    /** Use the actual precipitation surface, not a fixed Y that may sit under eaves or terrain. */
+    private static boolean isRainReachingColumn(ServerLevel level,int x,int z){
+        BlockPos column=new BlockPos(x,level.getMinBuildHeight(),z);
+        if(!level.hasChunkAt(column))return false;
+        int surfaceY=level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,x,z);
+        BlockPos precipitationPos=new BlockPos(x,surfaceY,z);
+        return level.hasChunkAt(precipitationPos)&&level.isRainingAt(precipitationPos);
+    }
+    /** Gate only the vanilla resident's request to open a controlled door while its home must stay closed. */
+    public static boolean shouldBlockResidentDoorOpening(ServerLevel level,Villager villager,BlockPos requestedPos){
+        if(villager.level!=level||!villager.isAlive()||!level.hasChunkAt(requestedPos))return false;
+        ResidenceData data=ResidenceData.get(level);
+        ResidenceData.Home home=data.owner(villager.getUUID());
+        if(home==null||!home.dimension.equals(level.dimension())||!home.residents.contains(villager.getUUID()))return false;
+        BlockState requested=level.getBlockState(requestedPos);
+        if(!(requested.getBlock() instanceof net.minecraft.world.level.block.DoorBlock)
+                ||!requested.is(net.minecraft.tags.BlockTags.WOODEN_DOORS))return false;
+        BlockPos lower=requested.getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                ==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER?requestedPos.below():requestedPos;
+        if(!level.hasChunkAt(lower)||!withinDoorBounds(lower,home))return false;
+        BlockState lowerState=level.getBlockState(lower);
+        return lowerState.getBlock()==requested.getBlock()
+                &&lowerState.getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+                ==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
+                &&isDoorClosureRequiredAt(level,data,lower);
     }
     private static boolean isDoorClosureRequiredAt(ServerLevel level,ResidenceData data,BlockPos pos){
         for(ResidenceData.Home home:data.homes())
@@ -298,7 +319,12 @@ public class VillagerResidenceEvents {
                 ||!shouldCloseResidentialDoors(level,home)
                 ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))return;
         rememberResidentialDoors(level,home);
-        queueResidentialDoorTask(level,home,findOpenResidentialDoors(level,home),Math.floorDiv(level.getDayTime(),DAY_LENGTH));
+        cancelHomeDoorRouteForStateChange(level,home);
+        watchResidentialDoors(level,home);
+    }
+    private static void cancelHomeDoorRouteForStateChange(ServerLevel level,ResidenceData.Home home){
+        for(UUID id:home.residents)if(level.getEntity(id) instanceof Villager resident
+                &&resident.getPersistentData().contains(NIGHT_DOOR_TASK))finishNightDoorClosure(resident);
     }
     /** One bounded scan per loaded residence at the start of each night. */
     private void beginNightDoorClosure(ServerLevel level,long nightPeriod){
@@ -461,13 +487,12 @@ public class VillagerResidenceEvents {
         watches.put(key,doors);
     }
 
-    /** Detects later AI/courier reopens every second without rescanning residential blocks. */
+    /** Enforces the cached door set every second without rescanning residential blocks. */
     private static void watchResidentialDoors(ServerLevel level,ResidenceData.Home home){
         rememberResidentialDoors(level,home);
         Set<Long> doors=RESIDENTIAL_DOOR_WATCHES.getOrDefault(level,Map.of()).get(homeKey(home));
         if(doors==null||doors.isEmpty())return;
-        Map<Long,Long> pending=PENDING_OPEN_DOORS.computeIfAbsent(level,ignored->new HashMap<>());
-        long now=level.getGameTime();
+        if(!shouldCloseResidentialDoors(level,home))return;
         for(long encoded:new ArrayList<>(doors)){
             BlockPos pos=BlockPos.of(encoded);
             if(!level.hasChunkAt(pos))continue;
@@ -476,12 +501,16 @@ public class VillagerResidenceEvents {
                     &&state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
                     &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
                     &&state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){
-                long retryAfter=RESIDENTIAL_DOOR_COOLDOWNS.getOrDefault(level,Map.of())
-                        .getOrDefault(encoded,Long.MIN_VALUE/2);
-                if(retryAfter<=now)pending.putIfAbsent(encoded,now);
-            }else pending.remove(encoded);
+                // The gate normally prevents resident AI from opening. This bounded
+                // state check also corrects a player, command, or other mod reopening it.
+                ((net.minecraft.world.level.block.DoorBlock)state.getBlock()).setOpen(null,level,state,pos,false);
+                Map<Long,Long> pending=PENDING_OPEN_DOORS.get(level);
+                if(pending!=null){
+                    pending.remove(encoded);
+                    if(pending.isEmpty())PENDING_OPEN_DOORS.remove(level);
+                }
+            }
         }
-        if(pending.isEmpty())PENDING_OPEN_DOORS.remove(level);
     }
 
     /** Reopen only the same bounded wooden doors, using the residence's existing physical worker. */

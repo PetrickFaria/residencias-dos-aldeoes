@@ -73,6 +73,9 @@ assert "crossedNightfall" in events and "beginNightDoorClosure" in events
 assert "DOOR_SCAN_INTERVAL=300L" in events and "if(now%DOOR_SCAN_INTERVAL!=0L)return;" in events
 assert "onResidentialDoorChanged" in events and "processResidentialWeatherTransitions(level)" in events
 assert "beginWeatherDoorClosure(level,home)" in events
+assert "shouldBlockResidentDoorOpening" in events
+assert "level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,x,z)" in events
+assert ").setOpen(null,level,state,pos,false)" in events
 assert "RESIDENTIAL_DOOR_WATCHES" in events and "watchResidentialDoors(level,home)" in events
 assert "DOOR_OPEN_STABILITY_TICKS=5L" in events
 assert "new AABB(door).inflate(0.08D,0.0D,0.08D)" in events
@@ -88,6 +91,8 @@ assert "DOOR_OPEN_STABILITY_TICKS" in events and "residentUsingDoorway(level,dat
 assert "home.residents.contains(villager.getUUID())" in events
 assert "daytime_rain_physically_closes_only_exposed_residential_doors" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "daytime_door_task_stops_after_local_rain_ends" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
+assert "ResidentialDoorWeatherMixin" in mixins["mixins"]
+assert "Resident AI reopened a controlled residential door during rain" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "BED_ANCHOR_INTERVAL=100" in events and "tickCount%BED_ANCHOR_INTERVAL==0" in events
 assert "Release the stale reservation and search the remaining beds" in events
 assert "level.hasChunkAt(pos)" in events and "state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)" in events
