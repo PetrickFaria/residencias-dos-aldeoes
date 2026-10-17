@@ -681,7 +681,8 @@ public class VillagerResidenceEvents {
                 if(currentGameTime<task.dueGameTime())continue;
                 int[] resources=AnchorMenu.countResources(level,home.pos,anchor.getSize());
                 List<UUID> residents=new ArrayList<>(home.residents);
-                int fragments=calculateDailyFragments(residents,resources);
+                for(UUID id:residents)if(level.getEntity(id) instanceof Villager resident)data.updateResidentAge(resident);
+                int fragments=calculateDailyFragments(residents,resources,data::residentIsBaby);
                 long eventId=task.period()==Long.MIN_VALUE?data.nextProductionDawnEventId():task.period();
                 boolean recorded=anchor.recordDailyProduction(eventId,fragments);
                 if(recorded&&fragments>0){
@@ -855,14 +856,23 @@ public class VillagerResidenceEvents {
         if(job.contains("previous_hand",Tag.TAG_COMPOUND))villager.setItemSlot(EquipmentSlot.MAINHAND,ItemStack.of(job.getCompound("previous_hand")));
         villager.getNavigation().stop();villager.getPersistentData().remove(EMERALD_TRANSFER);
     }
-    private int calculateDailyFragments(List<UUID> residents,int[] resources){
+    /**
+     * Applies the existing roster-ordered resource allocation while excluding workbench
+     * and chest benefits from babies. Adult-only totals remain identical to the old rule.
+     */
+    public static int calculateDailyFragments(List<UUID> residents,int[] resources,
+                                              java.util.function.Predicate<UUID> isBaby){
         int total=0;
+        int beds=Math.max(0,resources[0]),workstations=Math.max(0,resources[1]);
+        int chests=Math.max(0,resources[2]),food=Math.max(0,resources[3])*2;
         for(int index=0;index<residents.size();index++){
-            total+=ResidenceConfig.BASE_FRAGMENTS_PER_RESIDENT.get();
-            if(index<resources[0])total++;
-            if(index<resources[1])total++;
-            if(index<resources[2])total++;
-            if(index<resources[3]*2)total++;
+            UUID resident=residents.get(index);
+            boolean baby=isBaby.test(resident);
+            total+=baby?1:ResidenceConfig.BASE_FRAGMENTS_PER_RESIDENT.get();
+            if(beds>0){total++;beds--;}
+            if(!baby&&workstations>0){total++;workstations--;}
+            if(!baby&&chests>0){total++;chests--;}
+            if(food>0){total++;food--;}
         }
         return total;
     }
@@ -870,7 +880,7 @@ public class VillagerResidenceEvents {
         for(UUID resident:residents)if(level.getEntity(resident) instanceof Villager villager)
             level.playSound(null,villager.blockPosition(),SoundEvents.VILLAGER_NO,SoundSource.NEUTRAL,0.75F,1.0F);
     }
-    @SubscribeEvent public void onVillagerJoin(EntityJoinLevelEvent event){if(event.getEntity() instanceof Villager v&&event.getLevel() instanceof ServerLevel sl){ResidenceData data=ResidenceData.get(sl);data.applyPendingNameRestoration(v);if(data.reconcileCapturedResident(sl,v))data.applyResidentName(v);}}
+    @SubscribeEvent public void onVillagerJoin(EntityJoinLevelEvent event){if(event.getEntity() instanceof Villager v&&event.getLevel() instanceof ServerLevel sl){ResidenceData data=ResidenceData.get(sl);data.applyPendingNameRestoration(v);if(data.reconcileCapturedResident(sl,v))data.applyResidentName(v);if(data.owner(v.getUUID())!=null)data.updateResidentAge(v);}}
     @SubscribeEvent public void onStartTracking(PlayerEvent.StartTracking event){if(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player&&event.getTarget() instanceof Villager villager&&player.level instanceof ServerLevel level&&level.dimension().equals(villager.level.dimension())){ResidenceData data=ResidenceData.get(level);if(data.owner(villager.getUUID())!=null){br.com.residenciasaldeoes.network.ModNetwork.sendOpacity(player,villager.getUUID(),data.residentOpacity(villager.getUUID()));br.com.residenciasaldeoes.network.ModNetwork.sendResidentModel(player,villager.getUUID(),data.residentModel(villager.getUUID()));}ResidenceData.ResidentSkin skin=data.residentSkin(villager.getUUID());if(skin!=null)br.com.residenciasaldeoes.network.ModNetwork.sendSkin(player,villager.getUUID(),skin);}}
     @SubscribeEvent public void syncPlayerPreviews(TickEvent.PlayerTickEvent event) {
         if(event.phase!=TickEvent.Phase.END || !(event.player instanceof net.minecraft.server.level.ServerPlayer player) || player.tickCount%20!=0) return;
@@ -891,6 +901,8 @@ public class VillagerResidenceEvents {
     }
     @SubscribeEvent public void onVillagerTick(LivingEvent.LivingTickEvent event){
         if(!(event.getEntity() instanceof Villager villager)||!(villager.level instanceof ServerLevel level))return;
+        if(villager.tickCount%20==0&&villager.getPersistentData().hasUUID("residenciasaldeoes_resident_identity"))
+            ResidenceData.get(level).updateResidentAge(villager);
         if(villager.getPersistentData().contains(EMERALD_TRANSFER)){tickEmeraldTransfer(level,villager);return;}
         if(villager.getPersistentData().contains(NIGHT_DOOR_TASK)){tickNightDoorClosure(level,villager);return;}
         boolean weather=level.isRaining();var entityData=villager.getPersistentData();

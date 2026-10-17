@@ -42,8 +42,12 @@ assert 'next_production_dawn_event_id' in data and 'lastAcceptedDawnGameTime' in
 assert 'queueCollection(Home home,long eventId,long dueGameTime)' in data
 assert 'dueCollection(Home home,long currentGameTime)' in data
 assert 'AnchorMenu.countResources(level,home.pos,anchor.getSize())' in events
-for token in ('if(index<resources[0])total++', 'if(index<resources[1])total++', 'if(index<resources[2])total++', 'if(index<resources[3]*2)total++'):
-    assert token in events
+assert 'calculateDailyFragments(residents,resources,data::residentIsBaby)' in events
+assert 'data.updateResidentAge(resident)' in events
+assert 'public static int calculateDailyFragments(List<UUID> residents,int[] resources,' in events
+assert 'total+=baby?1:ResidenceConfig.BASE_FRAGMENTS_PER_RESIDENT.get()' in events
+assert 'if(!baby&&workstations>0)' in events and 'if(!baby&&chests>0)' in events
+assert 'residentBabyStates' in data and 'resident_is_baby' in data
 assert 'level.hasChunkAt(home.pos)' in events and 'pendingProduction' in events
 assert 'recorded&&fragments>0' in events
 assert 'SoundEvents.VILLAGER_NO' in events and 'SoundEvents.BELL_BLOCK' not in events
@@ -57,13 +61,32 @@ assert 'mayPlace(ItemStack stack){return false;}' in menu
 assert 'countResources(ServerLevel l,BlockPos a,int size)' in menu
 assert 'imageWidth=272;imageHeight=232' in screen
 
-def daily_fragments(resident_count, objectives):
-    return sum(3 + int(i < objectives[0]) + int(i < objectives[1]) + int(i < objectives[2]) + int(i < objectives[3] * 2)
-               for i in range(resident_count))
+def daily_fragments(babies, objectives, adult_base=3):
+    beds,work,chests,cakes=objectives
+    remaining=[beds,work,chests,cakes*2]
+    total=0
+    for baby in babies:
+        total+=1 if baby else adult_base
+        if remaining[0]>0:
+            total+=1;remaining[0]-=1
+        if not baby and remaining[1]>0:
+            total+=1;remaining[1]-=1
+        if not baby and remaining[2]>0:
+            total+=1;remaining[2]-=1
+        if remaining[3]>0:
+            total+=1;remaining[3]-=1
+    return total
 
-assert daily_fragments(1,(0,0,0,0))==3
-assert [daily_fragments(1,(int(goal>=1),int(goal>=2),int(goal>=3),int(goal>=4))) for goal in range(5)]==[3,4,5,6,7]
-assert daily_fragments(3,(3,3,3,2))==21
+assert daily_fragments([True],(0,0,0,0))==1
+assert daily_fragments([True],(1,0,0,0))==2
+assert daily_fragments([True],(0,0,0,1))==2
+assert daily_fragments([True],(1,0,0,1))==3
+assert daily_fragments([True],(1,4,4,1))==3
+assert daily_fragments([False],(0,0,0,0))==3
+assert daily_fragments([False],(1,1,1,1))==7
+assert daily_fragments([True,False],(2,1,1,1))==10
+assert daily_fragments([True,True],(2,0,0,1))==6
+assert daily_fragments([False,False,False],(3,3,3,2))==21
 
 def crosses_natural_dawn(before_game,after_game,before_day,after_day):
     return (after_game-before_game==1 and after_day-before_day==1
@@ -95,4 +118,4 @@ assert deposit([60,0,0,0,0],21)==([64,17,0,0,0],0)
 assert deposit([64,64,64,64,64],21)==([64,64,64,64,64],21)
 assert deposit([64]*10,21)==([64]*10,21)
 assert deposit([64]*5+[0]*5,21)==([64]*5+[21]+[0]*4,0)
-print('Event-relative production, persistence, deduplication, and quantity checks passed; Minecraft runtime checks remain separate.')
+print('Event-relative production, persistence, deduplication, baby caps, adult rules, and quantity checks passed; Minecraft runtime checks remain separate.')

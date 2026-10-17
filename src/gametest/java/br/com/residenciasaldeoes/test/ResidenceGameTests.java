@@ -919,6 +919,50 @@ public final class ResidenceGameTests {
         check(!resident.getPersistentData().getBoolean("residenciasaldeoes_death_notice_sent"),"Witch conversion was marked as a death");
         h.succeed();
     }
+    @GameTest(template="empty",timeoutTicks=40,batch="dawn")
+    public static void baby_fragment_bonuses_are_capped_and_adults_keep_current_rules(GameTestHelper h){
+        var baby=java.util.UUID.randomUUID();var adult=java.util.UUID.randomUUID();
+        java.util.function.Predicate<java.util.UUID> onlyBaby=java.util.Set.of(baby)::contains;
+        java.util.List<java.util.UUID> oneBaby=java.util.List.of(baby);
+        check(VillagerResidenceEvents.calculateDailyFragments(oneBaby,new int[]{0,0,0,0},onlyBaby)==1,
+                "Baby resident base production must be exactly one fragment");
+        check(VillagerResidenceEvents.calculateDailyFragments(oneBaby,new int[]{1,0,0,0},onlyBaby)==2,
+                "A valid bed must add one baby fragment");
+        check(VillagerResidenceEvents.calculateDailyFragments(oneBaby,new int[]{0,0,0,1},onlyBaby)==2,
+                "The existing food condition must add one baby fragment");
+        check(VillagerResidenceEvents.calculateDailyFragments(oneBaby,new int[]{1,0,0,1},onlyBaby)==3,
+                "Baby maximum with a bed and food must be three fragments");
+        check(VillagerResidenceEvents.calculateDailyFragments(oneBaby,new int[]{1,4,4,1},onlyBaby)==3,
+                "Workstations and chests must not raise baby production above three");
+        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(adult),new int[]{0,0,0,0},onlyBaby)==3,
+                "Adult base production changed");
+        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(adult),new int[]{1,1,1,1},onlyBaby)==7,
+                "Adult bed, workstation, chest, or food bonuses changed");
+        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(baby,adult),new int[]{2,1,1,1},onlyBaby)==10,
+                "Baby-only restrictions consumed workstation or chest benefits from the adult");
+        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(baby,baby),new int[]{2,0,0,1},onlyBaby)==6,
+                "Multiple babies exceeded their independent three-fragment cap");
+        h.succeed();
+    }
+
+    @GameTest(template="empty",timeoutTicks=40,batch="dawn")
+    public static void resident_baby_status_persists_and_switches_to_adult_rules_on_growth(GameTestHelper h){
+        var level=h.getLevel();BlockPos localHome=new BlockPos(5,2,5);BlockPos home=h.absolutePos(localHome);
+        h.setBlock(localHome,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(7,2,7));resident.setAge(-1);
+        var data=ResidenceData.get(level);
+        check("ok".equals(data.link(level,home,resident)),"Could not register baby resident");
+        check(data.residentIsBaby(resident.getUUID()),"Baby age category was not recorded at registration");
+        var saved=data.save(new net.minecraft.nbt.CompoundTag());
+        var reloaded=ResidenceData.load(saved);
+        check(reloaded.residentIsBaby(resident.getUUID()),"Baby age category was not persisted in residence data");
+        resident.setAge(0);data.updateResidentAge(resident);
+        check(!data.residentIsBaby(resident.getUUID()),"Resident did not switch to adult classification after growing");
+        check(VillagerResidenceEvents.calculateDailyFragments(java.util.List.of(resident.getUUID()),new int[]{0,0,0,0},data::residentIsBaby)==3,
+                "Grown resident did not return to the existing adult production rule");
+        h.succeed();
+    }
+
     @GameTest(template="empty",timeoutTicks=400,batch="dawn")
     public static void command_dawn_payment(GameTestHelper h){
         floor(h);BlockPos hp=new BlockPos(6,2,6);h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());
