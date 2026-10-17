@@ -40,6 +40,7 @@ public final class ModNetwork {
   CHANNEL.messageBuilder(ResidentModelSync.class,id++).encoder(ResidentModelSync::encode).decoder(ResidentModelSync::decode).consumerMainThread(ResidentModelSync::handle).add();
  }
  public static void action(BlockPos p,int a,int v){CHANNEL.sendToServer(new Action(p,a,v,null,""));}
+ public static void reorderResident(BlockPos p,UUID resident,int destinationIndex){CHANNEL.sendToServer(new Action(p,12,destinationIndex,resident,""));}
  public static void unlinkResident(BlockPos p,UUID id){CHANNEL.sendToServer(new Action(p,4,0,id,""));}
  public static void renameResident(BlockPos p,UUID id,String name){CHANNEL.sendToServer(new Action(p,5,0,id,name));}
  public static void unlinkAll(BlockPos p){CHANNEL.sendToServer(new Action(p,6,0,null,""));}
@@ -84,6 +85,7 @@ public final class ModNetwork {
     case 9->{if(resident!=null){ResidenceData.Home h=d.owner(resident);if(h!=null&&h.dimension.equals(sl.dimension())&&h.pos.equals(pos))sendSkin(p,resident,d.residentSkin(resident));}}
     case 10->{if(resident!=null){ResidenceData.Home h=d.owner(resident);if(h!=null&&h.dimension.equals(sl.dimension())&&h.pos.equals(pos)){int opacity=Math.max(0,Math.min(100,value));d.setResidentOpacity(resident,opacity);broadcastOpacity(sl,p,resident,opacity);m.sendResidentSnapshot(p);}}}
     case 11->{if(resident!=null){ResidenceData.Home h=d.owner(resident);if(h!=null&&h.dimension.equals(sl.dimension())&&h.pos.equals(pos)){ResidentModelType type=ResidentModelType.byId(value);d.setResidentModel(resident,type);broadcastResidentModel(sl,p,resident,type);m.sendResidentSnapshot(p);}}}
+    case 12->{if(resident!=null){ResidenceData.Home h=d.owner(resident);if(h!=null&&h.dimension.equals(sl.dimension())&&h.pos.equals(pos)&&d.reorderResident(sl.dimension(),pos,resident,value))m.sendResidentSnapshot(p);}}
    }
   });c.get().setPacketHandled(true);}
  }

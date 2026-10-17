@@ -109,9 +109,10 @@ public final class ResidenceGameTests {
     }
     @GameTest(template="empty",timeoutTicks=100,batch="index")
     public static void captured_resident_identity_rebinds_without_duplicates(GameTestHelper h){
-        var level=h.getLevel();var data=ResidenceData.get(level);BlockPos home=h.absolutePos(new BlockPos(6,2,6));
+        var level=h.getLevel();var data=ResidenceData.get(level);BlockPos home=h.absolutePos(new BlockPos(6,2,6));check(data.setSize(data.home(level,home),5),"Could not configure capture ordering fixture");
         Villager original=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,4));
         check(data.link(level,home,original).equals("ok"),"Could not register capture fixture");
+        Villager following=h.spawn(EntityType.VILLAGER,new BlockPos(9,2,4));check(data.link(level,home,following).equals("ok"),"Could not register resident following capture fixture");
         check(data.reconcileCapturedResident(level,original),"Registered resident identity was not initialized");
         net.minecraft.nbt.CompoundTag captured=original.getPersistentData().copy();
         Villager duplicateWhileOriginalExists=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,4));duplicateWhileOriginalExists.getPersistentData().merge(captured);
@@ -120,11 +121,46 @@ public final class ResidenceGameTests {
         Villager released=h.spawn(EntityType.VILLAGER,new BlockPos(7,2,4));released.getPersistentData().merge(captured);
         ResidenceData reloaded=ResidenceData.load(data.save(new net.minecraft.nbt.CompoundTag()));
         check(reloaded.reconcileCapturedResident(level,released),"Release with a new entity UUID did not restore the resident link");
-        check(reloaded.owner(released.getUUID())!=null&&reloaded.count(level.dimension(),home)==1,"Resident record was lost or duplicated after release");
+        check(reloaded.owner(released.getUUID())!=null&&reloaded.count(level.dimension(),home)==2,"Resident record was lost or duplicated after release");
+        check(new java.util.ArrayList<>(reloaded.residents(level.dimension(),home)).equals(java.util.List.of(released.getUUID(),following.getUUID())),"Captured resident replacement did not preserve its list position");
         check(reloaded.owner(captured.getUUID("residenciasaldeoes_resident_identity"))==null,"Stable identity leaked into the entity UUID owner index");
         Villager ordinary=h.spawn(EntityType.VILLAGER,new BlockPos(8,2,4));
         check(!reloaded.reconcileCapturedResident(level,ordinary),"Ordinary villager was treated as a resident");
         System.out.println("CAPTURE_IDENTITY_REBIND_PASSED persisted_token=true duplicate_live_entity_rejected=true");h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="index")
+    public static void resident_order_is_per_home_and_persistent(GameTestHelper h){
+        var level=h.getLevel();var data=ResidenceData.get(level);
+        BlockPos firstHome=h.absolutePos(new BlockPos(4,2,4)),secondHome=h.absolutePos(new BlockPos(10,2,10));
+        var firstConfig=data.home(level,firstHome);check(data.setSize(firstConfig,11),"Could not configure first ordering fixture");
+        java.util.List<java.util.UUID> original=new java.util.ArrayList<>();
+        for(int i=0;i<5;i++){
+            Villager villager=h.spawn(EntityType.VILLAGER,new BlockPos(3+i,2,3));villager.setCustomName(net.minecraft.network.chat.Component.literal("Duplicado"));
+            check("ok".equals(data.link(level,firstHome,villager)),"Could not link first-home ordering resident "+i);original.add(villager.getUUID());
+        }
+        var secondConfig=data.home(level,secondHome);check(data.setSize(secondConfig,7),"Could not configure second ordering fixture");
+        java.util.List<java.util.UUID> second=new java.util.ArrayList<>();
+        for(int i=0;i<3;i++){
+            Villager villager=h.spawn(EntityType.VILLAGER,new BlockPos(8+i,2,8));
+            check("ok".equals(data.link(level,secondHome,villager)),"Could not link second-home ordering resident "+i);second.add(villager.getUUID());
+        }
+        check(data.reorderResident(level.dimension(),firstHome,original.get(4),1),"Last resident could not be moved to second position");
+        check(data.reorderResident(level.dimension(),firstHome,original.get(0),4),"First resident could not be moved to the end");
+        check(data.reorderResident(level.dimension(),firstHome,original.get(3),0),"Resident could not be moved several positions");
+        check(data.reorderResident(level.dimension(),secondHome,second.get(0),2),"Second home's independent order could not be changed");
+        java.util.List<java.util.UUID> expected=java.util.List.of(original.get(3),original.get(4),original.get(1),original.get(2),original.get(0));
+        java.util.List<java.util.UUID> expectedSecond=java.util.List.of(second.get(1),second.get(2),second.get(0));
+        check(new java.util.ArrayList<>(data.residents(level.dimension(),firstHome)).equals(expected),"UUID-based reordering produced the wrong first-home sequence");
+        check(new java.util.ArrayList<>(data.residents(level.dimension(),secondHome)).equals(expectedSecond),"Reordering one home changed another home's sequence");
+        ResidenceData restored=ResidenceData.load(data.save(new net.minecraft.nbt.CompoundTag()));
+        check(new java.util.ArrayList<>(restored.residents(level.dimension(),firstHome)).equals(expected),"Resident order was not persisted through SavedData serialization");
+        Villager appended=h.spawn(EntityType.VILLAGER,new BlockPos(9,2,3));appended.setCustomName(net.minecraft.network.chat.Component.literal("Duplicado"));
+        check("ok".equals(restored.link(level,firstHome,appended)),"New resident could not be appended");
+        java.util.List<java.util.UUID> withAppended=new java.util.ArrayList<>(expected);withAppended.add(appended.getUUID());
+        check(new java.util.ArrayList<>(restored.residents(level.dimension(),firstHome)).equals(withAppended),"New resident did not appear at the end of the customized order");
+        restored.unlink(level,original.get(1));withAppended.remove(original.get(1));
+        check(new java.util.ArrayList<>(restored.residents(level.dimension(),firstHome)).equals(withAppended),"Unlink changed the relative order of remaining residents");
+        System.out.println("RESIDENT_ORDER_PERSISTENCE_PASSED uuid_based=true independent_homes=true append_and_unlink=true");h.succeed();
     }
     @GameTest(template="empty",timeoutTicks=100,batch="lid")
     public static void courier_lid_leases_and_player_overlap(GameTestHelper h){

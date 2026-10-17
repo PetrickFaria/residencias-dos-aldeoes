@@ -135,6 +135,17 @@ public class ResidenceData extends SavedData {
         v.setCustomNameVisible(true);
         setDirty(); return "ok";
     }
+    /** Reorders only this home's resident UUIDs. The final index is clamped to its current list. */
+    public boolean reorderResident(ResourceKey<Level> dim,BlockPos pos,UUID resident,int destinationIndex) {
+        Home h=homes.get(key(dim,pos));
+        if(h==null||resident==null)return false;
+        List<UUID> order=new ArrayList<>(h.residents);
+        int from=order.indexOf(resident);
+        if(from<0)return false;
+        int to=Math.max(0,Math.min(order.size()-1,destinationIndex));
+        if(from!=to){order.remove(from);order.add(to,resident);h.residents.clear();h.residents.addAll(order);setDirty();}
+        return true;
+    }
     public void unlink(ServerLevel level, UUID id) {
         unlink(level,id,level.getEntity(id) instanceof LivingEntity living?living:null);
     }
@@ -193,12 +204,17 @@ public class ResidenceData extends SavedData {
         // A copied capture item cannot take over while the registered entity is loaded.
         for(ServerLevel serverLevel:level.getServer().getAllLevels())if(serverLevel.getEntity(current)!=null)return false;
         if(owner(id)!=null)return false;
-        Home home=owner(current);if(home==null||!home.residents.remove(current))return false;
-        home.residents.add(id);owners.remove(current);owners.put(id,key(home.dimension,home.pos));
+        Home home=owner(current);if(home==null||!replaceResidentInOrder(home,current,id))return false;
+        owners.remove(current);owners.put(id,key(home.dimension,home.pos));
         moveKey(residentNames,current,id);moveKey(residentNameStates,current,id);moveKey(residentSkins,current,id);moveKey(residentOpacities,current,id);moveKey(residentModels,current,id);moveKey(residentLinkedAtGameTime,current,id);
         BedClaim claim=bedsByVillager.remove(current);if(claim!=null){bedOwners.remove(key(claim.dimension(),claim.bed()),current);bedsByVillager.put(id,claim);bedOwners.put(key(claim.dimension(),claim.bed()),id);}
         residentIdentityByVillager.remove(current);residentIdentityByVillager.put(id,identity);residentIdentityOwners.put(identity,id);
         persistent.putUUID("residenciasaldeoes_resident_identity",identity);setDirty();return true;
+    }
+    private static boolean replaceResidentInOrder(Home home,UUID oldId,UUID newId){
+        List<UUID> order=new ArrayList<>(home.residents);int index=order.indexOf(oldId);
+        if(index<0||order.contains(newId))return false;
+        order.set(index,newId);home.residents.clear();home.residents.addAll(order);return true;
     }
     private static <T> void moveKey(Map<UUID,T> map,UUID oldId,UUID newId){T value=map.remove(oldId);if(value!=null)map.put(newId,value);}
     private static void restoreName(LivingEntity villager,ResidentNameState state){

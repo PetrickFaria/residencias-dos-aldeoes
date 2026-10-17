@@ -48,6 +48,11 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     private boolean draggingScrollbar;
     private double scrollbarDragStartY;
     private int scrollbarDragStart;
+    private UUID residentPressCandidate;
+    private boolean draggingResident;
+    private int residentDropIndex=-1;
+    private double residentPressX,residentPressY,residentDragX,residentDragY;
+    private long residentAutoScrollNextMs;
     private Button registerButton,renameButton,unlinkResidentButton,unlinkAllButton,previewButton;
     private final List<Button> personalizationButtons=new ArrayList<>(),skinButtons=new ArrayList<>();
     private final List<SkinChoice> skinChoices=new ArrayList<>();
@@ -314,8 +319,13 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
             for(int i=scroll;i<Math.min(residents.size(),scroll+VISIBLE_ROWS);i++){
                 int yy=topPos+ROW_TOP+(i-scroll)*ROW_HEIGHT+2;var e=residents.get(i);
                 if(e.id().equals(selected)){fill(p,leftPos+7,yy-2,listClipRight(),yy+10,0xFF9A8058);fill(p,leftPos+8,yy-1,listClipRight()-1,yy+9,0xFF4A3B2C);}
+                if(draggingResident&&e.id().equals(residentPressCandidate))fill(p,leftPos+7,yy-2,listClipRight(),yy+10,0xFF68533A);
+                if(draggingResident&&i==residentDropIndex)fill(p,leftPos+7,yy-2,listClipRight(),yy-1,0xFF70C982);
                 font.draw(p,font.plainSubstrByWidth(e.name(),54),leftPos+10,yy,e.id().equals(selected)?0xFFFFE7BF:0xFFF2EEE4);
                 int sx=leftPos+68;sx=drawStatus(p,"Cama",e.bed(),sx,yy);sx=drawSeparator(p,sx,yy);sx=drawStatus(p,"Trabalho",e.work(),sx,yy);sx=drawSeparator(p,sx,yy);sx=drawStatus(p,"Baú",e.chest(),sx,yy);sx=drawSeparator(p,sx,yy);drawStatus(p,"Comida",e.food(),sx,yy);
+            }
+            if(draggingResident&&residentDropIndex==Math.min(residents.size()-1,scroll+VISIBLE_ROWS-1)&&residentDropIndex>=scroll){
+                int yy=topPos+ROW_TOP+LIST_HEIGHT-1;fill(p,leftPos+7,yy,listClipRight(),yy+1,0xFF70C982);
             }
             RenderSystem.disableScissor();
             if(hasScrollbar())renderScrollbar(p);
@@ -329,6 +339,25 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
     private boolean hasScrollbar(){return residents.size()>VISIBLE_ROWS;}
     private int scrollbarX(){return leftPos+imageWidth-11;}
     private int listClipRight(){return hasScrollbar()?scrollbarX()-2:leftPos+imageWidth-7;}
+    private int residentListTop(){return topPos+ROW_TOP;}
+    private boolean insideResidentList(double x,double y){return x>=leftPos+7&&x<listClipRight()&&y>=residentListTop()&&y<residentListTop()+LIST_HEIGHT;}
+    private int residentIndexAt(double y){if(residents.isEmpty())return -1;int slot=(int)Math.floor((y-residentListTop())/ROW_HEIGHT);return Math.max(0,Math.min(residents.size()-1,scroll+slot));}
+    private void updateResidentDropTarget(double x,double y){
+        residentDragX=x;residentDragY=y;
+        if(!insideResidentList(x,y)){residentDropIndex=-1;return;}
+        long now=System.currentTimeMillis();int max=Math.max(0,residents.size()-VISIBLE_ROWS);
+        if(residents.size()>VISIBLE_ROWS&&now>=residentAutoScrollNextMs){
+            if(y<residentListTop()+ROW_HEIGHT/2.0&&scroll>0){scroll--;residentAutoScrollNextMs=now+140;}
+            else if(y>=residentListTop()+LIST_HEIGHT-ROW_HEIGHT/2.0&&scroll<max){scroll++;residentAutoScrollNextMs=now+140;}
+        }
+        residentDropIndex=residentIndexAt(y);
+    }
+    private void reorderResidentsLocally(UUID id,int destination){
+        int from=-1;List<ModNetwork.ResidentEntry> order=new ArrayList<>(residents);
+        for(int i=0;i<order.size();i++)if(order.get(i).id().equals(id)){from=i;break;}
+        if(from<0||order.isEmpty())return;int to=Math.max(0,Math.min(order.size()-1,destination));
+        if(from==to)return;ModNetwork.ResidentEntry entry=order.remove(from);order.add(to,entry);residents=List.copyOf(order);
+    }
     private int scrollbarThumbHeight(){return Math.max(12,LIST_HEIGHT*VISIBLE_ROWS/residents.size());}
     private int scrollbarThumbTop(){int max= Math.max(1,residents.size()-VISIBLE_ROWS);return topPos+ROW_TOP+(LIST_HEIGHT-scrollbarThumbHeight())*scroll/max;}
     private void enableResidentClip(){double scale=minecraft.getWindow().getGuiScale();int x=(int)Math.floor((leftPos+7)*scale),right=(int)Math.ceil(listClipRight()*scale);int top=(int)Math.floor((topPos+ROW_TOP)*scale),bottom=(int)Math.ceil((topPos+ROW_TOP+LIST_HEIGHT)*scale);RenderSystem.enableScissor(x,minecraft.getWindow().getHeight()-bottom,right-x,bottom-top);}
@@ -453,7 +482,7 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         }
         if(button==0&&x>=leftPos+7&&x<listClipRight()&&y>=topPos+ROW_TOP&&y<topPos+ROW_TOP+LIST_HEIGHT){
             int i=scroll+(int)(y-(topPos+ROW_TOP))/ROW_HEIGHT;
-            if(i<residents.size()){selected=residents.get(i).id();if(renameButton!=null)renameButton.active=true;if(unlinkResidentButton!=null)unlinkResidentButton.active=true;setFocused(null);return true;}
+            if(i<residents.size()){selected=residents.get(i).id();if(renameButton!=null)renameButton.active=true;if(unlinkResidentButton!=null)unlinkResidentButton.active=true;residentPressCandidate=selected;residentPressX=x;residentPressY=y;draggingResident=false;residentDropIndex=-1;setFocused(null);return true;}
         }
         return super.mouseClicked(x,y,button);
     }
@@ -484,9 +513,33 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         for(int i=overlay.size()-1;i>=0;i--){Button widget=overlay.get(i);if(widget.isMouseOver(x,y)&&widget.mouseClicked(x,y,mouseButton)){setFocused(widget);if(mouseButton==0)setDragging(true);return true;}}
         return true;
     }
-    @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy){if(draggingSkinPreview&&button==0){skinPreviewYaw=(skinPreviewYaw+(float)(x-skinPreviewDragX)*3.0F)%360.0F;skinPreviewPitch=Math.max(-90.0F,Math.min(90.0F,skinPreviewPitch-(float)(y-skinPreviewDragY)*2.0F));skinPreviewDragX=x;skinPreviewDragY=y;return true;}if(skinOpen&&draggingOpacitySlider&&skinOpacitySlider!=null&&skinOpacitySlider.mouseDragged(x,y,button,dx,dy))return true;if(draggingScrollbar&&button==0){int travel=LIST_HEIGHT-scrollbarThumbHeight(),max=residents.size()-VISIBLE_ROWS;if(travel>0&&max>0)scroll=Math.max(0,Math.min(max,scrollbarDragStart+(int)Math.round((y-scrollbarDragStartY)*max/travel)));return true;}return super.mouseDragged(x,y,button,dx,dy);}
-    @Override public boolean mouseReleased(double x,double y,int button){if(button==0&&draggingSkinPreview){draggingSkinPreview=false;return true;}if(button==0&&draggingOpacitySlider){if(skinOpacitySlider!=null)skinOpacitySlider.mouseReleased(x,y,button);draggingOpacitySlider=false;return true;}if(button==0&&draggingScrollbar){draggingScrollbar=false;return true;}return super.mouseReleased(x,y,button);}
-    @Override public boolean mouseScrolled(double x,double y,double delta){if(skinOpen&&x>=skinDialogLeft+7&&x<skinDialogLeft+213&&y>=skinDialogTop+22&&y<skinDialogTop+111&&skinChoices.size()>5){skinScroll=Math.max(0,Math.min(skinChoices.size()-5,skinScroll-(int)Math.signum(delta)));rebuildSkinButtons();return true;}if(!renameOpen&&!personalizationOpen&&x>=leftPos+6&&x<leftPos+imageWidth-6&&y>=topPos+ROW_TOP&&y<topPos+ROW_TOP+LIST_HEIGHT&&residents.size()>VISIBLE_ROWS){scroll=Math.max(0,Math.min(residents.size()-VISIBLE_ROWS,scroll-(int)Math.signum(delta)));return true;}return super.mouseScrolled(x,y,delta);}
+    @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy){
+        if(draggingSkinPreview&&button==0){skinPreviewYaw=(skinPreviewYaw+(float)(x-skinPreviewDragX)*3.0F)%360.0F;skinPreviewPitch=Math.max(-90.0F,Math.min(90.0F,skinPreviewPitch-(float)(y-skinPreviewDragY)*2.0F));skinPreviewDragX=x;skinPreviewDragY=y;return true;}
+        if(skinOpen&&draggingOpacitySlider&&skinOpacitySlider!=null&&skinOpacitySlider.mouseDragged(x,y,button,dx,dy))return true;
+        if(draggingScrollbar&&button==0){int travel=LIST_HEIGHT-scrollbarThumbHeight(),max=residents.size()-VISIBLE_ROWS;if(travel>0&&max>0)scroll=Math.max(0,Math.min(max,scrollbarDragStart+(int)Math.round((y-scrollbarDragStartY)*max/travel)));return true;}
+        if(button==0&&residentPressCandidate!=null){
+            if(!draggingResident&&Math.pow(x-residentPressX,2)+Math.pow(y-residentPressY,2)>=16){draggingResident=true;residentAutoScrollNextMs=0;setFocused(null);setDragging(false);}
+            if(draggingResident){updateResidentDropTarget(x,y);return true;}
+        }
+        return super.mouseDragged(x,y,button,dx,dy);
+    }
+    @Override public boolean mouseReleased(double x,double y,int button){
+        if(button==0&&draggingSkinPreview){draggingSkinPreview=false;return true;}
+        if(button==0&&draggingOpacitySlider){if(skinOpacitySlider!=null)skinOpacitySlider.mouseReleased(x,y,button);draggingOpacitySlider=false;return true;}
+        if(button==0&&draggingScrollbar){draggingScrollbar=false;return true;}
+        if(button==0&&residentPressCandidate!=null){
+            if(draggingResident&&insideResidentList(x,y)){int destination=residentIndexAt(y);reorderResidentsLocally(residentPressCandidate,destination);ModNetwork.reorderResident(menu.getPos(),residentPressCandidate,destination);}
+            residentPressCandidate=null;draggingResident=false;residentDropIndex=-1;return true;
+        }
+        return super.mouseReleased(x,y,button);
+    }
+    @Override public boolean mouseScrolled(double x,double y,double delta){
+        if(skinOpen&&x>=skinDialogLeft+7&&x<skinDialogLeft+213&&y>=skinDialogTop+22&&y<skinDialogTop+111&&skinChoices.size()>5){skinScroll=Math.max(0,Math.min(skinChoices.size()-5,skinScroll-(int)Math.signum(delta)));rebuildSkinButtons();return true;}
+        if(draggingResident&&insideResidentList(x,y)&&residents.size()>VISIBLE_ROWS){scroll=Math.max(0,Math.min(residents.size()-VISIBLE_ROWS,scroll-(int)Math.signum(delta)));updateResidentDropTarget(x,y);return true;}
+        if(!renameOpen&&!personalizationOpen&&x>=leftPos+6&&x<leftPos+imageWidth-6&&y>=topPos+ROW_TOP&&y<topPos+ROW_TOP+LIST_HEIGHT&&residents.size()>VISIBLE_ROWS){scroll=Math.max(0,Math.min(residents.size()-VISIBLE_ROWS,scroll-(int)Math.signum(delta)));return true;}
+        return super.mouseScrolled(x,y,delta);
+    }
+    @Override public void onClose(){residentPressCandidate=null;draggingResident=false;residentDropIndex=-1;super.onClose();}
     @Override public boolean keyPressed(int keyCode,int scanCode,int modifiers){
         if(personalizationOpen&&keyCode==GLFW.GLFW_KEY_ESCAPE){closeCustomization();return true;}
         if(skinOpen&&keyCode==GLFW.GLFW_KEY_ESCAPE){closeSkinDialog();return true;}
