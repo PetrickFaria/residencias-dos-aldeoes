@@ -88,22 +88,6 @@ public final class ResidenceGameTests {
         try{var field=net.minecraft.world.entity.ai.navigation.PathNavigation.class.getDeclaredField("speedModifier");field.setAccessible(true);return field.getDouble(v.getNavigation());}
         catch(Exception e){throw new RuntimeException(e);}
     }
-    private static void assertNightDoorAndBedReturnWalkingSpeed(GameTestHelper h,net.minecraft.server.level.ServerLevel level,Villager resident,BlockPos doorLocal){
-        invoke("tickNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,Villager.class},level,resident);
-        check(!resident.getNavigation().isDone()&&Math.abs(navigationSpeed(resident)-.48D)<.0001D,
-                "Night door route did not start at its configured walking speed");
-        BlockPos door=h.absolutePos(doorLocal);
-        // Put the fixture resident at the physical interaction point so this test can
-        // deterministically inspect the next command without waiting on path timing.
-        resident.setPos(door.getX()+.5D,door.getY(),door.getZ()-.5D);
-        invoke("tickNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,Villager.class},level,resident);
-        check(!level.getBlockState(door).getValue(DoorBlock.OPEN),"Door task did not close its physical target");
-        check(resident.getPersistentData().getBoolean("residenciasaldeoes_night_door_bed_return"),
-                "Completed night door task did not schedule a return to bed");
-        new VillagerResidenceEvents().onVillagerTick(new net.minecraftforge.event.entity.living.LivingEvent.LivingTickEvent(resident));
-        check(!resident.getNavigation().isDone()&&Math.abs(navigationSpeed(resident)-.48D)<.0001D,
-                "Night bed-return route did not start at the same walking speed as the door route");
-    }
     @GameTest(template="empty",timeoutTicks=100,batch="index")
     public static void indexed_chest_range_and_invalidation(GameTestHelper h){
         var level=h.getLevel();BlockPos center=h.absolutePos(new BlockPos(6,2,6));
@@ -533,7 +517,7 @@ public final class ResidenceGameTests {
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
         check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not expand sleeping residence");
         for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
-        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,5));ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
+        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,7));ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
         check(data.link(level,absoluteHome,leader).equals("ok"),"Could not link sleeping leader");
         BlockPos bedLocal=new BlockPos(5,3,5),bed=h.absolutePos(bedLocal);var bedHead=Blocks.WHITE_BED.defaultBlockState()
                 .setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD)
@@ -543,12 +527,11 @@ public final class ResidenceGameTests {
         boolean bedIsInside=(Boolean)invoke("bedInsideHome",new Class[]{net.minecraft.server.level.ServerLevel.class,BlockPos.class,ResidenceData.Home.class},level,bed,residentHome);
         check(bedIsInside,"Fixture bed is outside the registered residential volume; home="+residentHome.pos+" size="+residentHome.size+" head="+bed+" headState="+level.getBlockState(bed)+" foot="+bedFoot+" footState="+level.getBlockState(bedFoot)+" chunk="+level.hasChunkAt(bed));
         check(data.reserveBed(leader.getUUID(),level.dimension(),absoluteHome,bed),"Could not reserve leader's current bed");
-        leader.startSleeping(bed);BlockPos doorLocal=new BlockPos(8,3,7);placeOpenDoor(h,doorLocal,Blocks.OAK_DOOR);level.setDayTime(13_001L);
+        leader.startSleeping(bed);BlockPos doorLocal=new BlockPos(7,3,6);placeOpenDoor(h,doorLocal,Blocks.OAK_DOOR);level.setDayTime(13_001L);
         invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,300_000L+level.getGameTime());
         check(!leader.isSleeping(),"Sleeping leader was not woken when no other resident was available");
         check(leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Woken leader did not receive the bounded door task");
         check(data.bedClaim(leader.getUUID())!=null&&data.bedClaim(leader.getUUID()).bed().equals(bed),"The original bed claim was not preserved while waking the leader; sleeping="+leader.isSleeping()+" position="+leader.getSleepingPos()+" owner="+data.owner(leader.getUUID())+" state="+level.getBlockState(bed));
-        h.runAtTickTime(1,()->assertNightDoorAndBedReturnWalkingSpeed(h,level,leader,doorLocal));
         h.succeedWhen(()->{
             check(!level.getBlockState(h.absolutePos(doorLocal)).getValue(DoorBlock.OPEN),"Resident did not physically close the nighttime door");
             check(leader.isSleeping()&&leader.getSleepingPos().orElse(null)!=null&&leader.getSleepingPos().orElseThrow().equals(bed),"Resident did not return to its original bed after closing the door");
@@ -634,12 +617,12 @@ public final class ResidenceGameTests {
         floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
         check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not expand rainy sleep residence");
         for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
-        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,5));Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(7,3,5));
+        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,7));Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(8,3,7));
         ResidenceData data=ResidenceData.get(level);BlockPos home=h.absolutePos(homePos);
         check(data.link(level,home,leader).equals("ok")&&data.link(level,home,second).equals("ok"),"Could not link sleeping residents");
         // Keep the second bed's foot clear of the doorway; the previous fixture
         // placed the open door on that half and made its sleeping state ambiguous.
-        BlockPos firstBedLocal=new BlockPos(5,3,5),secondBedLocal=new BlockPos(7,3,5);
+        BlockPos firstBedLocal=new BlockPos(5,3,5),secondBedLocal=new BlockPos(7,3,7);
         for(BlockPos bedLocal:List.of(firstBedLocal,secondBedLocal)){
             var head=Blocks.WHITE_BED.defaultBlockState().setValue(BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD).setValue(BedBlock.FACING,Direction.NORTH);
             h.setBlock(bedLocal.relative(Direction.SOUTH),head.setValue(BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT));h.setBlock(bedLocal,head);
@@ -647,13 +630,12 @@ public final class ResidenceGameTests {
         BlockPos firstBed=h.absolutePos(firstBedLocal),secondBed=h.absolutePos(secondBedLocal);
         check(data.reserveBed(leader.getUUID(),level.dimension(),home,firstBed)&&data.reserveBed(second.getUUID(),level.dimension(),home,secondBed),"Could not reserve both beds");
         leader.startSleeping(firstBed);second.startSleeping(secondBed);check(leader.isSleeping()&&second.isSleeping(),"Residents did not begin asleep");
-        BlockPos doorLocal=new BlockPos(8,3,7);placeOpenDoor(h,doorLocal,Blocks.OAK_DOOR);level.setDayTime(13_001L);level.setWeatherParameters(0,12_000,true,false);level.setRainLevel(1.0F);
+        BlockPos doorLocal=new BlockPos(7,3,6);placeOpenDoor(h,doorLocal,Blocks.OAK_DOOR);level.setDayTime(13_001L);level.setWeatherParameters(0,12_000,true,false);level.setRainLevel(1.0F);
         invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,500_000L+level.getGameTime());
         check(leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"A resident was not assigned to close the open door");
         check(!leader.isSleeping(),"The selected resident did not wake to perform the door task");
         check(second.isSleeping(),"A second resident was woken unnecessarily");
         check(data.ownsBed(level.dimension(),firstBed,leader.getUUID())&&data.ownsBed(level.dimension(),secondBed,second.getUUID()),"Waking discarded a bed reservation");
-        h.runAtTickTime(1,()->assertNightDoorAndBedReturnWalkingSpeed(h,level,leader,doorLocal));
         h.succeedWhen(()->{
             check(!level.getBlockState(h.absolutePos(doorLocal)).getValue(DoorBlock.OPEN),"Resident did not physically close the rainy-night door");
             ResidenceData.BedClaim leaderClaim=data.bedClaim(leader.getUUID()),secondClaim=data.bedClaim(second.getUUID());

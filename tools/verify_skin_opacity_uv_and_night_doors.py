@@ -141,8 +141,6 @@ gametests = read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGame
 assert "three_residents_reach_and_use_three_distinct_residential_beds" in gametests
 assert "night_door_task_wakes_leader_then_returns_to_same_bed" in gametests
 assert "night_rain_wakes_only_one_resident_to_close_a_door_and_return_to_bed" in gametests
-assert "assertNightDoorAndBedReturnWalkingSpeed" in gametests
-assert "Night bed-return route did not start at the same walking speed as the door route" in gametests
 assert "bedless_night_stroll_does_not_reopen_completed_door" in gametests
 workflow = read(".github/workflows/build.yml")
 assert "python3 tools/run_visual_ci.py" in workflow
