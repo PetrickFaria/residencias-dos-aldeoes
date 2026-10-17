@@ -539,7 +539,7 @@ public final class ResidenceGameTests {
     }
     @GameTest(template="empty",timeoutTicks=700,batch="doors")
     public static void daytime_rain_physically_closes_only_exposed_residential_doors(GameTestHelper h){
-        floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);
+        floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
         BlockPos wetHome=new BlockPos(4,2,6),shelteredHome=new BlockPos(12,2,6);
         h.setBlock(wetHome,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(shelteredHome,ResidenciasDosAldeoes.ANCHOR.get());
         // A roof over the second anchor means dimension-wide rain is not local there.
@@ -571,7 +571,7 @@ public final class ResidenceGameTests {
     }
     @GameTest(template="empty",timeoutTicks=100,batch="doors")
     public static void daytime_door_task_stops_after_local_rain_ends(GameTestHelper h){
-        floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);
+        floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);level.setRainLevel(1.0F);
         BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
         Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));
         var data=ResidenceData.get(level);BlockPos home=h.absolutePos(homePos);
@@ -580,7 +580,7 @@ public final class ResidenceGameTests {
         invoke("beginWeatherDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},
                 level,data.home(level,home));
         check(resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Rain did not start the daytime door route");
-        level.setWeatherParameters(0,0,false,false);
+        level.setWeatherParameters(0,0,false,false);level.setRainLevel(0.0F);
         invoke("tickNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,Villager.class},level,resident);
         check(!resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
                 "Daytime door route continued after local rain ended");
