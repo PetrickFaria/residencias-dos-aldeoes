@@ -888,12 +888,20 @@ public class VillagerResidenceEvents {
                     ==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
                     &&withinDoorBounds(pos,home)&&level.hasChunkAt(pos)){
                 recordTransferDoor(job,pos);
+                boolean openedForPassage=false;
                 if(!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN)
                         &&villager.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(pos))<=2.25D){
                     TransferDoorPermission previous=TRANSFER_DOOR_PERMISSION.get();
                     TRANSFER_DOOR_PERMISSION.set(new TransferDoorPermission(villager.getUUID(),level.dimension(),pos.immutable()));
-                    try{door.setOpen(villager,level,state,pos,true);}
+                    try{door.setOpen(villager,level,state,pos,true);openedForPassage=level.getBlockState(pos).getValue(net.minecraft.world.level.block.DoorBlock.OPEN);}
                     finally{if(previous==null)TRANSFER_DOOR_PERMISSION.remove();else TRANSFER_DOOR_PERMISSION.set(previous);}
+                }
+                if(openedForPassage){
+                    // The original path was planned while this door was closed and
+                    // can terminate at its threshold. Drop it and re-plan to the
+                    // existing route target now that the passage is physically open.
+                    villager.getNavigation().stop();
+                    villager.getNavigation().moveTo(target.getX()+.5D,target.getY(),target.getZ()+.5D,COURIER_WALK_SPEED);
                 }
                 java.util.Set<net.minecraft.core.GlobalPos> doors=villager.getBrain()
                         .getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.DOORS_TO_CLOSE)
