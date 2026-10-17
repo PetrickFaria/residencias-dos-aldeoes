@@ -70,14 +70,15 @@ assert png_info(skin_docs / "villager_uv_guide_1024.png")[:2] == (1024, 1024)
 assert png_info(skin_docs / "aldeao_creeper_256_corrigido.png") == (256, 256, 8, 6)
 
 assert "crossedNightfall" in events and "beginNightDoorClosure" in events
-assert "DOOR_SCAN_INTERVAL=300L" in events and "if(now%DOOR_SCAN_INTERVAL!=0L)return;" in events
+assert "DOOR_SCAN_INTERVAL=100L" in events and "if(now%DOOR_SCAN_INTERVAL!=0L)return;" in events
 assert "onResidentialDoorChanged" in events and "processResidentialWeatherTransitions(level)" in events
 assert "beginWeatherDoorClosure(level,home)" in events
 assert "shouldBlockResidentDoorOpening" in events
 assert "level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,x,z)" in events
-assert ").setOpen(null,level,state,pos,false)" in events
 assert ").setOpen(null,level,state,pos,true)" in events
-assert "RESIDENTIAL_DOOR_WATCHES" in events and "watchResidentialDoors(level,home)" in events
+assert "RESIDENTIAL_DOOR_WATCHES" in events and "findOpenResidentialDoors(level,home)" in events
+assert "private static List<BlockPos> findOpenResidentialDoors" in events
+assert "queueResidentialDoorTask(level,home,findOpenResidentialDoors(level,home)" in events
 assert "DOOR_OPEN_STABILITY_TICKS=5L" in events
 assert "new AABB(door).inflate(0.08D,0.0D,0.08D)" in events
 assert "beginDaytimeDoorOpening(level,home)" in events
@@ -92,12 +93,14 @@ assert "DOOR_OPEN_STABILITY_TICKS" in events and "residentUsingDoorway(level,dat
 assert "home.residents.contains(villager.getUUID())" in events
 assert "daytime_rain_physically_closes_only_exposed_residential_doors" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "daytime_door_task_stops_after_local_rain_ends" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
+assert "rain_wakes_bed_resident_and_resident_returns_to_bed_after_storm" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "ResidentialDoorWeatherMixin" in mixins["mixins"]
 assert "Resident AI reopened a controlled residential door during rain" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "BED_ANCHOR_INTERVAL=100" in events and "tickCount%BED_ANCHOR_INTERVAL==0" in events
 assert "Release the stale reservation and search the remaining beds" in events
 assert "level.hasChunkAt(pos)" in events and "state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)" in events
 assert "door.setOpen(villager,level,state,doorPos,opening)" in events
+assert "distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(doorPos))<=2.25D" in events
 assert "findApproach(level,doorPos,villager)" in events and "NIGHT_DOOR_WALK_SPEED" in events
 assert "villager.getNavigation().stop();" in events and "door.setOpen(villager,level,state,doorPos,opening)" in events
 assert "now-task.getLong(\"last_progress\")>=200L" in events and "attempts>=3" in events
@@ -131,4 +134,4 @@ assert "night_door_task_wakes_leader_then_returns_to_same_bed" in gametests
 assert "bedless_night_stroll_does_not_reopen_completed_door" in gametests
 workflow = read(".github/workflows/build.yml")
 assert "python3 tools/run_visual_ci.py" in workflow
-print("Continuous preview shader alpha, name-tag separation, 64–1024 templates, UV accessory transparency, 300-tick night scans, resident priorities, and bed recovery verified.")
+print("Continuous preview shader alpha, name-tag separation, 64–1024 templates, UV accessory transparency, 100-tick residential door scans, physical resident close routes, rain sleep priority, and bed recovery verified.")
