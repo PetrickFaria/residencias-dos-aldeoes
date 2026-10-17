@@ -654,7 +654,12 @@ public final class ResidenceGameTests {
         invoke("beginWeatherDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,data.owner(resident.getUUID()));
         h.runAtTickTime(20,()->{
             level.setWeatherParameters(0,0,false,false);level.setRainLevel(0.0F);
+            check(!level.isRaining(),"Weather fixture still reports global rain after clearing the storm");
+            check(!(Boolean)invoke("isRainingAtResidentialArea",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},
+                    level,data.owner(resident.getUUID())),"Residence still reports effective rain after the storm was cleared");
             invoke("beginDaytimeDoorOpening",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,data.owner(resident.getUUID()));
+            check(level.getBlockState(h.absolutePos(localDoor)).getValue(DoorBlock.OPEN),
+                    "Dry-day opening transition did not update the door immediately");
         });
         h.succeedWhen(()->check(level.getBlockState(h.absolutePos(localDoor)).getValue(DoorBlock.OPEN),
                 "A door controlled during daytime rain did not reopen in dry daytime"));
