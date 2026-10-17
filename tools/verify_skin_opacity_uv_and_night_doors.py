@@ -115,7 +115,11 @@ assert "level.hasChunkAt(pos)" in events
 assert "stale_unregistered_home_poi_is_not_released_or_claimed" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "stale_home_poi_during_negative_y_world_load_recovers_to_valid_bed" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "level.getPoiManager().take" in events and "type.is(net.minecraft.world.entity.ai.village.poi.PoiTypes.HOME)" in events
-assert "MemoryModuleType.WALK_TARGET,new WalkTarget(bedApproach,.85F,0)" in events
+assert "float bedWalkSpeed=(float)(returningFromNightDoor?NIGHT_DOOR_WALK_SPEED:0.85D)" in events
+assert "new WalkTarget(bedApproach,bedWalkSpeed,0)" in events
+assert "moveTo(path,returningFromNightDoor?NIGHT_DOOR_WALK_SPEED:0.85D)" in events
+assert "returnResidentToHome(level,data,villager,home,weather,returningFromNightDoor)" in events
+assert "if(!returningFromNightDoor&&elapsed>=returnTimeout" in events
 assert "villager.blockPosition().equals(bedApproach)" in events
 assert "residenciasaldeoes_night_door_task" in transport
 assert "TRANSFER_DOOR_PERMISSION" in events and "isAuthorizedTransferDoorOpening" in events
@@ -136,6 +140,9 @@ for percent in (100, 75, 50, 25, 0):
 gametests = read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "three_residents_reach_and_use_three_distinct_residential_beds" in gametests
 assert "night_door_task_wakes_leader_then_returns_to_same_bed" in gametests
+assert "night_rain_wakes_only_one_resident_to_close_a_door_and_return_to_bed" in gametests
+assert "Resident ran while returning to bed" in gametests
+assert "Resident ran while returning to bed during rain" in gametests
 assert "bedless_night_stroll_does_not_reopen_completed_door" in gametests
 workflow = read(".github/workflows/build.yml")
 assert "python3 tools/run_visual_ci.py" in workflow
