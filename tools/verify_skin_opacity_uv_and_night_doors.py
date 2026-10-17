@@ -76,6 +76,7 @@ assert "beginWeatherDoorClosure(level,home)" in events
 assert "shouldBlockResidentDoorOpening" in events
 assert "level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,x,z)" in events
 assert ").setOpen(null,level,state,pos,false)" in events
+assert ").setOpen(null,level,state,pos,true)" in events
 assert "RESIDENTIAL_DOOR_WATCHES" in events and "watchResidentialDoors(level,home)" in events
 assert "DOOR_OPEN_STABILITY_TICKS=5L" in events
 assert "new AABB(door).inflate(0.08D,0.0D,0.08D)" in events

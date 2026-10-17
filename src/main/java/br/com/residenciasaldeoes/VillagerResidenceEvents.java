@@ -513,14 +513,13 @@ public class VillagerResidenceEvents {
         }
     }
 
-    /** Reopen only the same bounded wooden doors, using the residence's existing physical worker. */
+    /** Reopen only cached residential wooden doors when daytime is dry. */
     private void beginDaytimeDoorOpening(ServerLevel level,ResidenceData.Home home){
         if(shouldCloseResidentialDoors(level,home)||!home.dimension.equals(level.dimension())
                 ||home.residents.isEmpty()||!level.hasChunkAt(home.pos)
                 ||!(level.getBlockEntity(home.pos) instanceof ResidentialAnchorBlockEntity))return;
         Set<Long> watched=RESIDENTIAL_DOOR_WATCHES.getOrDefault(level,Map.of()).get(homeKey(home));
         if(watched==null||watched.isEmpty())return;
-        List<BlockPos> closed=new ArrayList<>();
         for(long encoded:watched){
             BlockPos pos=BlockPos.of(encoded);
             if(!level.hasChunkAt(pos)||isDoorClosureRequiredAt(level,ResidenceData.get(level),pos))continue;
@@ -528,9 +527,9 @@ public class VillagerResidenceEvents {
             if(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
                     &&state.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)
                     &&state.getValue(net.minecraft.world.level.block.DoorBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER
-                    &&!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))closed.add(pos);
+                    &&!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))
+                ((net.minecraft.world.level.block.DoorBlock)state.getBlock()).setOpen(null,level,state,pos,true);
         }
-        queueResidentialDoorTask(level,home,closed,Math.floorDiv(level.getDayTime(),DAY_LENGTH),true);
     }
 
     private static boolean hasValidResidentialBed(ServerLevel level,ResidenceData data,Villager resident,ResidenceData.Home home){
