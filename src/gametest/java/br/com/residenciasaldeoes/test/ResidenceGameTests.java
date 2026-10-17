@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 20804)
-Total output lines: 907
-
 package br.com.residenciasaldeoes.test;
 
 import br.com.residenciasaldeoes.ResidenciasDosAldeoes;
@@ -272,7 +269,381 @@ public final class ResidenceGameTests {
         data.setResidentOpacity(translucent.getUUID(),150);
         check(data.residentOpacity(translucent.getUUID())==100,"opacity should clamp to 100");
         data.setResidentOpacity(translucent.getUUID(),-4);
-        check(data.re…8804 tokens truncated…t.hurt(net.minecraft.world.damagesource.DamageSource.GENERIC,1000F);
+        check(data.residentOpacity(translucent.getUUID())==0,"opacity should clamp to zero");
+        data.unlink(level,translucent.getUUID());data.unlink(level,opaque.getUUID());
+        translucent.discard();opaque.discard();
+        h.succeed();
+    }
+
+    @GameTest(template="empty",timeoutTicks=100)
+    public static void wardrobe_package_accepts_1024_skin_atlas(GameTestHelper h){
+        try{
+            var image=new java.awt.image.BufferedImage(1024,1024,java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            ByteArrayOutputStream png=new ByteArrayOutputStream();javax.imageio.ImageIO.write(image,"png",png);
+            ByteArrayOutputStream archive=new ByteArrayOutputStream();
+            try(ZipOutputStream zip=new ZipOutputStream(archive)){
+                zip.putNextEntry(new ZipEntry("manifest.json"));zip.write("{\"schema\":1,\"base_texture\":\"textures/base.png\"}".getBytes(StandardCharsets.UTF_8));zip.closeEntry();
+                zip.putNextEntry(new ZipEntry("textures/base.png"));zip.write(png.toByteArray());zip.closeEntry();
+            }
+            check(WardrobePackage.parse(archive.toByteArray()).baseTexture().equals("textures/base.png"),"1024x1024 skin atlas should pass wardrobe validation");
+        }catch(Exception invalid){throw new net.minecraft.gametest.framework.GameTestAssertException("1024x1024 skin atlas was rejected: "+invalid.getMessage());}
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100)
+    public static void ten_output_slots_and_legacy_nbt(GameTestHelper h){
+        BlockPos pos=new BlockPos(2,2,2);
+        h.setBlock(pos,ResidenciasDosAldeoes.ANCHOR.get());
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(pos);
+        check(anchor.getContainerSize()==10,"Anchor must expose ten slots");
+        var legacy=net.minecraft.core.NonNullList.withSize(5,ItemStack.EMPTY);
+        for(int i=0;i<5;i++)legacy.set(i,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),i+10));
+        net.minecraft.nbt.CompoundTag old=new net.minecraft.nbt.CompoundTag();
+        net.minecraft.world.ContainerHelper.saveAllItems(old,legacy);
+        anchor.setOutputItem(9,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),33));
+        anchor.load(old);
+        for(int i=0;i<5;i++)check(anchor.getItem(i).getCount()==i+10,"Legacy slot moved/lost/duplicated: "+i);
+        for(int i=5;i<10;i++)check(anchor.getItem(i).isEmpty(),"New legacy slot not empty: "+i);
+        check(!anchor.setOutputItem(9,new ItemStack(Items.DIRT,5)),"Output accepted invalid item");
+        anchor.clearContent();
+        anchor.setOutputItem(9,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),60));
+        long event=ResidenceData.get(h.getLevel()).nextProductionDawnEventId();
+        anchor.recordDailyProduction(event,10);
+        check(anchor.getItem(9).getCount()==64&&anchor.getItem(0).getCount()==6,"Existing pile not filled before empty slot");
+        anchor.clearContent();
+        anchor.recordDailyProduction(ResidenceData.get(h.getLevel()).nextProductionDawnEventId(),700);
+        for(int i=0;i<10;i++)check(anchor.getItem(i).getCount()==64,"Capacity did not include slot "+i);
+        check(anchor.getPendingFragments()==60,"Overflow lost");
+        check(anchor.getUpdateTag().getList("Items",10).size()==10,"Client update omitted output items");
+        var saved=anchor.saveWithFullMetadata();
+        ResidentialAnchorBlockEntity reloaded=new ResidentialAnchorBlockEntity(h.absolutePos(pos),anchor.getBlockState());
+        reloaded.load(saved);
+        h.getLevel().removeBlockEntity(h.absolutePos(pos));h.getLevel().setBlockEntity(reloaded);
+        for(int i=0;i<10;i++)check(reloaded.getItem(i).getCount()==64,"Reload lost slot "+i);
+        check(reloaded.getPendingFragments()==60,"Reload lost overflow");
+        var player=net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(h.getLevel());
+        player.getInventory().clearContent();
+        var menu=new br.com.residenciasaldeoes.menu.AnchorMenu(1,player.getInventory(),h.absolutePos(pos));
+        check(menu.slots.size()==10,"Menu does not expose ten slots");
+        for(int i=0;i<10;i++){
+            var slot=menu.slots.get(i);
+            check(!slot.mayPlace(new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())),"Manual fragment insertion allowed");
+            check(!slot.mayPlace(new ItemStack(Items.DIRT)),"Manual dirt insertion allowed");
+            check(slot.y==210&&slot.x==32+i*21,"Slots not centered in a single bottom row");
+        }
+        check(menu.quickMoveStack(player,9).getCount()==64,"Cannot withdraw tenth slot with shift-click");
+        check(player.getInventory().countItem(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get())==64,"Withdrawal lost items");
+        check(reloaded.getItem(9).getCount()==60&&reloaded.getPendingFragments()==0,"Overflow not replenished");
+        menu.clicked(9,0,net.minecraft.world.inventory.ClickType.PICKUP,player);
+        check(menu.getCarried().getCount()==60&&reloaded.getItem(9).isEmpty(),"Normal withdrawal failed");
+        menu.clicked(9,0,net.minecraft.world.inventory.ClickType.PICKUP,player);
+        check(menu.getCarried().getCount()==60&&reloaded.getItem(9).isEmpty(),"Manual insertion consumed items");
+        int cargo=0;
+        while(!reloaded.isEmpty()){
+            var trip=reloaded.takeAvailableFragments(15);check(!trip.isEmpty(),"Transport cannot read remaining slots");
+            for(ItemStack stack:trip)cargo+=stack.getCount();
+        }
+        check(cargo+64+menu.getCarried().getCount()==700,"Collection lost or duplicated fragments");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100)
+    public static void chest_filter_and_capacity(GameTestHelper h){
+        h.setBlock(new BlockPos(2,2,2),ResidenciasDosAldeoes.EMERALD_CHEST.get());
+        EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(new BlockPos(2,2,2));
+        IItemHandler handler=chest.getCapability(ForgeCapabilities.ITEM_HANDLER).orElseThrow(()->new AssertionError("Missing item handler"));
+        ItemStack dirt=new ItemStack(Items.DIRT,17);
+        check(handler.insertItem(0,dirt,false).getCount()==17,"Invalid items consumed");
+        check(dirt.getCount()==17&&chest.isEmpty(),"Invalid insertion mutated storage/source");
+        for(int i=0;i<27;i++)chest.setItem(i,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
+        ItemStack remainder=new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),12);
+        check(chest.insertFragments(remainder)==0&&remainder.getCount()==12,"Full chest lost fragments");
+        chest.removeItem(0,64); // An empty destination exposes invalid-item deletion regressions.
+        var player=net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(h.getLevel());
+        player.getInventory().setItem(9,new ItemStack(Items.DIRT,17));
+        var menu=new br.com.residenciasaldeoes.menu.EmeraldChestMenu(1,player.getInventory(),chest);
+        check(menu.quickMoveStack(player,27).isEmpty(),"Invalid shift-click accepted");
+        check(player.getInventory().getItem(9).getCount()==17,"Invalid shift-click deleted player's items");
+        check(chest.getItem(0).isEmpty(),"Invalid item entered an empty chest slot");
+        chest.setItem(0,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
+        net.minecraft.nbt.CompoundTag saved=chest.saveWithFullMetadata();
+        chest.load(saved);check(chest.getItem(26).getCount()==64,"NBT persistence failed");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100)
+    public static void door_states(GameTestHelper h){
+        floor(h);
+        int x=2;
+        for(Direction facing:Direction.Plane.HORIZONTAL){
+            BlockPos p=new BlockPos(x++,2,2);
+            for(DoorHingeSide hinge:DoorHingeSide.values())for(boolean open:new boolean[]{false,true}){
+                var state=ResidenciasDosAldeoes.REINFORCED_DOOR.get().defaultBlockState().setValue(DoorBlock.FACING,facing).setValue(DoorBlock.HINGE,hinge).setValue(DoorBlock.OPEN,open);
+                h.setBlock(p,state);h.setBlock(p.above(),state.setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER));
+                var reference=Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING,facing).setValue(DoorBlock.HINGE,hinge).setValue(DoorBlock.OPEN,open);
+                check(state.getCollisionShape(h.getLevel(),h.absolutePos(p)).bounds().equals(reference.getCollisionShape(h.getLevel(),h.absolutePos(p)).bounds()),"Door collision changed");
+                BlockPos absolute=h.absolutePos(p);
+                var player=net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(h.getLevel());
+                state.getBlock().use(state,h.getLevel(),absolute,player,net.minecraft.world.InteractionHand.MAIN_HAND,
+                        new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(absolute),Direction.UP,absolute,false));
+                check(h.getLevel().getBlockState(absolute).getValue(DoorBlock.OPEN)==!open,"Manual door toggle failed");
+                check(h.getLevel().getBlockState(absolute.above()).getValue(DoorBlock.OPEN)==!open,"Upper half did not toggle");
+            }
+        }
+        h.succeed();
+    }
+    private static void placeOpenDoor(GameTestHelper h,BlockPos pos,net.minecraft.world.level.block.Block block){
+        var lower=block.defaultBlockState().setValue(DoorBlock.HALF,DoubleBlockHalf.LOWER).setValue(DoorBlock.OPEN,true);
+        var upper=block.defaultBlockState().setValue(DoorBlock.HALF,DoubleBlockHalf.UPPER).setValue(DoorBlock.OPEN,true);
+        h.setBlock(pos,lower);h.setBlock(pos.above(),upper);
+    }
+    @GameTest(template="empty",timeoutTicks=900,batch="physical")
+    public static void first_resident_physically_closes_loaded_wooden_doors_in_bounded_area(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,9);
+        h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not expand residence for two residents");
+        Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,7));first.setAge(0);
+        Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,10));second.setAge(0);second.setNoAi(true);
+        ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
+        check("ok".equals(data.link(level,absoluteHome,first)),"First resident registration failed");
+        check("ok".equals(data.link(level,absoluteHome,second)),"Second resident registration failed");
+
+        BlockPos inside=new BlockPos(7,2,7),oneBeyond=new BlockPos(9,2,8),twoBeyond=new BlockPos(10,2,7),iron=new BlockPos(6,2,8);
+        placeOpenDoor(h,inside,Blocks.OAK_DOOR);placeOpenDoor(h,oneBeyond,Blocks.SPRUCE_DOOR);
+        placeOpenDoor(h,twoBeyond,Blocks.OAK_DOOR);placeOpenDoor(h,iron,Blocks.IRON_DOOR);
+        level.setDayTime(13_001L);
+        long uniqueNight=100_000L+level.getGameTime();
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,uniqueNight);
+        check(first.getPersistentData().contains("residenciasaldeoes_night_door_task"),"The first resident did not receive the task");
+        check(!second.getPersistentData().contains("residenciasaldeoes_night_door_task"),"A later resident received the task");
+        BlockPos doorApproach=(BlockPos)invoke("findApproach",new Class[]{net.minecraft.server.level.ServerLevel.class,BlockPos.class,Villager.class},level,h.absolutePos(inside),first);
+        net.minecraft.world.level.pathfinder.Path doorPath=doorApproach==null?null:first.getNavigation().createPath(doorApproach,0);
+        System.out.println("NIGHTDOOR-DIAG initial path="+(doorPath==null?"null":"nodes="+doorPath.getNodeCount()+" reach="+doorPath.canReach()+" target="+doorPath.getTarget())+" floor="+level.getBlockState(h.absolutePos(new BlockPos(4,1,6)))+" villager="+first.position());
+        h.runAtTickTime(100,()->System.out.println("NIGHTDOOR-DIAG tick100 alive="+first.isAlive()+" sleep="+first.isSleeping()+" owner="+(data.owner(first.getUUID())!=null)+" pos="+first.position()+" below="+level.getBlockState(first.blockPosition().below())+" task="+first.getPersistentData().getCompound("residenciasaldeoes_night_door_task")+" navDone="+first.getNavigation().isDone()));
+        h.runAtTickTime(500,()->{
+            check(!level.getBlockState(h.absolutePos(inside)).getValue(DoorBlock.OPEN),"In-bounds wooden door stayed open; villager="+first.position()+" navDone="+first.getNavigation().isDone()+" task="+first.getPersistentData().getCompound("residenciasaldeoes_night_door_task"));
+            check(!level.getBlockState(h.absolutePos(oneBeyond)).getValue(DoorBlock.OPEN),"One-block-out wooden door stayed open");
+            check(level.getBlockState(h.absolutePos(twoBeyond)).getValue(DoorBlock.OPEN),"Door two blocks outside the boundary was changed");
+            check(level.getBlockState(h.absolutePos(iron)).getValue(DoorBlock.OPEN),"Iron door was manipulated");
+            check(!first.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Completed door task remained stuck");
+            h.succeed();
+        });
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="doors")
+    public static void open_door_task_uses_awake_resident_before_waking_sleeping_leader(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not configure home");
+        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));Villager awake=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));
+        Villager nearestDoor=h.spawn(EntityType.VILLAGER,new BlockPos(8,2,6));
+        ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
+        check(data.link(level,absoluteHome,leader).equals("ok")&&data.link(level,absoluteHome,awake).equals("ok")
+                &&data.link(level,absoluteHome,nearestDoor).equals("ok"),"Could not link residents");
+        BlockPos bed=h.absolutePos(new BlockPos(4,2,8));h.setBlock(bed,Blocks.WHITE_BED.defaultBlockState().setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD));
+        leader.startSleeping(bed);check(leader.isSleeping(),"Leader did not enter the fixture sleeping state");
+        placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,200_000L+level.getGameTime());
+        check(leader.isSleeping(),"Sleeping registration leader was woken despite another awake resident");
+        check(!leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Sleeping leader received the door route");
+        check(awake.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Awake resident closest to the first resident did not receive the door route");
+        check(!nearestDoor.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Door proximity incorrectly overrode the required resident priority");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="doors")
+    public static void unlink_sleeping_resident_restores_standing_pose_and_cancels_route(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager villager=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
+        check(data.link(level,absoluteHome,villager).equals("ok"),"Could not link fixture resident");
+        BlockPos bed=h.absolutePos(new BlockPos(5,2,7));h.setBlock(bed,Blocks.WHITE_BED.defaultBlockState().setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD));
+        check(data.reserveBed(villager.getUUID(),level.dimension(),absoluteHome,bed),"Could not reserve fixture bed");
+        villager.startSleeping(bed);check(villager.isSleeping(),"Resident did not enter the fixture sleeping state");
+        villager.getPersistentData().putBoolean("residenciasaldeoes_home_return_active",true);
+        villager.getPersistentData().put("residenciasaldeoes_night_door_task",new net.minecraft.nbt.CompoundTag());
+        data.unlink(level,villager.getUUID());
+        check(!villager.isSleeping(),"Unlinked resident remained in the sleeping pose");
+        check(!villager.getPersistentData().contains("residenciasaldeoes_home_return_active")
+                &&!villager.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Residential navigation state survived unlink");
+        check(data.owner(villager.getUUID())==null&&data.bedClaim(villager.getUUID())==null,"Unlink retained residential registration or bed claim");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=1000,batch="doors")
+    public static void night_door_task_wakes_leader_then_returns_to_same_bed(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(homePos)).setSize(5),"Could not expand sleeping residence");
+        for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
+        Villager leader=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,7));ResidenceData data=ResidenceData.get(level);BlockPos absoluteHome=h.absolutePos(homePos);
+        check(data.link(level,absoluteHome,leader).equals("ok"),"Could not link sleeping leader");
+        BlockPos bedLocal=new BlockPos(5,3,5),bed=h.absolutePos(bedLocal);var bedHead=Blocks.WHITE_BED.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD)
+                .setValue(net.minecraft.world.level.block.BedBlock.FACING,Direction.NORTH);
+        h.setBlock(bedLocal.relative(Direction.SOUTH),bedHead.setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT));h.setBlock(bedLocal,bedHead);
+        ResidenceData.Home residentHome=data.owner(leader.getUUID());BlockPos bedFoot=bed.relative(Direction.SOUTH);
+        boolean bedIsInside=(Boolean)invoke("bedInsideHome",new Class[]{net.minecraft.server.level.ServerLevel.class,BlockPos.class,ResidenceData.Home.class},level,bed,residentHome);
+        check(bedIsInside,"Fixture bed is outside the registered residential volume; home="+residentHome.pos+" size="+residentHome.size+" head="+bed+" headState="+level.getBlockState(bed)+" foot="+bedFoot+" footState="+level.getBlockState(bedFoot)+" chunk="+level.hasChunkAt(bed));
+        check(data.reserveBed(leader.getUUID(),level.dimension(),absoluteHome,bed),"Could not reserve leader's current bed");
+        leader.startSleeping(bed);placeOpenDoor(h,new BlockPos(7,3,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,300_000L+level.getGameTime());
+        check(!leader.isSleeping(),"Sleeping leader was not woken when no other resident was available");
+        check(leader.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Woken leader did not receive the bounded door task");
+        check(data.bedClaim(leader.getUUID())!=null&&data.bedClaim(leader.getUUID()).bed().equals(bed),"The original bed claim was not preserved while waking the leader; sleeping="+leader.isSleeping()+" position="+leader.getSleepingPos()+" owner="+data.owner(leader.getUUID())+" state="+level.getBlockState(bed));
+        h.succeedWhen(()->{
+            check(!level.getBlockState(h.absolutePos(new BlockPos(7,3,6))).getValue(DoorBlock.OPEN),"Resident did not physically close the nighttime door");
+            check(leader.isSleeping()&&leader.getSleepingPos().orElse(null)!=null&&leader.getSleepingPos().orElseThrow().equals(bed),"Resident did not return to its original bed after closing the door");
+        });
+    }
+    @GameTest(template="empty",timeoutTicks=900,batch="doors")
+    public static void night_door_task_resumes_inside_wandering_without_bed(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos home=new BlockPos(6,2,6);h.setBlock(home,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(home)).setSize(5),"Could not configure bedless residence");
+        // The home bounds start one block above the anchor. Give the resident a real,
+        // walkable interior floor at that height instead of testing from below it.
+        for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,6));var data=ResidenceData.get(level);
+        check(data.link(level,h.absolutePos(home),resident).equals("ok"),"Could not link bedless door resident");
+        placeOpenDoor(h,new BlockPos(7,3,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,350_000L+level.getGameTime());
+        h.succeedWhen(()->{
+            BlockPos door=h.absolutePos(new BlockPos(7,3,6));
+            check(!level.getBlockState(door).getValue(DoorBlock.OPEN),"Resident did not close the door");
+            check(!resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Door route remained active after closing");
+            var target=resident.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET).orElse(null);
+            check(target!=null,"Bedless resident did not receive an interior stroll after the route ended");
+            check((Boolean)invoke("insideResidence",new Class[]{BlockPos.class,ResidenceData.Home.class},target.getTarget().currentBlockPosition(),data.owner(resident.getUUID())),
+                    "Post-door stroll target escaped the residential bounds");
+        });
+    }
+    @GameTest(template="empty",timeoutTicks=950,batch="doors")
+    public static void bedless_night_stroll_does_not_reopen_completed_door(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos home=new BlockPos(6,2,6);h.setBlock(home,ResidenciasDosAldeoes.ANCHOR.get());
+        check(((ResidentialAnchorBlockEntity)h.getBlockEntity(home)).setSize(5),"Could not configure bedless residence");
+        for(int x=4;x<=8;x++)for(int z=4;z<=8;z++)if(x!=6||z!=6)h.setBlock(new BlockPos(x,2,z),Blocks.STONE);
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,3,6));ResidenceData data=ResidenceData.get(level);
+        check(data.link(level,h.absolutePos(home),resident).equals("ok"),"Could not link bedless resident");
+        BlockPos doorLocal=new BlockPos(7,3,6);placeOpenDoor(h,doorLocal,Blocks.OAK_DOOR);level.setDayTime(13_001L);
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,450_000L+level.getGameTime());
+        h.runAtTickTime(850,()->{
+            check(!level.getBlockState(h.absolutePos(doorLocal)).getValue(DoorBlock.OPEN),
+                    "Bedless nighttime strolling reopened the door after the close task completed");
+            check(!resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
+                    "Completed door task was started again without a new open-door event");
+            check(resident.getPersistentData().contains("residenciasaldeoes_night_wander"),
+                    "Bedless resident did not enter the bounded night-wander state");
+            h.succeed();
+        });
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="doors")
+    public static void night_door_closure_runs_during_storms(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));ResidenceData data=ResidenceData.get(level);
+        check(data.link(level,h.absolutePos(homePos),resident).equals("ok"),"Could not link rain resident");
+        placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);level.setDayTime(13_001L);level.setWeatherParameters(0,12_000, true, true);
+        invoke("beginNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},level,400_000L+level.getGameTime());
+        check(resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Storm-time nighttime door was not assigned to an awake resident");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=700,batch="doors")
+    public static void daytime_rain_physically_closes_only_exposed_residential_doors(GameTestHelper h){
+        floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);
+        BlockPos wetHome=new BlockPos(4,2,6),shelteredHome=new BlockPos(12,2,6);
+        h.setBlock(wetHome,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(shelteredHome,ResidenciasDosAldeoes.ANCHOR.get());
+        // A roof over the second anchor means dimension-wide rain is not local there.
+        for(int x=10;x<=14;x++)for(int z=4;z<=8;z++)h.setBlock(new BlockPos(x,5,z),Blocks.STONE);
+        Villager wetResident=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));
+        Villager shelteredResident=h.spawn(EntityType.VILLAGER,new BlockPos(11,2,6));
+        var data=ResidenceData.get(level);
+        check("ok".equals(data.link(level,h.absolutePos(wetHome),wetResident)),"Could not link exposed rain resident");
+        check("ok".equals(data.link(level,h.absolutePos(shelteredHome),shelteredResident)),"Could not link sheltered resident");
+        BlockPos wetDoor=new BlockPos(5,2,6),shelteredDoor=new BlockPos(13,2,6);
+        placeOpenDoor(h,wetDoor,Blocks.OAK_DOOR);placeOpenDoor(h,shelteredDoor,Blocks.OAK_DOOR);
+        BlockPos absoluteWetHome=h.absolutePos(wetHome),absoluteShelteredHome=h.absolutePos(shelteredHome);
+        check(level.isRainingAt(absoluteWetHome.above()),"Rain fixture is not wet at the exposed residence");
+        check(!level.isRainingAt(absoluteShelteredHome.above()),"Roof did not shelter the second residence from local rain");
+        invoke("beginWeatherDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},
+                level,data.home(level,absoluteWetHome));
+        check(wetResident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
+                "Daytime rain did not assign a physical door-closing route");
+        check(!shelteredResident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
+                "Dimension-wide rain incorrectly assigned a route to the sheltered residence");
+        h.succeedWhen(()->{
+            check(!level.getBlockState(h.absolutePos(wetDoor)).getValue(DoorBlock.OPEN),
+                    "Resident failed to physically close its door during daytime rain");
+            check(!wetResident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
+                    "Daytime rain door task did not finish");
+            check(level.getBlockState(h.absolutePos(shelteredDoor)).getValue(DoorBlock.OPEN),
+                    "Sheltered residence door was modified");
+        });
+    }
+    @GameTest(template="empty",timeoutTicks=100,batch="doors")
+    public static void daytime_door_task_stops_after_local_rain_ends(GameTestHelper h){
+        floor(h);var level=h.getLevel();level.setDayTime(1_000L);level.setWeatherParameters(0,12_000,true,true);
+        BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));
+        var data=ResidenceData.get(level);BlockPos home=h.absolutePos(homePos);
+        check("ok".equals(data.link(level,home,resident)),"Could not link rain-transition resident");
+        placeOpenDoor(h,new BlockPos(7,2,6),Blocks.OAK_DOOR);
+        invoke("beginWeatherDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},
+                level,data.home(level,home));
+        check(resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),"Rain did not start the daytime door route");
+        level.setWeatherParameters(0,0,false,false);
+        invoke("tickNightDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,Villager.class},level,resident);
+        check(!resident.getPersistentData().contains("residenciasaldeoes_night_door_task"),
+                "Daytime door route continued after local rain ended");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=2600,batch="physical")
+    public static void physical_transport_after_payment(GameTestHelper h){
+        floor(h);
+        BlockPos homePos=new BlockPos(6,2,6),chestPos=new BlockPos(10,2,6);
+        h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(chestPos,ResidenciasDosAldeoes.EMERALD_CHEST.get());
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(homePos);anchor.setSize(11);
+        EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(chestPos);
+        Villager first=h.spawn(EntityType.VILLAGER,new BlockPos(3,2,6));first.setAge(0);
+        ResidenceData data=ResidenceData.get(h.getLevel());
+        check(data.link(h.getLevel(),h.absolutePos(homePos),first).equals("ok"),"Link failed");
+        Villager second=h.spawn(EntityType.VILLAGER,new BlockPos(2,2,6));second.setAge(0);second.setNoAi(true);
+        check(data.link(h.getLevel(),h.absolutePos(homePos),second).equals("ok"),"Second link failed");
+        var home=data.home(h.getLevel(),h.absolutePos(homePos));
+        long id=data.nextProductionDawnEventId();
+        // Use the real production processor and its existing amount calculation/scheduling.
+        data.queueProductionDawn(home,h.getLevel().getServer().overworld().getGameTime(),id);
+        invoke("processLoadedProduction",new Class[]{net.minecraft.server.level.ServerLevel.class,long.class},h.getLevel(),h.getLevel().getServer().overworld().getGameTime());
+        int producedPayment=anchor.getItem(0).getCount();check(producedPayment>0,"No payment");
+        anchor.setOutputItem(9,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),17));
+        int produced=producedPayment+17;
+        double startX=first.getX();
+        double originalSpeed=first.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).getBaseValue();
+        boolean[] walked={false,false};int[] lastStage={-1},trips={0};
+        h.runAtTickTime(290,()->check(chest.isEmpty()&&!first.getPersistentData().contains(JOB),"Collection started before 300 ticks"));
+        h.succeedWhen(()->{
+            if(first.getPersistentData().contains(JOB)&&first.getNavigation().getPath()!=null){
+                int stage=first.getPersistentData().getCompound(JOB).getInt("stage");
+                if(stage==0||stage==1){check(Math.abs(navigationSpeed(first)-.5D)<.0001D,"Courier is running");walked[stage]=true;}
+                if(stage==1&&lastStage[0]!=1){trips[0]++;int carried=0;var cargo=first.getPersistentData().getCompound(JOB).getList("cargo",10);for(int i=0;i<cargo.size();i++)carried+=ItemStack.of(cargo.getCompound(i)).getCount();check(carried>0&&carried<=15,"Courier exceeded trip capacity");}
+                lastStage[0]=stage;
+            }
+            check(!chest.isEmpty(),"Waiting for physical deposit; resident="+first.blockPosition()+" job="+first.getPersistentData().getCompound(JOB));
+            check(chest.getItem(0).getCount()==produced,"Lost or duplicated fragments: stored="+chest.getItem(0).getCount()+" expected="+produced+" anchor="+anchor.getItem(0).getCount()+" pending="+anchor.getPendingFragments()+" resident="+first.blockPosition()+" job="+first.getPersistentData().getCompound(JOB));
+            check(Math.abs(first.getX()-startX)>2,"Villager did not walk");
+            check(!second.getPersistentData().contains(JOB),"Second resident was assigned conflicting transport");
+            check(anchor.isEmpty(),"Anchor not collected");
+            check(walked[0]&&walked[1]&&trips[0]>=2,"Walking speed or multiple capped trips were not observed");
+            check(first.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED).getBaseValue()==originalSpeed,"Normal movement attribute changed");
+        });
+    }
+    @GameTest(template="empty",timeoutTicks=300,batch="full")
+    public static void full_chest_multiple_trips_and_recovery(GameTestHelper h){
+        BlockPos hp=new BlockPos(6,2,6),cp=new BlockPos(10,2,6);
+        h.setBlock(hp,ResidenciasDosAldeoes.ANCHOR.get());h.setBlock(cp,ResidenciasDosAldeoes.EMERALD_CHEST.get());
+        ResidentialAnchorBlockEntity anchor=(ResidentialAnchorBlockEntity)h.getBlockEntity(hp);
+        EmeraldChestBlockEntity chest=(EmeraldChestBlockEntity)h.getBlockEntity(cp);
+        Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));resident.setAge(0);
+        ResidenceData data=ResidenceData.get(h.getLevel());check(data.link(h.getLevel(),h.absolutePos(hp),resident).equals("ok"),"Link failed");
+        long period=data.nextProductionDawnEventId();anchor.recordDailyProduction(period,50);
+        var cargo=anchor.takeAvailableFragments(15);check(cargo.size()==1&&cargo.get(0).getCount()==15,"First trip was not capped at 15");
+        net.minecraft.nbt.ListTag carried=new net.minecraft.nbt.ListTag();for(ItemStack stack:cargo)carried.add(stack.save(new net.minecraft.nbt.CompoundTag()));
+        net.minecraft.nbt.CompoundTag job=new net.minecraft.nbt.CompoundTag();job.putLong("anchor",h.absolutePos(hp).asLong());job.putLong("chest",h.absolutePos(cp).asLong());job.put("cargo",carried);job.putInt("stage",1);job.putLong("started",h.getLevel().getGameTime());resident.getPersistentData().put(JOB,job);
+        resident.getPersistentData().putBoolean("residenciasaldeoes_fragment_drop_processed",true);
+        for(int slot=0;slot<27;slot++)chest.setItem(slot,new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),64));
+        ItemStack refused=new ItemStack(ResidenciasDosAldeoes.EMERALD_FRAGMENT.get(),15);check(chest.insertFragments(refused)==0&&refused.getCount()==15,"Full chest consumed in-transit cargo");
+        long total=anchor.getPendingFragments();for(int slot=0;slot<anchor.getContainerSize();slot++)total+=anchor.getItem(slot).getCount();total+=refused.getCount();
+        check(total==50,"Full chest lost or duplicated fragments");
+        resident.hurt(net.minecraft.world.damagesource.DamageSource.GENERIC,1000F);
         long recovered=anchor.getPendingFragments();for(int slot=0;slot<anchor.getContainerSize();slot++)recovered+=anchor.getItem(slot).getCount();
         check(recovered==50,"Resident death failed to recover cargo");
         for(int slot=0;slot<27;slot++)chest.removeItem(slot,64);

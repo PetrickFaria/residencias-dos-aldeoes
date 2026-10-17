@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 12693)
-Total output lines: 593
-
 package br.com.residenciasaldeoes.client;
 
 import br.com.residenciasaldeoes.data.ResidenceData;
@@ -296,7 +293,43 @@ public class AnchorScreen extends AbstractContainerScreen<AnchorMenu> {
         fill(p,leftPos+6,topPos+30,leftPos+imageWidth-6,topPos+31,0xFF876A45);fill(p,leftPos+7,topPos+74,leftPos+imageWidth-7,topPos+ROW_TOP+LIST_HEIGHT+2,0xFF393125);
         fill(p,leftPos+8,topPos+75,leftPos+imageWidth-8,topPos+76,0xFF6B5438);
         int slotLeft=(imageWidth-(ResidentialAnchorBlockEntity.OUTPUT_SLOTS*18+(ResidentialAnchorBlockEntity.OUTPUT_SLOTS-1)*3))/2;
-        for(int slot=0;slot<Reside…693 tokens truncated…ll(p,leftPos+7,yy,listClipRight(),yy+1,0xFF70C982);
+        for(int slot=0;slot<ResidentialAnchorBlockEntity.OUTPUT_SLOTS;slot++){
+            int sx=leftPos+slotLeft+slot*21,sy=topPos+210;
+            fill(p,sx,sy,sx+18,sy+18,0xFF342419);
+            fill(p,sx+1,sy+1,sx+17,sy+17,0xFFB18A5E);
+        }
+    }
+    @Override public void render(PoseStack p,int x,int y,float q){
+        renderBackground(p);
+        if(skinOpen){
+            // A skin selection modal is a separate visual layer: don't render the
+            // container slots, labels, widgets, or item tooltips underneath it.
+            fill(p,leftPos+3,topPos+3,leftPos+imageWidth-3,topPos+imageHeight-3,0xFF30251C);
+            renderSkinDialog(p,x,y,q);
+            return;
+        }
+        if(modelOpen){
+            fill(p,leftPos+3,topPos+3,leftPos+imageWidth-3,topPos+imageHeight-3,0xFF30251C);
+            renderModelDialog(p,x,y,q);
+            return;
+        }
+        super.render(p,x,y,q);
+        if(!skinOpen){
+            font.draw(p,Component.translatable("gui.residenciasaldeoes.current",menu.getSize(minecraft.player),menu.getSize(minecraft.player),menu.getSize(minecraft.player)),leftPos+8,topPos+19,0xFFF2E5C9);
+            font.draw(p,Component.translatable("gui.residenciasaldeoes.occupancy",menu.getCount(minecraft.player),capacity(menu.getSize(minecraft.player))),leftPos+8,topPos+54,0xFFE4D7BD);
+            font.draw(p,Component.translatable("gui.residenciasaldeoes.residents"),leftPos+8,topPos+64,0xFFFFEBCB);
+            enableResidentClip();
+            if(residents.isEmpty())font.draw(p,Component.translatable("gui.residenciasaldeoes.no_residents"),leftPos+12,topPos+82,0xFFD3C8AF);
+            for(int i=scroll;i<Math.min(residents.size(),scroll+VISIBLE_ROWS);i++){
+                int yy=topPos+ROW_TOP+(i-scroll)*ROW_HEIGHT+2;var e=residents.get(i);
+                if(e.id().equals(selected)){fill(p,leftPos+7,yy-2,listClipRight(),yy+10,0xFF9A8058);fill(p,leftPos+8,yy-1,listClipRight()-1,yy+9,0xFF4A3B2C);}
+                if(draggingResident&&e.id().equals(residentPressCandidate))fill(p,leftPos+7,yy-2,listClipRight(),yy+10,0xFF68533A);
+                if(draggingResident&&i==residentDropIndex)fill(p,leftPos+7,yy-2,listClipRight(),yy-1,0xFF70C982);
+                font.draw(p,font.plainSubstrByWidth(e.name(),54),leftPos+10,yy,e.id().equals(selected)?0xFFFFE7BF:0xFFF2EEE4);
+                int sx=leftPos+68;sx=drawStatus(p,"Cama",e.bed(),sx,yy);sx=drawSeparator(p,sx,yy);sx=drawStatus(p,"Trabalho",e.work(),sx,yy);sx=drawSeparator(p,sx,yy);sx=drawStatus(p,"Baú",e.chest(),sx,yy);sx=drawSeparator(p,sx,yy);drawStatus(p,"Comida",e.food(),sx,yy);
+            }
+            if(draggingResident&&residentDropIndex==Math.min(residents.size()-1,scroll+VISIBLE_ROWS-1)&&residentDropIndex>=scroll){
+                int yy=topPos+ROW_TOP+LIST_HEIGHT-1;fill(p,leftPos+7,yy,listClipRight(),yy+1,0xFF70C982);
             }
             RenderSystem.disableScissor();
             if(hasScrollbar())renderScrollbar(p);
