@@ -20,8 +20,8 @@ public abstract class LivingEntityRendererOpacityMixin {
     /**
      * Steve uses PlayerModel inside the villager renderer. Select a blended base
      * pass explicitly for that resident so its world render follows the same
-     * opacity path as the customizer preview. BufferBuilderOpacityMixin applies
-     * the selected alpha to this pass and to the PlayerModel skin layers.
+     * opacity path as the customizer preview. The resident's vertex consumer
+     * applies the selected alpha to this pass and to the PlayerModel skin layers.
      */
     @SuppressWarnings("unchecked")
     @Inject(method = "getRenderType", at = @At("HEAD"), cancellable = true)

@@ -27,7 +27,7 @@ assert "skinOpacitySlider.mouseDragged(x,y,button,dx,dy)" in drag
 
 assert "ResidentOpacity.set(skinPreviewVillager.getUUID(),pendingOpacity)" in screen
 assert "new OpacityPreviewBuffers(bufferSource,pendingOpacity)" in screen
-assert "adjusted=Math.max(0,Math.min(255,Math.round(alpha*(opacity/100.0F))))" in preview_buffers
+assert "adjusted=Math.max(0,Math.min(255,Math.round(alpha*(clamped/100.0F))))" in preview_buffers
 assert "isPreviewRendering()" in buffer_mixin
 assert "if(ResidentOpacity.isPreviewRendering())return alpha;" in buffer_mixin
 assert "bufferSource.endBatch()" in screen

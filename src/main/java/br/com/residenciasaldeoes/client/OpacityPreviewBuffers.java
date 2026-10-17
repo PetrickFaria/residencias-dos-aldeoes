@@ -4,25 +4,31 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 
-/** Applies the selected alpha to every preview model pass, including the vanilla skin. */
-final class OpacityPreviewBuffers implements MultiBufferSource {
+/** Applies the selected alpha to every model pass, including the vanilla skin. */
+public final class OpacityPreviewBuffers implements MultiBufferSource {
     private final MultiBufferSource.BufferSource delegate;
     private final int opacity;
 
-    OpacityPreviewBuffers(MultiBufferSource.BufferSource delegate,int opacity){
+    public OpacityPreviewBuffers(MultiBufferSource delegate,int opacity){
         this.delegate=delegate;
         this.opacity=Math.max(0,Math.min(100,opacity));
     }
 
     @Override public VertexConsumer getBuffer(RenderType type){
         VertexConsumer target=delegate.getBuffer(type);
-        if(opacity>=100)return target;
+        return withOpacity(target,opacity);
+    }
+
+    /** Shares the explicit vertex-alpha path between the preview and world entity renderer. */
+    public static VertexConsumer withOpacity(VertexConsumer target,int opacity){
+        int clamped=Math.max(0,Math.min(100,opacity));
+        if(clamped>=100)return target;
         return new VertexConsumer(){
             @Override public VertexConsumer vertex(double x,double y,double z){target.vertex(x,y,z);return this;}
             @Override public VertexConsumer color(int red,int green,int blue,int alpha){
                 int adjusted=alpha;
                 if(!ResidentOpacity.renderingNameTag()){
-                    adjusted=Math.max(0,Math.min(255,Math.round(alpha*(opacity/100.0F))));
+                    adjusted=Math.max(0,Math.min(255,Math.round(alpha*(clamped/100.0F))));
                     ResidentOpacity.beginPreviewAlphaOverride();
                 }
                 try{target.color(red,green,blue,adjusted);}finally{ResidentOpacity.endPreviewAlphaOverride();}
@@ -35,7 +41,7 @@ final class OpacityPreviewBuffers implements MultiBufferSource {
             @Override public void endVertex(){target.endVertex();}
             @Override public void defaultColor(int red,int green,int blue,int alpha){
                 if(ResidentOpacity.renderingNameTag()){target.defaultColor(red,green,blue,alpha);return;}
-                int adjusted=Math.max(0,Math.min(255,Math.round(alpha*(opacity/100.0F))));
+                int adjusted=Math.max(0,Math.min(255,Math.round(alpha*(clamped/100.0F))));
                 ResidentOpacity.beginPreviewAlphaOverride();
                 try{target.defaultColor(red,green,blue,adjusted);}finally{ResidentOpacity.endPreviewAlphaOverride();}
             }

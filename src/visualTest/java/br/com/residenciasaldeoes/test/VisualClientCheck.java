@@ -19,7 +19,9 @@ import java.io.File;
 /** Development-only scene; excluded from the installable main JAR. */
 @Mod.EventBusSubscriber(modid="residenciasaldeoes",value=Dist.CLIENT)
 public final class VisualClientCheck {
-    private static boolean requested,scene,depositCaptured,overlapVerified,closedCaptured,courierStarted;
+    private static final int[] OPACITY_PERCENTAGES={0,10,25,50,75,90,100};
+    private static boolean requested,scene,depositCaptured,overlapVerified,closedCaptured,courierStarted,opacityScenePrepared,opacitySceneCaptured;
+    private static volatile int opacityVillagerEntityId=-1;
     private static int ticks;
     @SubscribeEvent public static void tick(TickEvent.ClientTickEvent event){
         if(event.phase!=TickEvent.Phase.END||!Boolean.getBoolean("residencias.visualCheck"))return;
@@ -175,6 +177,50 @@ public final class VisualClientCheck {
                 throw new IllegalStateException("Anchor screen with ten slots did not open");
             Screenshot.grab(new File("../build"),"visual-anchor-slots.png",mc.getMainRenderTarget(),message->{});
         }
-        if(ticks==550){if(!depositCaptured||!overlapVerified||!closedCaptured)throw new IllegalStateException("Courier/client opening checks incomplete");mc.stop();}
+        if(ticks==530){
+            mc.player.closeContainer();
+            var server=mc.getSingleplayerServer();var uuid=mc.player.getUUID();
+            server.execute(()->{
+                var level=server.overworld();var player=server.getPlayerList().getPlayer(uuid);
+                // High-contrast wall behind the resident makes partial alpha visible in the capture.
+                for(int x=0;x<=10;x++)for(int y=-58;y<=-53;y++){
+                    var block=((x+y)&1)==0?Blocks.RED_CONCRETE:Blocks.BLUE_CONCRETE;
+                    level.setBlock(new BlockPos(x,y,3),block.defaultBlockState(),3);
+                }
+                var resident=net.minecraft.world.entity.EntityType.VILLAGER.create(level);
+                if(resident==null)throw new IllegalStateException("Could not create Steve opacity visual test resident");
+                resident.setNoAi(true);resident.moveTo(5.5,-58,5.5,0F,0F);level.addFreshEntity(resident);
+                var data=br.com.residenciasaldeoes.data.ResidenceData.get(level);BlockPos home=new BlockPos(1,-58,8);
+                if(!"ok".equals(data.link(level,home,resident)))throw new IllegalStateException("Could not register Steve opacity visual test resident");
+                data.setResidentOpacity(resident.getUUID(),50);
+                data.setResidentModel(resident.getUUID(),br.com.residenciasaldeoes.data.ResidentModelType.STEVE);
+                opacityVillagerEntityId=resident.getId();
+                br.com.residenciasaldeoes.network.ModNetwork.sendOpacity(player,resident.getUUID(),50);
+                br.com.residenciasaldeoes.network.ModNetwork.sendResidentModel(player,resident.getUUID(),br.com.residenciasaldeoes.data.ResidentModelType.STEVE);
+                player.teleportTo(level,5.5,-57,10.5,180F,15F);
+            });
+        }
+        if(ticks==560&&opacityVillagerEntityId>=0){
+            var entity=mc.level.getEntity(opacityVillagerEntityId);
+            if(!(entity instanceof net.minecraft.world.entity.npc.Villager resident)
+                    ||!br.com.residenciasaldeoes.client.ResidentAppearanceModels.usesSteve(resident)
+                    ||br.com.residenciasaldeoes.client.ResidentOpacity.get(resident.getUUID())!=50)
+                throw new IllegalStateException("Steve 50% opacity/model data was not synchronized to the client renderer");
+            opacityScenePrepared=true;
+        }
+        if(opacityScenePrepared){
+            var resident=(net.minecraft.world.entity.npc.Villager)mc.level.getEntity(opacityVillagerEntityId);
+            for(int i=0;i<OPACITY_PERCENTAGES.length;i++){
+                int setTick=560+i*3,captureTick=setTick+2;
+                if(ticks==setTick)br.com.residenciasaldeoes.client.ResidentOpacity.set(resident.getUUID(),OPACITY_PERCENTAGES[i]);
+                if(ticks==captureTick){
+                    String name="visual-steve-opacity-"+OPACITY_PERCENTAGES[i]+".png";
+                    Screenshot.grab(new File("../build"),name,mc.getMainRenderTarget(),message->{});
+                    if(i==3)System.out.println("STEVE_WORLD_OPACITY_50_PASSED");
+                    if(i==OPACITY_PERCENTAGES.length-1){System.out.println("STEVE_WORLD_OPACITY_PERCENTAGES_PASSED");opacitySceneCaptured=true;}
+                }
+            }
+        }
+        if(ticks==590){if(!depositCaptured||!overlapVerified||!closedCaptured||!opacitySceneCaptured)throw new IllegalStateException("Courier/client opening or Steve opacity checks incomplete");mc.stop();}
     }
 }

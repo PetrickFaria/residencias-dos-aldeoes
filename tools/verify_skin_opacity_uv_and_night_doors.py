@@ -12,6 +12,8 @@ opacity = read("src/main/java/br/com/residenciasaldeoes/client/ResidentOpacity.j
 buffer_mixin = read("src/main/java/br/com/residenciasaldeoes/mixin/BufferBuilderOpacityMixin.java")
 name_mixin = read("src/main/java/br/com/residenciasaldeoes/mixin/EntityRendererNameTagOpacityMixin.java")
 render_opacity_mixin = read("src/main/java/br/com/residenciasaldeoes/mixin/LivingEntityRendererOpacityMixin.java")
+buffer_source_opacity = read("src/main/java/br/com/residenciasaldeoes/mixin/ResidentBufferSourceOpacityMixin.java")
+preview_buffers = read("src/main/java/br/com/residenciasaldeoes/client/OpacityPreviewBuffers.java")
 mixins = json.loads(read("src/main/resources/residencias.mixins.json"))
 textures = read("src/main/java/br/com/residenciasaldeoes/client/VillagerSkinTextures.java")
 events = read("src/main/java/br/com/residenciasaldeoes/VillagerResidenceEvents.java")
@@ -32,6 +34,12 @@ assert "ResidentAppearanceModels.usesSteve(villager)" in render_opacity_mixin
 assert "ResidentOpacity.renderingPercent() < 100" in render_opacity_mixin
 assert "@org.spongepowered.asm.mixin.Shadow" not in render_opacity_mixin
 assert "EntityRenderer<LivingEntity>" in render_opacity_mixin and ".getTextureLocation(entity)" in render_opacity_mixin
+assert "MultiBufferSource.BufferSource" in buffer_source_opacity
+assert "OpacityPreviewBuffers.withOpacity" in buffer_source_opacity
+assert "ResidentOpacity.renderingNameTag()" in buffer_source_opacity
+assert "ResidentBufferSourceOpacityMixin" in mixins["client"]
+assert "target.color(red,green,blue,adjusted)" in preview_buffers
+assert "sendOpacity(player,villager.getUUID(),data.residentOpacity(villager.getUUID()))" in read("src/main/java/br/com/residenciasaldeoes/VillagerResidenceEvents.java")
 assert "beginPreviewRender(skinPreviewVillager)" in screen
 assert "if (renderingNameTag()) return 100;" in opacity
 assert "renderNameTag" in name_mixin and "beginNameTag" in name_mixin and "endNameTag" in name_mixin
