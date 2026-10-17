@@ -650,14 +650,21 @@ public final class ResidenceGameTests {
         BlockPos homePos=new BlockPos(6,2,6);h.setBlock(homePos,ResidenciasDosAldeoes.ANCHOR.get());
         Villager resident=h.spawn(EntityType.VILLAGER,new BlockPos(4,2,6));var data=ResidenceData.get(level);
         check("ok".equals(data.link(level,h.absolutePos(homePos),resident)),"Could not link dry-transition resident");
-        BlockPos localDoor=new BlockPos(7,2,6);placeDoor(h,localDoor,Blocks.OAK_DOOR,false);
-        invoke("beginWeatherDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,data.owner(resident.getUUID()));
+        BlockPos localDoor=new BlockPos(7,2,6);placeOpenDoor(h,localDoor,Blocks.OAK_DOOR);
+        ResidenceData.Home home=data.owner(resident.getUUID());
+        check((Boolean)invoke("isRainingAtResidentialArea",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},
+                level,home),"Rain did not reach the residence before the closure transition");
+        invoke("beginWeatherDoorClosure",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,home);
+        check(!level.getBlockState(h.absolutePos(localDoor)).getValue(DoorBlock.OPEN),
+                "Exposed door did not close when rain began during daytime");
         h.runAtTickTime(20,()->{
             level.setWeatherParameters(0,0,false,false);level.setRainLevel(0.0F);
             check(!level.isRaining(),"Weather fixture still reports global rain after clearing the storm");
             check(!(Boolean)invoke("isRainingAtResidentialArea",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},
-                    level,data.owner(resident.getUUID())),"Residence still reports effective rain after the storm was cleared");
-            invoke("beginDaytimeDoorOpening",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,data.owner(resident.getUUID()));
+                    level,home),"Residence still reports effective rain after the storm was cleared");
+            check(!(Boolean)invoke("shouldCloseResidentialDoors",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},
+                    level,home),"Dry daytime was still considered a closed-door period");
+            invoke("beginDaytimeDoorOpening",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.Home.class},level,home);
             check(level.getBlockState(h.absolutePos(localDoor)).getValue(DoorBlock.OPEN),
                     "Dry-day opening transition did not update the door immediately");
         });
