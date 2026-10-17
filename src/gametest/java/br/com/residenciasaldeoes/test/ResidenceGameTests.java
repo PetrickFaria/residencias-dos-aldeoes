@@ -430,8 +430,8 @@ public final class ResidenceGameTests {
         invoke("tickEmeraldTransfer",new Class[]{net.minecraft.server.level.ServerLevel.class,Villager.class},level,courier);
         check(level.getBlockState(door).getValue(DoorBlock.OPEN),"Courier's active route could not open the protected residential door");
         check(!level.getBlockState(h.absolutePos(unrelatedLocal)).getValue(DoorBlock.OPEN),"Courier exception opened a door outside the active route");
-        check(java.util.Arrays.stream(courier.getPersistentData().getCompound(JOB).getLongArray("open_doors"))
-                .anyMatch(value->value==door.asLong()),"Opened residential door was not tracked for post-passage closure");
+        check((Boolean)invoke("transferJobListsDoor",new Class[]{net.minecraft.nbt.CompoundTag.class,BlockPos.class},
+                courier.getPersistentData().getCompound(JOB),door),"Opened residential door was not tracked for post-passage closure");
         check(VillagerResidenceEvents.shouldBlockResidentDoorOpening(level,courier,door),"Scoped passage exception leaked beyond the setOpen call");
         h.succeedWhen(()->{
             check(courier.blockPosition().getX()>=door.getX()+1,"Courier did not physically cross the residential doorway");
