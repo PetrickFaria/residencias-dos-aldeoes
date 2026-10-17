@@ -75,6 +75,11 @@ assert "NIGHT_DOOR_RESUME" in events and "putBoolean(NIGHT_DOOR_RESUME,true)" in
 assert "residenciasaldeoes_night_wander" in events and "tickNightWander(level,villager,home)" in events
 assert "60L+villager.getRandom().nextInt(81)" in events
 assert "pathAvoidsWoodenDoors(level,path)" in events
+assert "isRegisteredHomePoi(level,bed)" in events
+assert "getPoiManager().getType(pos)" in events
+assert "level.hasChunkAt(pos)" in events
+assert "stale_unregistered_home_poi_is_not_released_or_claimed" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
+assert "stale_home_poi_during_negative_y_world_load_recovers_to_valid_bed" in read("src/gametest/java/br/com/residenciasaldeoes/test/ResidenceGameTests.java")
 assert "level.getPoiManager().take" in events and "type.is(net.minecraft.world.entity.ai.village.poi.PoiTypes.HOME)" in events
 assert "MemoryModuleType.WALK_TARGET,new WalkTarget(bedApproach,.85F,0)" in events
 assert "villager.blockPosition().equals(bedApproach)" in events

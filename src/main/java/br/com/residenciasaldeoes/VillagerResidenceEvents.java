@@ -1187,25 +1187,46 @@ public class VillagerResidenceEvents {
     private static boolean claimResidentialBedPoi(ServerLevel level,ResidenceData data,Villager villager,ResidenceData.Home home,BlockPos bed){
         var brain=villager.getBrain();
         net.minecraft.core.GlobalPos current=brain.getMemory(MemoryModuleType.HOME).orElse(null);
-        if(current!=null&&current.dimension().equals(level.dimension())&&current.pos().equals(bed))return true;
-        if(current!=null){
-            // A resident previously assigned another home. Release only that villager's
-            // own old HOME ticket before acquiring this residence's new bed.
-            level.getPoiManager().release(current.pos());
+        boolean sameHome=current!=null&&current.dimension().equals(level.dimension())&&current.pos().equals(bed);
+        if(sameHome){
+            if(isRegisteredHomePoi(level,bed))return true;
+            // A saved HOME memory may outlive the bed/POI. Forget only this stale
+            // memory; PoiManager.release throws when the position has no record.
             brain.eraseMemory(MemoryModuleType.HOME);
+            current=null;
         }
+        ServerLevel oldLevel=current==null?null:(current.dimension().equals(level.dimension())?level:level.getServer().getLevel(current.dimension()));
+        boolean oldPoiLoaded=oldLevel!=null&&oldLevel.hasChunkAt(current.pos());
+        if(oldPoiLoaded&&!isRegisteredHomePoi(oldLevel,current.pos())){
+            brain.eraseMemory(MemoryModuleType.HOME);
+            current=null;
+            oldLevel=null;
+        }
+
+        // Do not call take() based only on the visible block state. During chunk
+        // restoration a bed block and its HOME POI can briefly disagree.
+        if(!isRegisteredHomePoi(level,bed))return false;
         var acquired=level.getPoiManager().take(type->type.is(net.minecraft.world.entity.ai.village.poi.PoiTypes.HOME),
                 (type,pos)->pos.equals(bed),bed,1);
         if(acquired.isEmpty())return false;
+        // Keep a valid old assignment if the new POI could not be claimed. Once
+        // the replacement is secured, release the old ticket only if its POI is
+        // still present and its chunk is already loaded.
+        if(current!=null&&oldPoiLoaded&&oldLevel!=null&&isRegisteredHomePoi(oldLevel,current.pos()))
+            oldLevel.getPoiManager().release(current.pos());
         brain.setMemory(MemoryModuleType.HOME,net.minecraft.core.GlobalPos.of(level.dimension(),bed));
         return true;
     }
     private static void releaseResidentialBedPoi(ServerLevel level,Villager villager,BlockPos bed){
         net.minecraft.core.GlobalPos current=villager.getBrain().getMemory(MemoryModuleType.HOME).orElse(null);
-        if(current!=null&&current.dimension().equals(level.dimension())&&current.pos().equals(bed)){
-            level.getPoiManager().release(bed);
+        if(current!=null&&current.dimension().equals(level.dimension())&&current.pos().equals(bed)&&level.hasChunkAt(bed)){
+            if(isRegisteredHomePoi(level,bed))level.getPoiManager().release(bed);
             villager.getBrain().eraseMemory(MemoryModuleType.HOME);
         }
+    }
+    private static boolean isRegisteredHomePoi(ServerLevel level,BlockPos pos){
+        return level!=null&&level.hasChunkAt(pos)&&level.getPoiManager().getType(pos)
+                .filter(type->type.is(net.minecraft.world.entity.ai.village.poi.PoiTypes.HOME)).isPresent();
     }
     private BlockPos findReachableBedApproach(ServerLevel level,Villager villager,BlockPos bed,ResidenceData.Home home){
         List<BlockPos> approaches=new ArrayList<>();

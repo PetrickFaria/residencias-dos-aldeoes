@@ -619,6 +619,56 @@ public final class ResidenceGameTests {
         check(owner.equals(data.bedOwner(level.dimension(),bed)),"Separate claim disturbed the original bed");
         h.succeed();
     }
+    @GameTest(template="empty",timeoutTicks=100,batch="sleep")
+    public static void stale_unregistered_home_poi_is_not_released_or_claimed(GameTestHelper h){
+        floor(h);var level=h.getLevel();BlockPos homeLocal=new BlockPos(6,2,6);h.setBlock(homeLocal,ResidenciasDosAldeoes.ANCHOR.get());
+        var resident=h.spawn(EntityType.VILLAGER,new BlockPos(5,2,6));var data=ResidenceData.get(level);
+        BlockPos home=h.absolutePos(homeLocal);check(data.link(level,home,resident).equals("ok"),"Could not link resident with stale HOME memory");
+        BlockPos stale=h.absolutePos(new BlockPos(4,3,4)),candidate=h.absolutePos(new BlockPos(8,3,8));
+        check(level.getPoiManager().getType(stale).isEmpty(),"Stale fixture unexpectedly has a POI");
+        check(level.getPoiManager().getType(candidate).isEmpty(),"Invalid candidate fixture unexpectedly has a POI");
+        resident.getBrain().setMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.HOME,
+                net.minecraft.core.GlobalPos.of(level.dimension(),stale));
+        boolean claimed=(Boolean)invoke("claimResidentialBedPoi",new Class[]{net.minecraft.server.level.ServerLevel.class,ResidenceData.class,Villager.class,ResidenceData.Home.class,BlockPos.class},
+                level,data,resident,data.owner(resident.getUUID()),candidate);
+        check(!claimed,"Unregistered POI was treated as a valid residential bed");
+        check(resident.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.HOME).isEmpty(),
+                "Stale HOME memory was retained after its loaded position proved to have no POI");
+        check(data.bedClaim(resident.getUUID())==null,"Resident was assigned a nonexistent bed");
+        h.succeed();
+    }
+    @GameTest(template="empty",timeoutTicks=800,batch="sleep")
+    public static void stale_home_poi_during_negative_y_world_load_recovers_to_valid_bed(GameTestHelper h){
+        var level=h.getLevel();BlockPos origin=h.absolutePos(BlockPos.ZERO);
+        BlockPos home=new BlockPos(origin.getX()+6,-62,origin.getZ()+6);
+        for(int x=-3;x<=3;x++)for(int z=-3;z<=3;z++)level.setBlock(new BlockPos(home.getX()+x,-61,home.getZ()+z),Blocks.STONE.defaultBlockState(),3);
+        level.setBlock(home.below(),Blocks.STONE.defaultBlockState(),3);
+        level.setBlock(home,ResidenciasDosAldeoes.ANCHOR.get().defaultBlockState(),3);
+        check(((ResidentialAnchorBlockEntity)level.getBlockEntity(home)).setSize(5),"Could not size negative-Y residence");
+        BlockPos bed=new BlockPos(home.getX()+1,-60,home.getZ()-1),foot=bed.relative(Direction.SOUTH);
+        var bedHead=Blocks.WHITE_BED.defaultBlockState().setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.HEAD)
+                .setValue(net.minecraft.world.level.block.BedBlock.FACING,Direction.NORTH).setValue(net.minecraft.world.level.block.BedBlock.OCCUPIED,false);
+        level.setBlock(foot,bedHead.setValue(net.minecraft.world.level.block.BedBlock.PART,net.minecraft.world.level.block.state.properties.BedPart.FOOT),3);
+        level.setBlock(bed,bedHead,3);
+        check(level.getPoiManager().getType(bed).filter(type->type.is(net.minecraft.world.entity.ai.village.poi.PoiTypes.HOME)).isPresent(),
+                "Negative-Y test bed did not register its vanilla HOME POI");
+        Villager resident=EntityType.VILLAGER.create(level);check(resident!=null,"Could not create negative-Y resident");
+        resident.moveTo(home.getX()+2.5,-60,home.getZ()-.5,0F,0F);resident.setAge(0);level.addFreshEntity(resident);
+        var data=ResidenceData.get(level);check(data.link(level,home,resident).equals("ok"),"Could not register negative-Y resident");
+        BlockPos staleHome=new BlockPos(bed.getX(),-63,bed.getZ());
+        check(level.hasChunkAt(staleHome)&&level.getPoiManager().getType(staleHome).isEmpty(),"Negative-Y stale HOME fixture is not a loaded non-POI position");
+        resident.getBrain().setMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.HOME,
+                net.minecraft.core.GlobalPos.of(level.dimension(),staleHome));
+        level.setDayTime(13_001L);
+        h.succeedWhen(()->{
+            check(resident.isAlive(),"Resident died while stale HOME POI was being recovered");
+            check(resident.isSleeping()&&resident.getSleepingPos().orElse(null)!=null&&resident.getSleepingPos().orElseThrow().equals(bed),
+                    "Resident did not claim/use the valid negative-Y bed after stale HOME cleanup; homeMemory="
+                            +resident.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.HOME).orElse(null));
+            check(data.bedClaim(resident.getUUID())!=null&&data.bedClaim(resident.getUUID()).bed().equals(bed),
+                    "Valid bed reservation was not saved after stale POI recovery");
+        });
+    }
     @GameTest(template="empty",timeoutTicks=600,batch="sleep")
     public static void three_residents_reach_and_use_three_distinct_residential_beds(GameTestHelper h){
         floor(h);var level=h.getLevel();BlockPos home=new BlockPos(6,2,6);
