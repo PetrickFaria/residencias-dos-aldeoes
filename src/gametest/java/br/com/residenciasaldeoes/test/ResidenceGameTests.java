@@ -433,6 +433,11 @@ public final class ResidenceGameTests {
         check((Boolean)invoke("transferJobListsDoor",new Class[]{net.minecraft.nbt.CompoundTag.class,BlockPos.class},
                 courier.getPersistentData().getCompound(JOB),door),"Opened residential door was not tracked for post-passage closure");
         check(VillagerResidenceEvents.shouldBlockResidentDoorOpening(level,courier,door),"Scoped passage exception leaked beyond the setOpen call");
+        for(int tick:new int[]{20,100,500})h.runAtTickTime(tick,()->System.out.println("COURIER-DOOR-DIAG tick="+tick+
+                " pos="+courier.position()+" navDone="+courier.getNavigation().isDone()+" path="+
+                (courier.getNavigation().getPath()==null?"null":courier.getNavigation().getPath().getTarget())+
+                " doorOpen="+level.getBlockState(door).getValue(DoorBlock.OPEN)+" job="+
+                courier.getPersistentData().getCompound(JOB)));
         h.succeedWhen(()->{
             check(courier.blockPosition().getX()>=door.getX()+1,"Courier did not physically cross the residential doorway");
             check(!courier.getPersistentData().contains(JOB),"Courier did not finish the bounded test route");
